@@ -11,6 +11,7 @@ import { CreateLocation } from "./components/CreateLocation";
 import { EditLocation } from "./components/EditLocation";
 import { AddInspection } from "./components/AddInspection";
 import { AdminCatalog } from "./components/AdminCatalog";
+import { ProposalBuilder } from "./components/ProposalBuilder";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", Component: MountainsList },
       { path: "/admin", Component: AdminCatalog },
+      { path: "/proposal-builder", Component: ProposalBuilder },
       { path: "/mountains/new", Component: CreateMountain },
       { path: "/mountains/:mountainId", Component: MountainDetail },
       { path: "/mountains/:mountainId/edit", Component: EditMountain },
