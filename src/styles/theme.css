@@ -1,108 +1,66 @@
 @custom-variant dark (&:is(.dark *));
 
-/*
- * ── YULLR Design System — Color Tokens ───────────────────────────────────────
- *
- * Tonal palettes extracted from the YULLR "Color Guidance" frame:
- *
- *  Primary (Orange):    P40=#E14810  P50=#F95C39  P70=#FF6A60  P90=#FFEDE9
- *  Secondary (Blue):    S40=#1C68C4  S50=#307FE2
- *  Tertiary (Navy):     T10=#1D2930  T20=#2C333A  T30=#3B454F  T40=#515961
- *                       T50=#6D7B83  T95=#EEF0F1  T98=#F2F3F5
- *  Error (Red):         E40=#D10000  E50=#E31D19  E95=#FDE3E3
- *  Neutral:             N95=#E8E9EA  N98=#F8F8FA
- */
-
 :root {
   --font-size: 16px;
-
-  /* ── Brand primitives ──────────────────────────────────────────────────────── */
-  --yullr-primary:           #F95C39;   /* P-50  — main CTA orange              */
-  --yullr-primary-dark:      #E14810;   /* P-40  — pressed / dark variant        */
-  --yullr-primary-light:     #FF6A60;   /* P-70  — hover tint                   */
-  --yullr-primary-container: #FFEDE9;   /* P-90  — light background tint         */
-
-  --yullr-secondary:         #307FE2;   /* S-50  — blue links / info             */
-  --yullr-secondary-dark:    #1C68C4;   /* S-40  — pressed blue                 */
-
-  --yullr-on-dark:           #1D2930;   /* T-10  — primary text (dark navy)      */
-  --yullr-surface-dim:       #2C333A;   /* T-20  — dark surfaces / headers       */
-  --yullr-surface-variant:   #3B454F;   /* T-30  — dark card variants            */
-  --yullr-outline:           #515961;   /* T-40  — borders on dark               */
-  --yullr-muted:             #6D7B83;   /* T-50  — secondary / muted text        */
-  --yullr-surface-container: #EEF0F1;   /* T-95  — light surface containers      */
-  --yullr-background:        #F2F3F5;   /* T-98  — page background               */
-
-  --yullr-error:             #E31D19;   /* E-50  — error / destructive           */
-  --yullr-error-dark:        #D10000;   /* E-40  — pressed error                 */
-  --yullr-error-container:   #FDE3E3;   /* E-95  — light error background        */
-
-  --yullr-neutral-95:        #E8E9EA;   /* N-95  — pressed / active states       */
-  --yullr-neutral-98:        #F8F8FA;   /* N-98  — input/field background        */
-
-  --yullr-surface:           #FFFFFF;   /* White — card / sheet surfaces         */
-  --yullr-border:            rgba(29, 41, 48, 0.10); /* Tertiary-tinted border  */
-
-  /* ── Semantic mappings (used by Tailwind theme) ───────────────────────────── */
-  --background:         var(--yullr-background);
-  --foreground:         var(--yullr-on-dark);
-  --card:               var(--yullr-surface);
-  --card-foreground:    var(--yullr-on-dark);
-  --popover:            var(--yullr-surface);
-  --popover-foreground: var(--yullr-on-dark);
-  --primary:            var(--yullr-primary);
-  --primary-foreground: #ffffff;
-  --secondary:          var(--yullr-secondary);
-  --secondary-foreground: #ffffff;
-  --muted:              var(--yullr-surface-container);
-  --muted-foreground:   var(--yullr-muted);
-  --accent:             var(--yullr-neutral-95);
-  --accent-foreground:  var(--yullr-on-dark);
-  --destructive:        var(--yullr-error);
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
   --destructive-foreground: #ffffff;
-  --border:             var(--yullr-border);
-  --input:              transparent;
-  --input-background:   var(--yullr-neutral-98);
-  --switch-background:  #C9CDD2;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring:               var(--yullr-secondary);
+  --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.75rem;
-  --sidebar: var(--yullr-surface-dim);
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: var(--yullr-primary);
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--yullr-surface-variant);
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255,255,255,0.08);
-  --sidebar-ring: var(--yullr-secondary);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
-  --background: var(--yullr-on-dark);
-  --foreground: #ffffff;
-  --card: var(--yullr-surface-dim);
-  --card-foreground: #ffffff;
-  --popover: var(--yullr-surface-dim);
-  --popover-foreground: #ffffff;
-  --primary: var(--yullr-primary);
-  --primary-foreground: #ffffff;
-  --secondary: var(--yullr-secondary);
-  --secondary-foreground: #ffffff;
-  --muted: var(--yullr-surface-variant);
-  --muted-foreground: var(--yullr-muted);
-  --accent: var(--yullr-surface-variant);
-  --accent-foreground: #ffffff;
-  --destructive: var(--yullr-error);
-  --destructive-foreground: #ffffff;
-  --border: rgba(255,255,255,0.10);
-  --input: rgba(255,255,255,0.08);
-  --ring: var(--yullr-secondary);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
   --font-weight-medium: 500;
   --font-weight-normal: 400;
   --chart-1: oklch(0.488 0.243 264.376);
@@ -110,14 +68,14 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: var(--yullr-on-dark);
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: var(--yullr-primary);
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--yullr-surface-variant);
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255,255,255,0.08);
-  --sidebar-ring: var(--yullr-secondary);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
 }
 
 @theme inline {
@@ -166,71 +124,58 @@
     @apply border-border outline-ring/50;
   }
 
-  html {
-    font-size: var(--font-size);
-    /* Inter is loaded via fonts.css — set it as the global base font */
-    font-family: 'Inter', sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
   }
 
-  /*
-   * Typography scale — matches YULLR design system.
-   * Tailwind utility classes always override these base defaults.
-   */
+  /**
+  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
+  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
+  */
+
+  html {
+    font-size: var(--font-size);
+  }
+
   h1 {
     font-size: var(--text-2xl);
-    font-weight: 700;
-    line-height: 1.25;
-    color: var(--yullr-on-dark);
-    letter-spacing: -0.01em;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
   }
 
   h2 {
     font-size: var(--text-xl);
-    font-weight: 600;
-    line-height: 1.3;
-    color: var(--yullr-on-dark);
-    letter-spacing: -0.005em;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
   }
 
   h3 {
     font-size: var(--text-lg);
-    font-weight: 600;
-    line-height: 1.4;
-    color: var(--yullr-on-dark);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
   }
 
   h4 {
     font-size: var(--text-base);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     line-height: 1.5;
-    color: var(--yullr-on-dark);
   }
 
   label {
-    font-size: var(--text-sm);
-    font-weight: 500;
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
     line-height: 1.5;
-    color: var(--yullr-muted);
   }
 
   button {
     font-size: var(--text-base);
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     line-height: 1.5;
-    font-family: 'Inter', sans-serif;
   }
 
-  input, textarea, select {
+  input {
     font-size: var(--text-base);
-    font-weight: 400;
+    font-weight: var(--font-weight-normal);
     line-height: 1.5;
-    font-family: 'Inter', sans-serif;
   }
 }

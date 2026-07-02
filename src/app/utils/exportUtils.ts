@@ -332,6 +332,7 @@ export async function generatePDF(
 
     const metaItems = [];
     if (loc.trailName) metaItems.push(`Trail: ${esc(loc.trailName)}`);
+    if (loc.difficulty) metaItems.push(`Difficulty: ${loc.difficulty}/5`);
     if (loc.coordinates) metaItems.push(`GPS: ${loc.coordinates.latitude.toFixed(5)}, ${loc.coordinates.longitude.toFixed(5)}`);
     if (loc.notes) metaItems.push(`Notes: ${esc(loc.notes)}`);
 

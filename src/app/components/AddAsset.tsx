@@ -143,13 +143,22 @@ function OtherItemRow({
 export function AddAsset() {
   const { mountainId, locationId, assetId } = useParams();
   const navigate = useNavigate();
-  const { addAsset, updateAsset, getAssetById, getAssetsByLocationId, getMountainById, getOptions } = useData();
+  const {
+    addAsset, updateAsset, getAssetById, getAssetsByLocationId,
+    getMountainById, getTrailsByMountainId, getLocationsByMountainId,
+    getOptions
+  } = useData();
 
+  const isInventoryMode = !locationId; // accessed from /mountains/:mountainId/inventory/new
   const isEditing = !!assetId;
   const existingAsset = isEditing ? getAssetById(assetId) : undefined;
-  const existingAssets = getAssetsByLocationId(locationId!);
+  const existingAssets = locationId ? getAssetsByLocationId(locationId) : [];
   const mountain = getMountainById(mountainId!);
   const ipSubnet = mountain?.ipSubnet || '';
+
+  // Get trails and locations for inventory mode
+  const trails = mountainId ? getTrailsByMountainId(mountainId) : [];
+  const allLocations = mountainId ? getLocationsByMountainId(mountainId) : [];
 
   // Resolve misc install items from context (seeded by AdminCatalog), fallback to hardcoded
   const miscInstallItems = getOptions('misc:installItems').length > 0
@@ -187,6 +196,15 @@ export function AddAsset() {
 
   // ── Misc photos ───────────────────────────────────────────────────────────
   const [miscPhotos, setMiscPhotos] = useState<string[]>(existingAsset?.miscPhotos || []);
+
+  // For inventory mode: track selected trail and location separately
+  const [selectedTrailId, setSelectedTrailId] = useState(existingAsset?.trail || '');
+  const [selectedLocationId, setSelectedLocationId] = useState(existingAsset?.locationId || '');
+
+  // Filter locations by selected trail
+  const filteredLocations = selectedTrailId
+    ? allLocations.filter(loc => loc.trailId === selectedTrailId)
+    : allLocations;
 
   const [formData, setFormData] = useState<Partial<Asset>>(() => {
     if (existingAsset) {
@@ -347,9 +365,7 @@ export function AddAsset() {
   const handleSubmit = (isDraft: boolean) => {
     if (!isDraft) {
       if (formData.type === 'Camera') {
-        if (!formData.serialNumber) { toast.error('Serial number is required for cameras'); return; }
-        if (!formData.serialPhoto) { toast.error('Serial number photo is required for cameras'); return; }
-        if (!formData.installPhoto) { toast.error('Installation photo is required for cameras'); return; }
+        // serial number, serial photo, and install photo are all optional
       } else if (formData.type === 'Server') {
         if (!formData.processorModel) { toast.error('Processor model is required for servers'); return; }
         if (!formData.gpuModel) { toast.error('GPU model is required for servers'); return; }
@@ -358,8 +374,7 @@ export function AddAsset() {
         if (!formData.osDiskSize) { toast.error('OS disk size is required for servers'); return; }
         if (!formData.captureDiskSize) { toast.error('Capture disk size is required for servers'); return; }
         if (!formData.ipAddress) { toast.error('IP address is required for servers'); return; }
-        if (!formData.internalPhoto) { toast.error('Internal photo is required for servers'); return; }
-        if (!formData.externalPhoto) { toast.error('External photo is required for servers'); return; }
+        // internal and external photos are optional
       }
     }
 
@@ -376,9 +391,15 @@ export function AddAsset() {
     const finalMiscItems = formData.type === 'Miscellaneous' ? buildMiscItems() : undefined;
     const finalMiscPhotos = formData.type === 'Miscellaneous' ? miscPhotos : undefined;
 
+    // In inventory mode, use the selected trail and location
+    const finalLocationId = isInventoryMode ? (selectedLocationId || undefined) : locationId;
+    const finalTrail = isInventoryMode ? selectedTrailId : formData.trail;
+
     const assetData = {
       ...formData,
-      locationId: locationId!,
+      mountainId: mountainId!,
+      locationId: finalLocationId,
+      trail: finalTrail,
       isDraft,
       ...(formData.type === 'Miscellaneous' && {
         miscItems: finalMiscItems,
@@ -391,9 +412,13 @@ export function AddAsset() {
       toast.success('Asset updated successfully');
     } else {
       addAsset(assetData);
-      toast.success(isDraft ? 'Asset saved as draft' : 'Asset added successfully');
+      toast.success(isDraft ? 'Asset saved as draft' : isInventoryMode ? 'Asset added to inventory' : 'Asset added successfully');
     }
-    navigate(`/mountains/${mountainId}/locations/${locationId}`);
+    if (isInventoryMode) {
+      navigate(`/mountains/${mountainId}`);
+    } else {
+      navigate(`/mountains/${mountainId}/locations/${locationId}`);
+    }
   };
 
   const updateField = (field: keyof Asset, value: any) => {
@@ -461,13 +486,16 @@ export function AddAsset() {
       <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(`/mountains/${mountainId}/locations/${locationId}`)}
+            onClick={() => isInventoryMode
+              ? navigate(`/mountains/${mountainId}`)
+              : navigate(`/mountains/${mountainId}/locations/${locationId}`)
+            }
             className="p-1 active:opacity-60"
           >
             <ArrowLeft size={24} className="text-[#0a0a0a]" />
           </button>
           <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px]">
-            {isEditing ? 'Edit Asset' : 'Add New Asset'}
+            {isEditing ? 'Edit Asset' : isInventoryMode ? 'Add to Inventory' : 'Add New Asset'}
           </h1>
         </div>
       </div>
@@ -522,6 +550,64 @@ export function AddAsset() {
             </div>
           )}
         </div>
+
+        {/* ── Trail & Location Selection (Inventory Mode Only) ────────────── */}
+        {isInventoryMode && (
+          <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
+            <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+              Installation Location <span className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px] font-normal">(optional)</span>
+            </h2>
+            <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] -mt-2">
+              Link this asset to a specific trail and location, or leave unassigned for inventory stock.
+            </p>
+
+            <div>
+              <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">
+                Trail
+              </label>
+              <select
+                value={selectedTrailId}
+                onChange={e => {
+                  setSelectedTrailId(e.target.value);
+                  setSelectedLocationId(''); // Reset location when trail changes
+                }}
+                className="w-full bg-[#f3f3f5] rounded-[8px] px-4 py-3.5 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none"
+              >
+                <option value="">Unassigned (In Stock)</option>
+                {trails.map(trail => (
+                  <option key={trail.id} value={trail.id}>
+                    {trail.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedTrailId && (
+              <div>
+                <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">
+                  Location
+                </label>
+                <select
+                  value={selectedLocationId}
+                  onChange={e => setSelectedLocationId(e.target.value)}
+                  className="w-full bg-[#f3f3f5] rounded-[8px] px-4 py-3.5 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none"
+                >
+                  <option value="">Select location on this trail</option>
+                  {filteredLocations.map(location => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+                {filteredLocations.length === 0 && (
+                  <p className="text-[#ff5c39] text-[12px] mt-1.5">
+                    No locations found on this trail. Create locations first.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Miscellaneous ──────────────────────────────────────────────── */}
         {isMisc && (
@@ -691,13 +777,13 @@ export function AddAsset() {
             </div>
 
             <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
-              <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Server Photos *</h2>
+              <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Server Photos</h2>
               <div>
-                <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Internal Photo *</label>
+                <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Internal Photo</label>
                 <PhotoCaptureButton mode="internal" label="Take Internal Photo" photoField={formData.internalPhoto} />
               </div>
               <div>
-                <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">External Photo *</label>
+                <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">External Photo</label>
                 <PhotoCaptureButton mode="external" label="Take External Photo" photoField={formData.externalPhoto} />
               </div>
             </div>
@@ -741,7 +827,7 @@ export function AddAsset() {
 
               <div>
                 <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px] mb-2">
-                  Serial Number{isCamera && ' *'}
+                  Serial Number
                 </label>
                 <input
                   type="text"
@@ -769,13 +855,13 @@ export function AddAsset() {
               <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Photos</h2>
               <div>
                 <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">
-                  Serial Number Photo{isCamera && ' *'}
+                  Serial Number Photo
                 </label>
                 <PhotoCaptureButton mode="serial" label="Take Photo" photoField={formData.serialPhoto} />
               </div>
               <div>
                 <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">
-                  Completed Installation Photo{isCamera && ' *'}
+                  Completed Installation Photo
                 </label>
                 <PhotoCaptureButton mode="install" label="Take Photo" photoField={formData.installPhoto} />
               </div>

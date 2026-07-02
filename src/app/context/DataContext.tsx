@@ -2,8 +2,11 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 import * as photoDB from '../utils/photoDB';
 import * as locMediaDB from '../utils/locationMediaDB';
+import * as mountainDocsDB from '../utils/mountainDocumentsDB';
+import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import * as cloudPhotos from '../utils/cloudPhotoSync';
 import * as cloudLocSync from '../utils/cloudLocationSync';
+import * as cloudAnnotationSync from '../utils/cloudAnnotationSync';
 import * as offlineQueue from '../utils/offlineQueue';
 import { toast } from 'sonner';
 
@@ -18,6 +21,28 @@ export interface Contact {
   notes?: string;
 }
 
+export interface TechAdmin {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+}
+
+export interface Invoice {
+  invoiceNumber: string;
+  date: string;
+  subtotal: number;
+  invoiceNumber1Percent: number; // e.g., 50 for 50%
+  balanceDue: number;
+  lineItems: {
+    description: string;
+    unitPrice: number;
+    quantity: number;
+    total: number;
+  }[];
+}
+
 export interface Mountain {
   id: string;
   name: string;
@@ -30,9 +55,44 @@ export interface Mountain {
   website: string;
   notes?: string;
   ipSubnet?: string;
+  timingSystems?: string[];
   adminContact: Contact;
   technicalContact: Contact;
   additionalContacts: Contact[];
+  technicalAdministrators?: TechAdmin[];
+  proposalCreated?: boolean;
+  proposalCreatedAt?: string;  // ISO timestamp when proposal was created
+  trailMapType?: 'image' | 'pdf';  // set when a trail map is stored in IndexedDB
+  trailMapUploadedAt?: string;  // ISO timestamp when trail map was uploaded
+  trailMapAnnotations?: Annotation[];  // annotations on the trail map image
+  invoice?: Invoice;
+  // Mountain stats
+  trailCount?: number;
+  acreage?: number;
+  verticalDrop?: number;
+  slackEmail?: string;
+  region?: 'Rocky Mountains' | 'Sierra Nevada' | 'Pacific Northwest' | 'Northeast' | 'Mid-Atlantic' | 'Midwest';
+  // Portal fields
+  mountainLogo?: string;              // base64 — stored in IndexedDB key mountainLogo:{id}
+  proposedInstallDates?: string[];    // up to 3 ISO dates, set by mountain rep on portal
+  confirmedInstallDate?: string;      // set by YULLR in Builder
+  invoicePaid?: boolean;              // toggled by YULLR in Builder
+  onsiteContact?: {
+    name: string;
+    phone: string;
+    contactId?: string;               // CRM contact ID if linked
+  };
+  // CRM fields
+  pipelineStage?: PipelineStage;
+  isStalled?: boolean;
+  stallReason?: StallReason;
+  stalledAt?: string;
+  nextAction?: string;
+  nextActionDate?: string;
+  estimatedDealValue?: number;
+  closeProbability?: number;
+  corporateGroup?: string;
+  organizationId?: string;
 }
 
 // ─── Inspection item types (shared between Location inspection + AddInspection) ─
@@ -52,17 +112,52 @@ export interface SiteInspectionItem {
   count: number;
 }
 
+// ─── Annotations ──────────────────────────────────────────────────────────────
+
+export type AnnotationType = 'line' | 'area' | 'pin' | 'text';
+
+export interface Annotation {
+  id: string;
+  type: AnnotationType;
+  label?: string;
+  notes?: string;
+  color: string;
+  // For lines: array of points [{x, y}, {x, y}, ...]
+  // For areas: array of polygon points [{x, y}, {x, y}, ...] (closed path)
+  // For pins: single point {x, y}
+  points: Array<{ x: number; y: number }>;
+  createdAt: string;
+}
+
+// ─── Trail ───────────────────────────────────────────────────────────────────
+
+export interface Trail {
+  id: string;
+  mountainId: string;
+  name: string;
+  notes?: string;
+  isNastar?: boolean;
+  annotations?: Annotation[];
+}
+
 // ─── Unified Location (replaces InstallLocation + SiteInspectionLocation) ─────
 
 export interface Location {
   id: string;
   mountainId: string;
+  trailId?: string;        // links to a Trail record
   name: string;
-  trailName?: string;
+  trailName?: string;      // legacy / display label
   notes?: string;
+  difficulty?: 1 | 2 | 3 | 4 | 5; // Installation difficulty rating
   coordinates?: {
     latitude: number;
     longitude: number;
+  };
+  originalCoordinates?: {
+    latitude: number;
+    longitude: number;
+    recordedAt: string;    // timestamp when original coordinates were captured
   };
   /** One inspection per location — optional, added separately after creation. */
   inspection?: {
@@ -74,9 +169,31 @@ export interface Location {
 
 // ─── Asset ───────────────────────────────────────────────────────────────────
 
+export type InventoryCategory = 'Server Hardware' | 'Network Equipment' | 'Cameras' | 'Miscellaneous Items' | 'Office Equipment';
+export type InventoryStatus = 'In Stock' | 'Deployed' | 'In a Build' | 'Retired';
+
+export const INVENTORY_SUBCATEGORIES: Record<InventoryCategory, string[]> = {
+  'Server Hardware': ['Case', 'Power', 'Motherboard', 'CPU', 'GPU', 'RAM', 'NVME', 'SSD', 'HDD', 'Cooling', 'Other', 'Complete Server'],
+  'Network Equipment': ['Switch', 'Router', 'Access Point', 'PoE Injector', 'Media Converter', 'Firewall/Gateway', 'Cabling'],
+  'Cameras': ['PTZ Camera', 'Fixed Camera', 'Lens', 'Mount/Housing', 'NVR/Recorder'],
+  'Miscellaneous Items': ['Cables', 'Mounts/Brackets', 'Power/Transformers', 'Tools', 'Enclosures', 'Office Supplies', 'Other'],
+  'Office Equipment': ['Computer', 'Monitor', 'Printer', 'Phone', 'Tablet', 'UPS/Battery Backup', 'Other'],
+};
+
+export const MOUNTAIN_DEPLOYMENTS = [
+  'Pats Peak', 'Wachusett', 'Cranmore', 'Waterville', 'Ski Ward',
+  'Burke', 'Berkshire East', 'Attitash', 'DEMO', 'Unassigned / Warehouse',
+];
+
+export interface DeploymentLogEntry {
+  mountainName: string;
+  timestamp: string;
+}
+
 export interface Asset {
   id: string;
-  locationId: string;
+  mountainId?: string;   // mountain-level ownership — set when added to inventory
+  locationId?: string;   // optional — unset means "in inventory, not yet installed"
   type: 'Camera' | 'Network Gear' | 'Miscellaneous' | 'Server';
   isDraft?: boolean;
   trail?: string;
@@ -106,6 +223,78 @@ export interface Asset {
   externalPhoto?: string;
   miscItems?: MiscItem[];
   miscPhotos?: string[];
+  // ── Inventory Management fields ──────────────────────────────────────────
+  yullrInventoryNumber?: string;
+  dateAddedToInventory?: string;    // ISO date, defaults to creation date
+  inventoryCategory?: InventoryCategory;
+  inventorySubcategory?: string;
+  inventoryStatus?: InventoryStatus;
+  cost?: number;
+  vendor?: string;
+  dateOfPurchase?: string;          // ISO date string
+  upc?: string;
+  mountainDeployment?: string;      // from MOUNTAIN_DEPLOYMENTS
+  deploymentLog?: DeploymentLogEntry[];
+  serverId?: string;                // if assigned to a server build
+  serverComponentIds?: string[];    // if this IS a server, the component asset IDs
+  buildDate?: string;               // for server builds
+}
+
+// ─── CRM ─────────────────────────────────────────────────────────────────────
+
+export type ContactType = 'Resort' | 'Partner' | 'Vendor' | 'Investor' | 'Advisor' | 'Coach' | 'Team' | 'General';
+export type ContactTag = 'Decision Maker' | 'Technical' | 'Champion' | 'Billing' | 'Legal';
+export type OrgType = 'Partner' | 'Vendor' | 'Investor Group' | 'Advisory' | 'Corporate Group';
+export type PipelineStage =
+  | 'Prospect' | 'Contacted' | 'Demo Scheduled' | 'Positive'
+  | 'Verbal Yes' | 'Contract Sent' | 'Signed' | 'Installing' | 'Live' | 'Churned';
+export type StallReason = 'No response' | 'Waiting on legal' | 'Budget hold' | 'Timing — offseason' | 'Other';
+
+export interface ContactActivity {
+  id: string;
+  text: string;
+  type: 'note' | 'action';
+  completed?: boolean;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface CRMContact {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  type: ContactType;
+  title?: string;
+  organizationId?: string;
+  tags: ContactTag[];
+  isPrimary: boolean;
+  mountainId?: string;       // single linked mountain
+  notes?: string;
+  activities?: ContactActivity[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CRMOrganization {
+  id: string;
+  name: string;
+  type: OrgType;
+  contactIds: string[];
+  mountainIds: string[];
+  agreementDetails?: string;
+  keyDates: { label: string; date: string }[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NoteTopic = 'Demo' | 'Site Visit' | 'Proposal' | 'Install' | 'Training' | 'Updates' | 'Follow-up';
+
+export interface NoteEntry {
+  id: string;
+  text: string;
+  timestamp: string;
 }
 
 export interface MountainNote {
@@ -114,6 +303,16 @@ export interface MountainNote {
   text: string;
   createdAt: string;
   updatedAt: string;
+  topic?: NoteTopic;
+  scheduled?: boolean;
+  completed?: boolean;
+  installProgress?: number;
+  entries?: NoteEntry[];
+  // CRM extensions
+  followUpDate?: string;
+  source?: 'mountain' | 'crm';
+  contactId?: string;
+  organizationId?: string;
 }
 
 export interface MiscItem {
@@ -126,7 +325,10 @@ interface DataContextType {
   mountains: Mountain[];
   locations: Location[];
   assets: Asset[];
+  trails: Trail[];
   notes: MountainNote[];
+  contacts: CRMContact[];
+  organizations: CRMOrganization[];
   options: Record<string, string[]>;
   itemPrices: Record<string, number>;
   addMountain: (mountain: Omit<Mountain, 'id'>) => string;
@@ -138,9 +340,14 @@ interface DataContextType {
   addAsset: (asset: Omit<Asset, 'id'>) => string;
   updateAsset: (id: string, asset: Partial<Asset>) => void;
   deleteAsset: (id: string) => Promise<void>;
+  addTrail: (trail: Omit<Trail, 'id'>) => string;
+  updateTrail: (id: string, updates: Partial<Trail>) => void;
+  deleteTrail: (id: string) => Promise<void>;
   getAssetById: (id: string) => Asset | undefined;
   getLocationsByMountainId: (mountainId: string) => Location[];
   getAssetsByLocationId: (locationId: string) => Asset[];
+  getAssetsByMountainId: (mountainId: string) => Asset[];
+  getTrailsByMountainId: (mountainId: string) => Trail[];
   getMountainById: (id: string) => Mountain | undefined;
   getLocationById: (id: string) => Location | undefined;
   getMountainTrailNames: (mountainId: string) => string[];
@@ -148,10 +355,18 @@ interface DataContextType {
   addOption: (key: string, value: string) => void;
   deleteOption: (key: string, value: string) => void;
   setItemPrice: (name: string, price: number | null) => void;
-  addNote: (mountainId: string, text: string) => string;
-  updateNote: (id: string, text: string) => void;
+  addNote: (mountainId: string, text: string, topic?: NoteTopic, scheduled?: boolean, completed?: boolean, installProgress?: number) => string;
+  updateNote: (id: string, updates: Partial<Omit<MountainNote, 'id' | 'mountainId' | 'createdAt'>>) => void;
   deleteNote: (id: string) => void;
   getNotesByMountainId: (mountainId: string) => MountainNote[];
+  // CRM
+  addContact: (contact: Omit<CRMContact, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateContact: (id: string, updates: Partial<CRMContact>) => void;
+  deleteContact: (id: string) => void;
+  addOrganization: (org: Omit<CRMOrganization, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateOrganization: (id: string, updates: Partial<CRMOrganization>) => void;
+  deleteOrganization: (id: string) => void;
+  importContactsFromMountains: () => void;
 }
 
 // Persist the context object on globalThis so that Vite's React Fast Refresh
@@ -167,9 +382,12 @@ const STORAGE_KEYS = {
   LOCATIONS: 'skiInstall_locations',
   ASSETS: 'skiInstall_assets',
   NOTES: 'skiInstall_notes',
+  TRAILS: 'skiInstall_trails',
   OPTIONS: 'skiInstall_options',
   ITEM_PRICES: 'skiInstall_item_prices',
   PENDING_PHOTOS: 'skiInstall_pendingPhotoSync',
+  CONTACTS: 'skiInstall_crm_contacts',
+  ORGANIZATIONS: 'skiInstall_crm_organizations',
 };
 
 // ─── Tombstone helpers — track locally-deleted IDs so server data can't resurrect them ──
@@ -305,11 +523,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
     catch { return []; }
   });
   const [locations, setLocations] = useState<Location[]>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATIONS) || '[]'); }
+    try {
+      const locs: Location[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATIONS) || '[]');
+      // One-time migration: auto-link locations whose trailName matches an existing trail name
+      const trailsArr: Trail[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]');
+      return locs.map(loc => {
+        if (loc.trailId || !loc.trailName) return loc;
+        const match = trailsArr.find(t => t.mountainId === loc.mountainId && t.name === loc.trailName);
+        return match ? { ...loc, trailId: match.id } : loc;
+      });
+    }
     catch { return []; }
   });
   const [assets, setAssets] = useState<Asset[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSETS) || '[]'); }
+    catch { return []; }
+  });
+  const [trails, setTrails] = useState<Trail[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]'); }
     catch { return []; }
   });
   const [notes, setNotes] = useState<MountainNote[]>(() => {
@@ -323,6 +554,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [itemPrices, setItemPrices] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ITEM_PRICES) || '{}'); }
     catch { return {}; }
+  });
+  const [contacts, setContacts] = useState<CRMContact[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || '[]'); }
+    catch { return []; }
+  });
+  const [organizations, setOrganizations] = useState<CRMOrganization[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ORGANIZATIONS) || '[]'); }
+    catch { return []; }
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -342,34 +581,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       setIsLoading(true);
       try {
-        console.log('Loading data from backend...');
-
         // Snapshot local state BEFORE fetching so we can merge below.
-        // This preserves items that were added locally but not yet synced to server.
         let localMountains: Mountain[] = [];
         let localLocations: Location[] = [];
         let localAssets: Asset[] = [];
         let localNotes: MountainNote[] = [];
+        let localTrails: Trail[] = [];
         try { localMountains = JSON.parse(localStorage.getItem(STORAGE_KEYS.MOUNTAINS) || '[]'); } catch {}
         try { localLocations = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATIONS) || '[]'); } catch {}
         try { localAssets = JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSETS) || '[]'); } catch {}
         try { localNotes = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTES) || '[]'); } catch {}
+        try { localTrails = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]'); } catch {}
 
         // Fetch local photos first (IndexedDB — no network cost)
-        const photoLookup = await photoDB.getAllPhotos().catch(e => { console.error('Error loading photos from IndexedDB:', e); return {}; });
+        const photoLookup = await photoDB.getAllPhotos().catch(() => ({}));
+
+        const silent = () => null; // swallow per-call errors — one toast below covers it
+        let backendUnreachable = false;
 
         // Batch 1: lightweight/config endpoints — run in parallel
-        const [mountainsRes, locationsRes, optionsRes, pricesRes] = await Promise.all([
-          apiCall('/mountains').catch(e => { console.error('Error loading mountains:', e); return null; }),
-          apiCall('/locations').catch(e => { console.error('Error loading locations:', e); return null; }),
-          apiCall('/options').catch(e => { console.error('Error loading options:', e); return null; }),
-          apiCall('/item-prices').catch(e => { console.error('Error loading item prices:', e); return null; }),
+        const [mountainsRes, locationsRes, trailsRes, optionsRes, pricesRes] = await Promise.all([
+          apiCall('/mountains').catch(() => { backendUnreachable = true; return silent(); }),
+          apiCall('/locations').catch(() => silent()),
+          apiCall('/trails').catch(() => silent()),
+          apiCall('/options').catch(() => silent()),
+          apiCall('/item-prices').catch(() => silent()),
         ]);
 
-        // Batch 2: large collections — load after batch 1 to avoid resource exhaustion
+        if (backendUnreachable) {
+          console.warn('Backend unreachable — running from local cache');
+        }
+
+        // Batch 2: large collections
         const [assetsRes, notesRes] = await Promise.all([
-          apiCall('/assets').catch(e => { console.error('Error loading assets:', e); return null; }),
-          apiCall('/notes').catch(e => { console.error('Error loading notes:', e); return null; }),
+          apiCall('/assets').catch(() => silent()),
+          apiCall('/notes').catch(() => silent()),
         ]);
 
         // Merge helper: server is authoritative for items it knows about;
@@ -385,6 +631,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
         if (mountainsRes) setMountains(mergeById(mountainsRes.mountains || [], localMountains, 'mountains'));
         if (locationsRes) setLocations(mergeById(locationsRes.locations || [], localLocations, 'locations'));
+        if (trailsRes) setTrails(mergeById(trailsRes.trails || [], localTrails, 'trails'));
         if (assetsRes) {
           const serverAssets: Asset[] = assetsRes.assets || [];
           const merged = mergeById(serverAssets, localAssets, 'assets');
@@ -432,9 +679,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (pricesRes?.prices) {
           setItemPrices(prev => ({ ...prev, ...pricesRes.prices }));
         }
-        console.log('Data loaded successfully');
+        console.log('Data loaded successfully (mountains, locations, trails, assets, notes, options, prices)');
       } catch (error) {
-        console.error('Backend load failed, local cache already displayed:', error);
+        console.warn('Backend load failed — running from local cache:', (error as Error)?.message);
       } finally {
         setIsLoading(false);
       }
@@ -532,22 +779,55 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ─── Flush pending annotation uploads on reconnect ────────────────────────────
+  const flushPendingAnnotations = useCallback(async () => {
+    const pending = cloudAnnotationSync.getPendingAnnotations();
+    if (pending.length === 0) return;
+    console.log(`[annotationSync] Retrying ${pending.length} pending annotation upload(s)…`);
+    let syncedCount = 0;
+    for (const imageId of pending) {
+      try {
+        const annotations = await imageAnnotationsDB.getAnnotations(imageId);
+        if (annotations.length === 0) {
+          // No annotations to upload — remove stale entry
+          cloudAnnotationSync.removePendingAnnotation(imageId);
+          continue;
+        }
+        const ok = await cloudAnnotationSync.uploadAnnotations(imageId, annotations);
+        if (ok) {
+          cloudAnnotationSync.removePendingAnnotation(imageId);
+          syncedCount++;
+          console.log(`[annotationSync] Synced annotations for image ${imageId}`);
+        } else {
+          console.warn(`[annotationSync] Retry failed for image ${imageId} — will try again later`);
+        }
+      } catch (err) {
+        console.error(`[annotationSync] Error retrying image ${imageId}:`, err);
+      }
+    }
+    if (syncedCount > 0) {
+      toast.success(`${syncedCount} annotation${syncedCount !== 1 ? 's' : ''} synced to cloud ☁️`, { duration: 3000 });
+    }
+  }, []);
+
   useEffect(() => {
     // Try to flush any ops that were queued during a previous offline session
     if (navigator.onLine) {
       flushQueue();
       flushPendingPhotos();
       flushPendingLocationMedia();
+      flushPendingAnnotations();
     }
 
     const handleOnline = () => {
       flushQueue();
       flushPendingPhotos();
       flushPendingLocationMedia();
+      flushPendingAnnotations();
     };
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [flushQueue, flushPendingPhotos, flushPendingLocationMedia]);
+  }, [flushQueue, flushPendingPhotos, flushPendingLocationMedia, flushPendingAnnotations]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -581,6 +861,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.TRAILS, JSON.stringify(trails)); }
+      catch (e) { console.error('Error saving trails:', e); }
+    }
+  }, [trails, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
       try { localStorage.setItem(STORAGE_KEYS.OPTIONS, JSON.stringify(options)); }
       catch (e) { console.error('Error saving options:', e); }
     }
@@ -592,6 +879,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       catch (e) { console.error('Error saving item prices:', e); }
     }
   }, [itemPrices, isLoading]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts)); }
+    catch (e) { console.warn('Error saving contacts:', e); }
+  }, [contacts]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.ORGANIZATIONS, JSON.stringify(organizations)); }
+    catch (e) { console.warn('Error saving organizations:', e); }
+  }, [organizations]);
 
   // ─── Mountains ──────────────────────────────────────────────────────────────
 
@@ -628,16 +925,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deleteMountain = async (id: string) => {
     const locationIds = locations.filter(l => l.mountainId === id).map(l => l.id);
-    const assetIds = assets.filter(a => locationIds.includes(a.locationId)).map(a => a.id);
+    // Include both location-assigned assets AND mountain inventory assets
+    const assetIds = assets.filter(a =>
+      (a.locationId && locationIds.includes(a.locationId)) || a.mountainId === id
+    ).map(a => a.id);
 
     await Promise.all(assetIds.map(aid => photoDB.deletePhotos(aid).catch(() => {})));
     await Promise.all(assetIds.map(aid => cloudPhotos.deleteAssetPhotos(aid).catch(() => {})));
     await Promise.all(locationIds.map(lid => locMediaDB.deleteAllMedia(lid).catch(() => {})));
     await Promise.all(locationIds.map(lid => cloudLocSync.deleteLocationMedia(lid).catch(() => {})));
+    await mountainDocsDB.deleteDocuments(id).catch(() => {});
 
     setNotes(prev => prev.filter(n => n.mountainId !== id));
     setAssets(prev => prev.filter(a => !assetIds.includes(a.id)));
-    setLocations(prev => prev.filter(l => l.id !== id));
+    setLocations(prev => prev.filter(l => l.mountainId !== id));
+    setTrails(prev => prev.filter(t => t.mountainId !== id));
     setMountains(prev => prev.filter(m => m.id !== id));
 
     addTombstone('mountains', id);
@@ -680,7 +982,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addAsset = (asset: Omit<Asset, 'id'>) => {
     const id = crypto.randomUUID();
-    const newAsset = { ...asset, id };
+    const newAsset = {
+      ...asset,
+      id,
+      inventoryStatus: asset.inventoryStatus || 'In Stock',
+      mountainDeployment: asset.mountainDeployment || 'Unassigned / Warehouse',
+      dateAddedToInventory: asset.dateAddedToInventory || new Date().toISOString().slice(0, 10),
+    };
     setAssets(prev => [...prev, newAsset]);
     const photos = extractPhotoFields(newAsset);
     if (Object.keys(photos).length > 0) {
@@ -751,24 +1059,163 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Asset delete sync error:', e));
   };
 
+  // ─── Trails ─────────────────────────────────────────────────────────────────
+
+  const addTrail = (trail: Omit<Trail, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newTrail = { ...trail, id };
+    setTrails(prev => [...prev, newTrail]);
+    syncOrQueue('/trails', 'POST', JSON.stringify(newTrail))
+      .catch(e => console.error('Trail sync error:', e));
+    return id;
+  };
+
+  const updateTrail = (id: string, updates: Partial<Trail>) => {
+    setTrails(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    syncOrQueue(`/trails/${id}`, 'PUT', JSON.stringify(updates))
+      .catch(e => console.error('Trail update sync error:', e));
+  };
+
+  const deleteTrail = async (id: string) => {
+    // Unlink locations from this trail (don't delete them — they become standalone)
+    setLocations(prev => prev.map(l => l.trailId === id ? { ...l, trailId: undefined } : l));
+    setTrails(prev => prev.filter(t => t.id !== id));
+
+    addTombstone('trails', id);
+    syncOrQueue(`/trails/${id}`, 'DELETE', null)
+      .catch(e => console.error('Trail delete sync error:', e));
+  };
+
   // ─── Notes ──────────────────────────────────────────────────────────────────
 
-  const addNote = (mountainId: string, text: string) => {
+  const addNote = (mountainId: string, text: string, topic?: NoteTopic, scheduled?: boolean, completed?: boolean, installProgress?: number) => {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const newNote: MountainNote = { id, mountainId, text, createdAt: now, updatedAt: now };
+    const newNote: MountainNote = {
+      id,
+      mountainId,
+      text,
+      createdAt: now,
+      updatedAt: now,
+      ...(topic && { topic, scheduled, completed, installProgress }),
+    };
     setNotes(prev => [...prev, newNote]);
     syncOrQueue('/notes', 'POST', JSON.stringify(newNote))
       .catch(e => console.error('Note sync error:', e));
     return id;
   };
 
-  const updateNote = (id: string, text: string) => {
+  const updateNote = (id: string, updates: Partial<Omit<MountainNote, 'id' | 'mountainId' | 'createdAt'>>) => {
     const now = new Date().toISOString();
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, text, updatedAt: now } : n));
-    syncOrQueue(`/notes/${id}`, 'PUT', JSON.stringify({ text, updatedAt: now }))
+    const note = notes.find(n => n.id === id);
+    const wasProposalJustSigned = note?.topic === 'Proposal' && !note.completed && updates.completed === true;
+
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updates, updatedAt: now } : n));
+    syncOrQueue(`/notes/${id}`, 'PUT', JSON.stringify({ ...updates, updatedAt: now }))
       .catch(e => console.error('Note update sync error:', e));
+
+    // Auto-generate invoice when proposal is signed
+    if (wasProposalJustSigned && note?.mountainId) {
+      setTimeout(() => generateInvoiceFromProposal(note.mountainId!), 500);
+    }
   };
+
+  async function generateInvoiceFromProposal(mountainId: string) {
+    try {
+      // Fetch the proposal data from the server
+      const tokenResp = await apiCall(`/proposals/sign-status/${mountainId}`);
+      if (!tokenResp.token) return;
+
+      const proposalResp = await apiCall(`/proposals/sign/${tokenResp.token}`);
+      if (!proposalResp.proposalSnapshot) return;
+
+      const proposal = proposalResp.proposalSnapshot;
+
+      // Calculate line items from proposal
+      const lineItems: { description: string; unitPrice: number; quantity: number; total: number }[] = [];
+
+      // Add trail capture points
+      proposal.trails?.forEach((trail: any) => {
+        const qty = parseInt(trail.capturePoints) || 0;
+        const price = parseFloat(trail.unitPrice?.replace(/[$,]/g, '')) || 1000;
+        if (qty > 0) {
+          const trailName = trail.name || 'Trail';
+          lineItems.push({
+            description: `${trailName} Capture Points`,
+            unitPrice: price,
+            quantity: qty,
+            total: price * qty,
+          });
+        }
+      });
+
+      // Add integration fee
+      const integrationFee = parseFloat(proposal.integrationFee?.replace(/[$,]/g, '')) || 0;
+      if (integrationFee > 0) {
+        lineItems.push({
+          description: 'Integration Fee',
+          unitPrice: integrationFee,
+          quantity: 1,
+          total: integrationFee,
+        });
+      }
+
+      // Add install fee
+      const installFee = parseFloat(proposal.installFee?.replace(/[$,]/g, '')) || 0;
+      if (installFee > 0) {
+        lineItems.push({
+          description: 'Installation Fee',
+          unitPrice: installFee,
+          quantity: 1,
+          total: installFee,
+        });
+      }
+
+      // Add misc fee
+      const miscFee = parseFloat(proposal.miscFee?.replace(/[$,]/g, '')) || 0;
+      if (miscFee > 0) {
+        lineItems.push({
+          description: 'Miscellaneous Fees',
+          unitPrice: miscFee,
+          quantity: 1,
+          total: miscFee,
+        });
+      }
+
+      const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+      const invoiceNumber1Percent = 50; // Default to 50% for Invoice 1
+      const balanceDue = subtotal * (invoiceNumber1Percent / 100);
+
+      // Generate invoice number: YYMMDD + mountain initials
+      const mountain = getMountainById(mountainId);
+      const today = new Date();
+      const yy = today.getFullYear().toString().slice(-2);
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const initials = (mountain?.name || 'MTN')
+        .split(' ')
+        .map(w => w[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 3);
+      const invoiceNumber = `YL${yy}${mm}${dd}${initials}-A`;
+
+      const invoice: Invoice = {
+        invoiceNumber,
+        date: today.toISOString().split('T')[0],
+        subtotal,
+        invoiceNumber1Percent,
+        balanceDue,
+        lineItems,
+      };
+
+      updateMountain(mountainId, { invoice });
+      toast.success('Invoice #' + invoiceNumber + ' generated!');
+    } catch (err) {
+      console.error('Error generating invoice:', err);
+      toast.error('Failed to generate invoice');
+    }
+  }
 
   const deleteNote = (id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id));
@@ -786,6 +1233,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const getAssetById = (id: string) => assets.find(a => a.id === id);
   const getLocationsByMountainId = (mountainId: string) => locations.filter(l => l.mountainId === mountainId);
   const getAssetsByLocationId = (locationId: string) => assets.filter(a => a.locationId === locationId);
+  const getAssetsByMountainId = (mountainId: string) => assets.filter(a => a.mountainId === mountainId);
+  const getTrailsByMountainId = (mountainId: string) => trails.filter(t => t.mountainId === mountainId);
   const getMountainById = (id: string) => mountains.find(m => m.id === id);
   const getLocationById = (id: string) => locations.find(l => l.id === id);
 
@@ -839,13 +1288,78 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Item price sync error:', e));
   };
 
+  // ─── CRM ────────────────────────────────────────────────────────────────────
+
+  const addContact = (contact: Omit<CRMContact, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const newContact: CRMContact = { ...contact, id, createdAt: now, updatedAt: now };
+    setContacts(prev => [...prev, newContact]);
+    return id;
+  };
+
+  const updateContact = (id: string, updates: Partial<CRMContact>) => {
+    setContacts(prev => prev.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c));
+  };
+
+  const deleteContact = (id: string) => {
+    setContacts(prev => prev.filter(c => c.id !== id));
+  };
+
+  const addOrganization = (org: Omit<CRMOrganization, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const newOrg: CRMOrganization = { ...org, id, createdAt: now, updatedAt: now };
+    setOrganizations(prev => [...prev, newOrg]);
+    return id;
+  };
+
+  const updateOrganization = (id: string, updates: Partial<CRMOrganization>) => {
+    setOrganizations(prev => prev.map(o => o.id === id ? { ...o, ...updates, updatedAt: new Date().toISOString() } : o));
+  };
+
+  const deleteOrganization = (id: string) => {
+    setOrganizations(prev => prev.filter(o => o.id !== id));
+  };
+
+  // Auto-import contacts from all mountains (called on first CRM visit)
+  const importContactsFromMountains = () => {
+    const existingEmails = new Set(contacts.map(c => c.email.toLowerCase()).filter(Boolean));
+    const toAdd: CRMContact[] = [];
+    mountains.forEach(m => {
+      const candidates = [
+        m.adminContact && { ...m.adminContact, type: 'Resort' as const },
+        m.technicalContact && { ...m.technicalContact, type: 'Resort' as const },
+        ...(m.additionalContacts || []).map(c => ({ ...c, type: 'Resort' as const })),
+      ].filter(Boolean) as any[];
+      candidates.forEach(c => {
+        if (!c.name) return;
+        const emailKey = (c.email || '').toLowerCase();
+        if (emailKey && existingEmails.has(emailKey)) return;
+        if (emailKey) existingEmails.add(emailKey);
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        toAdd.push({
+          id, name: c.name, email: c.email || '', phone: c.phone || '',
+          type: 'Resort', title: c.title || c.role || '', organizationId: undefined,
+          tags: [], isPrimary: false, mountainId: m.id,
+          notes: c.notes || '', activities: [], createdAt: now, updatedAt: now,
+        });
+      });
+    });
+    if (toAdd.length > 0) setContacts(prev => [...prev, ...toAdd]);
+  };
+
   return (
     <DataContext.Provider
       value={{
         mountains,
         locations,
         assets,
+        trails,
         notes,
+        contacts,
+        organizations,
         options,
         itemPrices,
         addMountain,
@@ -857,9 +1371,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         addAsset,
         updateAsset,
         deleteAsset,
+        addTrail,
+        updateTrail,
+        deleteTrail,
         getAssetById,
         getLocationsByMountainId,
         getAssetsByLocationId,
+        getAssetsByMountainId,
+        getTrailsByMountainId,
         getMountainById,
         getLocationById,
         getMountainTrailNames,
@@ -871,6 +1390,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         updateNote,
         deleteNote,
         getNotesByMountainId,
+        addContact,
+        updateContact,
+        deleteContact,
+        addOrganization,
+        updateOrganization,
+        deleteOrganization,
+        importContactsFromMountains,
       }}
     >
       {children}

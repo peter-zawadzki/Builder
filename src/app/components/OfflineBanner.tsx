@@ -77,7 +77,7 @@ export function OfflineBanner() {
     return (
       <div
         role="status"
-        className="flex items-center gap-2 px-4 py-2.5 bg-[#1D2930] text-white text-[13px] font-['Inter:Regular',sans-serif]"
+        className="flex items-center gap-2 px-4 py-2.5 bg-[#1e3a5f] text-white text-[13px] font-['Inter:Regular',sans-serif]"
       >
         <WifiOff size={14} className="shrink-0" />
         <span className="flex-1">Offline — changes will sync when you reconnect.</span>

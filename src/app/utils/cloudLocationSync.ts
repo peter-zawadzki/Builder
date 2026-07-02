@@ -193,12 +193,21 @@ export async function fetchLocationMediaUrls(
       body: JSON.stringify({ locationIds }),
     });
     if (!res.ok) {
-      console.error('[cloudLocSync] batch-urls failed:', res.status, await res.text().catch(() => ''));
+      // Only log if it's an actual server error (not 404 or empty response)
+      if (res.status >= 500) {
+        console.error('[cloudLocSync] batch-urls server error:', res.status);
+      }
       return {};
     }
     const { urlMap } = await res.json();
     return urlMap ?? {};
   } catch (err) {
+    // Silently fail - this is expected when offline or server not available
+    // Only log if it's not a network error
+    if (err instanceof TypeError && err.message === 'Failed to fetch') {
+      // Network error, likely offline or server not running - don't log
+      return {};
+    }
     console.error('[cloudLocSync] fetchLocationMediaUrls error:', err);
     return {};
   }

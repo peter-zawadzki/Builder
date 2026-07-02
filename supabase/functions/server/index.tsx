@@ -31,6 +31,48 @@ const PHOTO_BUCKET = "make-a0d4ba78-photos";
 // Enable logger
 app.use('*', logger(console.log));
 
+// ─── Postmark email helper ─────────────────────────────────────────────────────
+
+async function sendPostmarkEmail(
+  subject: string,
+  htmlBody: string,
+  textBody: string,
+  to: string = 'support@yullr.com',
+  cc?: string
+): Promise<void> {
+  const apiKey = Deno.env.get('POSTMARK_API_KEY');
+  if (!apiKey) { console.log('POSTMARK_API_KEY not set — skipping email'); return; }
+  try {
+    const payload: Record<string, any> = {
+      From: 'support@yullr.com',
+      To: to,
+      Subject: subject,
+      HtmlBody: htmlBody,
+      TextBody: textBody,
+      MessageStream: 'outbound',
+    };
+    if (cc) payload.Cc = cc;
+
+    const res = await fetch('https://api.postmarkapp.com/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-Postmark-Server-Token': apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json() as any;
+    if (!res.ok || data.ErrorCode) {
+      console.error('Postmark send error:', JSON.stringify(data));
+    } else {
+      console.log('Postmark email sent:', data.MessageID);
+    }
+  } catch (err) {
+    console.error('Failed to send Postmark email:', err);
+  }
+}
+
 // Enable CORS for all routes and methods
 app.use(
   "/*",
@@ -102,6 +144,7 @@ const LOCATION_INDEX = "idx:locations";
 const ASSET_INDEX    = "idx:assets";
 const SI_INDEX       = "idx:siteInspections";
 const NOTE_INDEX     = "idx:notes";
+const TRAIL_INDEX    = "idx:trails";
 
 async function addToIndex(indexKey: string, id: string): Promise<void> {
   const ids: string[] = (await withRetry(() => kv.get(indexKey), `get index ${indexKey}`)) || [];
@@ -323,6 +366,501 @@ app.delete("/make-server-a0d4ba78/location-media/:locationId", async (c) => {
   }
 });
 
+// ─── Trail Map Upload / Download / Delete ─────────────────────────────────────
+
+/**
+ * POST /trail-map/upload
+ * { mountainId, dataUrl, mimeType, fileName }
+ * Stores the trail map in Supabase Storage and records the path in KV.
+ */
+app.post("/make-server-a0d4ba78/trail-map/upload", async (c) => {
+  try {
+    const { mountainId, dataUrl, mimeType, fileName } = await c.req.json();
+    if (!mountainId || !dataUrl || !mimeType) {
+      return c.json({ error: "mountainId, dataUrl, and mimeType are required" }, 400);
+    }
+
+    const commaIdx = (dataUrl as string).indexOf(",");
+    if (commaIdx === -1) return c.json({ error: "Invalid dataUrl" }, 400);
+    const b64 = (dataUrl as string).slice(commaIdx + 1);
+
+    let binary: string;
+    try { binary = atob(b64); } catch { return c.json({ error: "Invalid base64" }, 400); }
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    const ext = (mimeType as string).includes("pdf") ? "pdf"
+              : (mimeType as string).includes("png") ? "png"
+              : (mimeType as string).includes("webp") ? "webp"
+              : "jpg";
+    const storagePath = `trail-maps/${mountainId}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .upload(storagePath, bytes, { contentType: mimeType, upsert: true });
+
+    if (uploadError) {
+      console.error(`Trail map upload error (${storagePath}):`, uploadError);
+      return c.json({ error: `Upload failed: ${uploadError.message}` }, 500);
+    }
+
+    await withRetry(
+      () => kv.set(`trailMap:${mountainId}`, { path: storagePath, mimeType, fileName: fileName || storagePath }),
+      "set trailMap kv"
+    );
+
+    // Return a fresh signed URL (24 h)
+    const { data: signed } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(storagePath, 86400);
+    console.log(`Trail map uploaded: ${storagePath} (${bytes.length} bytes)`);
+    return c.json({ success: true, url: signed?.signedUrl ?? null });
+  } catch (err) {
+    console.error("Error uploading trail map:", err);
+    return c.json({ error: `Failed to upload trail map: ${err}` }, 500);
+  }
+});
+
+/** GET /trail-map/:mountainId — returns a signed URL + metadata for the trail map */
+app.get("/make-server-a0d4ba78/trail-map/:mountainId", async (c) => {
+  try {
+    const mountainId = c.req.param("mountainId");
+    const meta = (await withRetry(() => kv.get(`trailMap:${mountainId}`), "get trailMap kv")) as
+      { path: string; mimeType: string; fileName: string } | null;
+
+    if (!meta?.path) return c.json({ url: null, mimeType: null, fileName: null });
+
+    const { data: signed } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(meta.path, 86400);
+    return c.json({ url: signed?.signedUrl ?? null, mimeType: meta.mimeType, fileName: meta.fileName });
+  } catch (err) {
+    console.error("Error fetching trail map URL:", err);
+    return c.json({ error: `Failed to fetch trail map: ${err}` }, 500);
+  }
+});
+
+/** DELETE /trail-map/:mountainId — removes trail map from storage + KV */
+app.delete("/make-server-a0d4ba78/trail-map/:mountainId", async (c) => {
+  try {
+    const mountainId = c.req.param("mountainId");
+    const meta = (await withRetry(() => kv.get(`trailMap:${mountainId}`), "get trailMap kv for delete")) as
+      { path: string } | null;
+
+    if (meta?.path) {
+      const { error } = await supabase.storage.from(PHOTO_BUCKET).remove([meta.path]);
+      if (error) console.error("Storage remove error for trail map:", error);
+    }
+    await withRetry(() => kv.del(`trailMap:${mountainId}`), "del trailMap kv");
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Error deleting trail map:", err);
+    return c.json({ error: `Failed to delete trail map: ${err}` }, 500);
+  }
+});
+
+// ─── Proposal Email Sending ───────────────────────────────────────────────────
+
+/**
+ * POST /proposals/send-email
+ * { mountainId, recipientEmail, recipientName?, ccEmails?, proposalSnapshot }
+ * Sends proposal link via email to recipient with optional CC recipients
+ */
+app.post("/make-server-a0d4ba78/proposals/send-email", async (c) => {
+  try {
+    const { mountainId, recipientEmail, recipientName, ccEmails, proposalSnapshot } = await c.req.json();
+    if (!mountainId || !recipientEmail || !proposalSnapshot) {
+      return c.json({ error: "mountainId, recipientEmail, and proposalSnapshot are required" }, 400);
+    }
+
+    // Get or create signing token
+    let token = (await withRetry(() => kv.get(`proposalSignToken:${mountainId}`), "get proposalSignToken")) as string | null;
+    if (!token) {
+      // Create new signing record
+      token = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
+      const record = {
+        token,
+        mountainId,
+        createdAt: new Date().toISOString(),
+        proposalSnapshot,
+        yullrSignature: null,
+        clientSignature: null,
+      };
+      await withRetry(() => kv.set(`proposalSign:${token}`, record), "set proposalSign");
+      await withRetry(() => kv.set(`proposalSignToken:${mountainId}`, token), "set proposalSignToken");
+    }
+
+    const signingUrl = `${c.req.header('origin') || 'https://builder.yullr.com'}/sign/${token}`;
+    const mountainName = proposalSnapshot.mountainName || proposalSnapshot.clientName || 'your mountain';
+    const proposalNumber = proposalSnapshot.proposalNumber || 'Draft';
+    const displayName = recipientName || recipientEmail;
+
+    const emailHtml = `
+<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+  <div style="background:#1D2930;padding:32px">
+    <img src="https://race.yullr.com/_assets/v11/8b719608599361ca2b1d142742df531a9af04c08.png" alt="YULLR" style="height:44px;margin-bottom:8px" />
+    <h1 style="color:#fff;font-size:24px;margin:8px 0 4px">Your YULLR Proposal</h1>
+    <p style="color:#F95C39;font-size:14px;margin:0;font-weight:600">#${proposalNumber}</p>
+  </div>
+  <div style="padding:32px">
+    <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 20px">Hi ${displayName},</p>
+    <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 20px">Thank you for your interest in YULLR. We're excited to share our proposal for deploying the YULLR platform at <strong>${mountainName}</strong>.</p>
+    <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 24px">Click the button below to review the full proposal and digitally sign when ready:</p>
+    <div style="text-align:center;margin:0 0 24px">
+      <a href="${signingUrl}" style="display:inline-block;background:#FF5C39;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px">Review &amp; Sign Proposal</a>
+    </div>
+    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">If you have any questions about this proposal, please don't hesitate to reach out. We're here to help.</p>
+  </div>
+  <div style="padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb">
+    <p style="color:#9ca3af;font-size:12px;margin:0">YULLR, Inc. · support@yullr.com</p>
+  </div>
+</div>`;
+
+    const emailText = `YULLR Proposal #${proposalNumber}
+
+Hi ${displayName},
+
+Thank you for your interest in YULLR. We're excited to share our proposal for deploying the YULLR platform at ${mountainName}.
+
+Review and sign your proposal here:
+${signingUrl}
+
+If you have any questions about this proposal, please don't hesitate to reach out. We're here to help.
+
+YULLR, Inc.
+support@yullr.com`;
+
+    await sendPostmarkEmail(
+      `YULLR Proposal for ${mountainName} — #${proposalNumber}`,
+      emailHtml,
+      emailText,
+      recipientEmail,
+      ccEmails || undefined
+    );
+
+    // Log email send event in signing record
+    const record = (await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign for log")) as Record<string, any> | null;
+    if (record) {
+      if (!Array.isArray(record.emailLog)) record.emailLog = [];
+      record.emailLog.push({
+        sentAt: new Date().toISOString(),
+        recipientEmail,
+        recipientName: recipientName || null,
+        ccEmails: ccEmails || null,
+      });
+      await withRetry(() => kv.set(`proposalSign:${token}`, record), "set proposalSign log");
+    }
+
+    console.log(`Proposal email sent: token=${token} to=${recipientEmail}`);
+    return c.json({ success: true, token });
+  } catch (err) {
+    console.error("Error sending proposal email:", err);
+    return c.json({ error: `Failed to send email: ${err}` }, 500);
+  }
+});
+
+// ─── Proposal Signing ─────────────────────────────────────────────────────────
+
+/**
+ * POST /proposals/sign-request
+ * { mountainId, proposalSnapshot }
+ * Creates a signing record in KV and returns a unique token.
+ */
+app.post("/make-server-a0d4ba78/proposals/sign-request", async (c) => {
+  try {
+    const { mountainId, proposalSnapshot } = await c.req.json();
+    if (!mountainId || !proposalSnapshot) {
+      return c.json({ error: "mountainId and proposalSnapshot are required" }, 400);
+    }
+    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
+    const record = {
+      token,
+      mountainId,
+      createdAt: new Date().toISOString(),
+      proposalSnapshot,
+      yullrSignature: null,
+      clientSignature: null,
+    };
+    await withRetry(() => kv.set(`proposalSign:${token}`, record), "set proposalSign");
+    await withRetry(() => kv.set(`proposalSignToken:${mountainId}`, token), "set proposalSignToken");
+    console.log(`Proposal signing request created: token=${token} mountainId=${mountainId}`);
+    return c.json({ token });
+  } catch (err) {
+    console.error("Error creating proposal sign request:", err);
+    return c.json({ error: `Failed to create sign request: ${err}` }, 500);
+  }
+});
+
+/**
+ * GET /proposals/sign/:token — public, no auth required
+ * Returns the full signing record (snapshot + signatures).
+ */
+app.get("/make-server-a0d4ba78/proposals/sign/:token", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const record = await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign");
+    if (!record) return c.json({ error: "Signing request not found" }, 404);
+    return c.json(record);
+  } catch (err) {
+    console.error("Error fetching signing record:", err);
+    return c.json({ error: `Failed to fetch signing record: ${err}` }, 500);
+  }
+});
+
+/**
+ * POST /proposals/sign/:token/viewed — public, no auth required
+ * Called when a client opens the signing link. Appends a timestamped entry to viewLog.
+ */
+app.post("/make-server-a0d4ba78/proposals/sign/:token/viewed", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const record = (await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign for view")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Not found" }, 404);
+    if (!Array.isArray(record.viewLog)) record.viewLog = [];
+    record.viewLog.push({ viewedAt: new Date().toISOString() });
+    await withRetry(() => kv.set(`proposalSign:${token}`, record), "set proposalSign view");
+    console.log(`Proposal link viewed: token=${token} total_views=${record.viewLog.length}`);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Error recording proposal view:", err);
+    return c.json({ error: `Failed: ${err}` }, 500);
+  }
+});
+
+/**
+ * GET /proposals/sign-status/:mountainId
+ * Returns the current token + signing record for a mountain (builder use).
+ */
+app.get("/make-server-a0d4ba78/proposals/sign-status/:mountainId", async (c) => {
+  try {
+    const mountainId = c.req.param("mountainId");
+    const token = (await withRetry(() => kv.get(`proposalSignToken:${mountainId}`), "get proposalSignToken")) as string | null;
+    if (!token) return c.json({ token: null, record: null });
+    const record = await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign for status");
+    return c.json({ token, record: record ?? null });
+  } catch (err) {
+    console.error("Error fetching sign status:", err);
+    return c.json({ error: `Failed to fetch sign status: ${err}` }, 500);
+  }
+});
+
+/**
+ * POST /proposals/sign/:token/client
+ * { name, title } — client submits their signature via the public signing page.
+ */
+app.post("/make-server-a0d4ba78/proposals/sign/:token/client", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const { name, title, legalEntity, signatureImage } = await c.req.json();
+    if (!name?.trim()) return c.json({ error: "Name is required" }, 400);
+    const record = (await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign for client sig")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Signing request not found" }, 404);
+    if (record.clientSignature) return c.json({ error: "Already signed by client" }, 409);
+    record.clientSignature = {
+      name: name.trim(),
+      title: title?.trim() || "",
+      legalEntity: legalEntity?.trim() || "",
+      signatureImage: signatureImage || null,
+      signedAt: new Date().toISOString(),
+    };
+    await withRetry(() => kv.set(`proposalSign:${token}`, record), "set proposalSign client sig");
+    console.log(`Client signed proposal: token=${token} name=${name.trim()}`);
+
+    // ── Fire notification email (non-blocking) ───────────────────────────────
+    const snap = record.proposalSnapshot as any;
+    const mountainName = snap?.mountainName || snap?.projectName || record.mountainId || 'Unknown';
+    const signedAt = new Date(record.clientSignature.signedAt).toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+    const signerName = record.clientSignature.name;
+    const signerTitle = record.clientSignature.title || '—';
+    const signerEntity = record.clientSignature.legalEntity || '—';
+    const proposalHtml = `
+<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+  <div style="background:#1D2930;padding:24px 32px">
+    <p style="color:#F95C39;font-size:13px;font-weight:600;letter-spacing:.08em;margin:0 0 4px">YULLR BUILDER</p>
+    <h1 style="color:#fff;font-size:22px;margin:0">Proposal Signed</h1>
+  </div>
+  <div style="padding:32px">
+    <p style="color:#374151;font-size:15px;margin:0 0 24px">A client has signed the proposal. Here are the details:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <tr><td style="padding:8px 0;color:#6b7280;width:40%">Mountain / Project</td><td style="padding:8px 0;color:#111827;font-weight:600">${mountainName}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:8px 6px;color:#6b7280">Signer Name</td><td style="padding:8px 6px;color:#111827;font-weight:600">${signerName}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Title / Role</td><td style="padding:8px 0;color:#111827">${signerTitle}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:8px 6px;color:#6b7280">Legal Entity</td><td style="padding:8px 6px;color:#111827">${signerEntity}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Signed At</td><td style="padding:8px 0;color:#111827">${signedAt}</td></tr>
+    </table>
+    <div style="margin-top:24px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
+      <p style="color:#15803d;font-size:13px;margin:0">✅ The proposal has been signed by the client. You can now proceed to the Customer Agreement.</p>
+    </div>
+  </div>
+  <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb">
+    <p style="color:#9ca3af;font-size:12px;margin:0">YULLR Builder · Automated Notification</p>
+  </div>
+</div>`;
+    const proposalText = `Proposal Signed\n\nMountain/Project: ${mountainName}\nSigner: ${signerName}\nTitle: ${signerTitle}\nLegal Entity: ${signerEntity}\nSigned At: ${signedAt}\n\nLog in to YULLR Builder to proceed.`;
+    sendPostmarkEmail(`✅ Proposal Signed — ${mountainName} — ${signerName}`, proposalHtml, proposalText).catch(console.error);
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Error saving client signature:", err);
+    return c.json({ error: `Failed to save client signature: ${err}` }, 500);
+  }
+});
+
+/**
+ * POST /proposals/sign/:token/clear-signatures
+ * Clears both YULLR and client signatures, unlocking the proposal for editing.
+ */
+app.post("/make-server-a0d4ba78/proposals/sign/:token/clear-signatures", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const record = (await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign for clear")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Signing request not found" }, 404);
+    record.yullrSignature = null;
+    record.clientSignature = null;
+    await withRetry(() => kv.set(`proposalSign:${token}`, record), "set proposalSign clear sigs");
+    console.log(`Signatures cleared for proposal token=${token}`);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Error clearing signatures:", err);
+    return c.json({ error: `Failed to clear signatures: ${err}` }, 500);
+  }
+});
+
+/**
+ * DELETE /proposals/sign/:token
+ * Removes the sign record and the token index for the mountain.
+ */
+app.delete("/make-server-a0d4ba78/proposals/sign/:token", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const record = (await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign for delete")) as Record<string, any> | null;
+
+    // Prevent deletion if any signatures exist
+    if (record?.yullrSignature || record?.clientSignature) {
+      console.log(`Proposal deletion blocked - signatures exist: token=${token}`);
+      return c.json({ error: "Cannot delete a signed proposal" }, 403);
+    }
+
+    if (record?.mountainId) {
+      await withRetry(() => kv.del(`proposalSignToken:${record.mountainId}`), "del proposalSignToken");
+    }
+    await withRetry(() => kv.del(`proposalSign:${token}`), "del proposalSign");
+    console.log(`Proposal sign record deleted: token=${token}`);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Error deleting proposal sign record:", err);
+    return c.json({ error: `Failed to delete sign record: ${err}` }, 500);
+  }
+});
+
+/**
+ * POST /proposals/sign/:token/yullr
+ * { name, signatureImage } — YULLR rep signs from inside the Proposal Builder.
+ */
+app.post("/make-server-a0d4ba78/proposals/sign/:token/yullr", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const { name, signatureImage } = await c.req.json();
+    if (!name?.trim()) return c.json({ error: "Name is required" }, 400);
+    const record = (await withRetry(() => kv.get(`proposalSign:${token}`), "get proposalSign for yullr sig")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Signing request not found" }, 404);
+    record.yullrSignature = {
+      name: name.trim(),
+      signatureImage: signatureImage || null,
+      signedAt: new Date().toISOString(),
+    };
+    await withRetry(() => kv.set(`proposalSign:${token}`, record), "set proposalSign yullr sig");
+    console.log(`YULLR signed proposal: token=${token} name=${name.trim()}`);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Error saving YULLR signature:", err);
+    return c.json({ error: `Failed to save YULLR signature: ${err}` }, 500);
+  }
+});
+
+/**
+ * POST /proposals/send-signed-pdf
+ * { mountainId, proposalNumber, mountainName, recipientEmail, pdfBase64 }
+ * Sends the fully signed proposal PDF to the customer via email
+ */
+app.post("/make-server-a0d4ba78/proposals/send-signed-pdf", async (c) => {
+  try {
+    const { mountainId, proposalNumber, mountainName, recipientEmail, pdfBase64 } = await c.req.json();
+    if (!pdfBase64 || !recipientEmail) {
+      return c.json({ error: "pdfBase64 and recipientEmail are required" }, 400);
+    }
+
+    const emailHtml = `
+<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+  <div style="background:#1D2930;padding:32px">
+    <img src="https://race.yullr.com/_assets/v11/8b719608599361ca2b1d142742df531a9af04c08.png" alt="YULLR" style="height:44px;margin-bottom:8px" />
+    <h1 style="color:#fff;font-size:24px;margin:8px 0 4px">Fully Executed Proposal</h1>
+    <p style="color:#F95C39;font-size:14px;margin:0;font-weight:600">#${proposalNumber || 'Draft'}</p>
+  </div>
+  <div style="padding:32px">
+    <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 20px">Thank you for signing the YULLR proposal for <strong>${mountainName || 'your mountain'}</strong>.</p>
+    <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 20px">Please find the fully executed proposal attached to this email as a PDF. Both parties have signed and the agreement is now in effect.</p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0">
+      <p style="color:#15803d;font-size:14px;margin:0">✅ <strong>Next Steps:</strong> Your YULLR representative will be in touch shortly to coordinate installation and deployment.</p>
+    </div>
+    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">If you have any questions, please don't hesitate to reach out at support@yullr.com.</p>
+  </div>
+  <div style="padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb">
+    <p style="color:#9ca3af;font-size:12px;margin:0">YULLR, Inc. · support@yullr.com</p>
+  </div>
+</div>`;
+
+    const emailText = `YULLR Fully Executed Proposal #${proposalNumber || 'Draft'}
+
+Thank you for signing the YULLR proposal for ${mountainName || 'your mountain'}.
+
+Please find the fully executed proposal attached to this email as a PDF. Both parties have signed and the agreement is now in effect.
+
+Next Steps: Your YULLR representative will be in touch shortly to coordinate installation and deployment.
+
+If you have any questions, please don't hesitate to reach out.
+
+YULLR, Inc.
+support@yullr.com`;
+
+    // Send email with PDF attachment
+    const apiKey = Deno.env.get("POSTMARK_API_KEY");
+    if (!apiKey) throw new Error("POSTMARK_API_KEY not configured");
+
+    const response = await fetch("https://api.postmarkapp.com/email", {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-Postmark-Server-Token": apiKey,
+      },
+      body: JSON.stringify({
+        From: "YULLR Builder <support@yullr.com>",
+        To: recipientEmail,
+        Subject: `✅ Signed Proposal — ${mountainName || 'Mountain'} — #${proposalNumber || 'Draft'}`,
+        HtmlBody: emailHtml,
+        TextBody: emailText,
+        MessageStream: "outbound",
+        Attachments: [
+          {
+            Name: `YULLR-Proposal-${proposalNumber || 'Draft'}-${(mountainName || 'Mountain').replace(/\s+/g, '-')}-Signed.pdf`,
+            Content: pdfBase64,
+            ContentType: "application/pdf",
+          }
+        ],
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      console.error("Postmark error:", result);
+      throw new Error(result.Message || "Failed to send email");
+    }
+
+    console.log(`Signed proposal PDF sent: mountainId=${mountainId} to=${recipientEmail}`);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("Error sending signed PDF:", err);
+    return c.json({ error: `Failed to send PDF: ${err}` }, 500);
+  }
+});
+
 // ─── Asset Photo Upload / Download / Delete ───────────────────────────────────
 
 /**
@@ -440,12 +978,225 @@ app.delete("/make-server-a0d4ba78/photos/:assetId", async (c) => {
   }
 });
 
+// ─── Image Annotations ────────────────────────────────────────────────────────
+
+/** POST /annotations/upload — save annotations for an image */
+app.post("/make-server-a0d4ba78/annotations/upload", async (c) => {
+  try {
+    const { imageId, annotations } = await c.req.json();
+    if (!imageId) return c.json({ error: "Missing imageId" }, 400);
+
+    const key = `annotations:${imageId}`;
+    await kv.set(key, { imageId, annotations, updatedAt: new Date().toISOString() });
+
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("[annotations/upload] error:", err);
+    return c.json({ error: String(err) }, 500);
+  }
+});
+
+/** POST /annotations/batch-get — get annotations for multiple images */
+app.post("/make-server-a0d4ba78/annotations/batch-get", async (c) => {
+  try {
+    const { imageIds } = await c.req.json();
+    if (!Array.isArray(imageIds)) return c.json({ error: "imageIds must be an array" }, 400);
+
+    const keys = imageIds.map(id => `annotations:${id}`);
+    const results = await kv.mget(...keys);
+
+    // Build map of imageId -> annotations
+    const annotationsMap: Record<string, any[]> = {};
+    results.forEach((result, index) => {
+      if (result) {
+        annotationsMap[imageIds[index]] = result.annotations || [];
+      }
+    });
+
+    return c.json({ annotationsMap });
+  } catch (err) {
+    console.error("[annotations/batch-get] error:", err);
+    return c.json({ error: String(err) }, 500);
+  }
+});
+
+/** DELETE /annotations/:imageId — delete annotations for an image */
+app.delete("/make-server-a0d4ba78/annotations/:imageId", async (c) => {
+  try {
+    const imageId = c.req.param("imageId");
+    const key = `annotations:${imageId}`;
+    await kv.del(key);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error("[annotations/delete] error:", err);
+    return c.json({ error: String(err) }, 500);
+  }
+});
+
 // Health check endpoint
 app.get("/make-server-a0d4ba78/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-// ─── Mountains ────────────────────────────────────────────────────────────────
+// ─── Image proxy (used by PDF export to bypass browser CORS on external images) ─
+app.get("/make-server-a0d4ba78/proxy-image", async (c) => {
+  const url = c.req.query("url");
+  if (!url) return c.text("Missing url parameter", 400);
+  try {
+    const resp = await fetch(url, {
+      headers: { "User-Agent": "YULLR-PDF-Export/1.0" },
+    });
+    if (!resp.ok) return c.text(`Upstream returned ${resp.status}`, 502);
+    const bytes = await resp.arrayBuffer();
+    const ct = resp.headers.get("content-type") || "image/png";
+    return c.body(bytes, 200, {
+      "Content-Type": ct,
+      "Cache-Control": "public, max-age=3600",
+    });
+  } catch (e) {
+    console.log("Image proxy error:", e);
+    return c.text(`Proxy fetch failed: ${e}`, 502);
+  }
+});
+
+// ─── Mountains ────────────────────────────────────────────���───────────────────
+
+// ─── Customer Agreement Signing ────────────────────────────────────────────────
+
+app.post("/make-server-a0d4ba78/customer-agreements", async (c) => {
+  try {
+    const { mountainId, formData } = await c.req.json();
+    if (!mountainId || !formData) return c.json({ error: "mountainId and formData are required" }, 400);
+    const token = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
+    const record = { token, mountainId, createdAt: new Date().toISOString(), formData, yullrSignature: null, clientSignature: null };
+    await withRetry(() => kv.set(`ca:${token}`, record), "set ca");
+    await withRetry(() => kv.set(`caToken:${mountainId}`, token), "set caToken");
+    console.log(`Customer Agreement created: token=${token} mountainId=${mountainId}`);
+    return c.json({ token });
+  } catch (err) { console.error("Error creating CA:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
+
+app.get("/make-server-a0d4ba78/customer-agreements/status/:mountainId", async (c) => {
+  try {
+    const mountainId = c.req.param("mountainId");
+    const token = (await withRetry(() => kv.get(`caToken:${mountainId}`), "get caToken")) as string | null;
+    if (!token) return c.json({ token: null, record: null });
+    const record = await withRetry(() => kv.get(`ca:${token}`), "get ca for status");
+    return c.json({ token, record: record ?? null });
+  } catch (err) { console.error("Error fetching CA status:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
+
+app.get("/make-server-a0d4ba78/customer-agreements/sign/:token", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const record = await withRetry(() => kv.get(`ca:${token}`), "get ca");
+    if (!record) return c.json({ error: "Agreement not found" }, 404);
+    return c.json(record);
+  } catch (err) { console.error("Error fetching CA:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
+
+app.put("/make-server-a0d4ba78/customer-agreements/:token/form", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const { formData } = await c.req.json();
+    const record = (await withRetry(() => kv.get(`ca:${token}`), "get ca for update")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Not found" }, 404);
+    record.formData = { ...record.formData, ...formData };
+    await withRetry(() => kv.set(`ca:${token}`, record), "set ca form");
+    return c.json({ success: true });
+  } catch (err) { console.error("Error updating CA form:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
+
+app.post("/make-server-a0d4ba78/customer-agreements/sign/:token/client", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const { name, title, signatureImage } = await c.req.json();
+    if (!name?.trim()) return c.json({ error: "Name is required" }, 400);
+    const record = (await withRetry(() => kv.get(`ca:${token}`), "get ca for client sig")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Not found" }, 404);
+    if (record.clientSignature) return c.json({ error: "Already signed" }, 409);
+    record.clientSignature = { name: name.trim(), title: title?.trim() || "", signatureImage: signatureImage || null, signedAt: new Date().toISOString() };
+    await withRetry(() => kv.set(`ca:${token}`, record), "set ca client sig");
+    console.log(`Client signed CA: token=${token}`);
+
+    // ── Fire notification email (non-blocking) ───────────────────────────────
+    const fd = record.formData as any;
+    const caMountainName = fd?.facilityName || fd?.customerLegalName || record.mountainId || 'Unknown';
+    const caSignerName = record.clientSignature.name;
+    const caSignerTitle = record.clientSignature.title || '—';
+    const caSignedAt = new Date(record.clientSignature.signedAt).toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+    const caHtml = `
+<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+  <div style="background:#1D2930;padding:24px 32px">
+    <p style="color:#F95C39;font-size:13px;font-weight:600;letter-spacing:.08em;margin:0 0 4px">YULLR BUILDER</p>
+    <h1 style="color:#fff;font-size:22px;margin:0">Customer Agreement Signed</h1>
+  </div>
+  <div style="padding:32px">
+    <p style="color:#374151;font-size:15px;margin:0 0 24px">A customer has signed the Customer Agreement. Here are the details:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <tr><td style="padding:8px 0;color:#6b7280;width:40%">Facility / Mountain</td><td style="padding:8px 0;color:#111827;font-weight:600">${caMountainName}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:8px 6px;color:#6b7280">Legal Entity</td><td style="padding:8px 6px;color:#111827;font-weight:600">${fd?.customerLegalName || '—'}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Entity Type</td><td style="padding:8px 0;color:#111827">${fd?.entityType || '—'}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:8px 6px;color:#6b7280">State of Formation</td><td style="padding:8px 6px;color:#111827">${fd?.stateOfFormation || '—'}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Authorized Signatory</td><td style="padding:8px 0;color:#111827">${fd?.authorizedSignatory || caSignerName}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:8px 6px;color:#6b7280">Signer Name</td><td style="padding:8px 6px;color:#111827;font-weight:600">${caSignerName}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Title / Role</td><td style="padding:8px 0;color:#111827">${caSignerTitle}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:8px 6px;color:#6b7280">Email for Notices</td><td style="padding:8px 6px;color:#111827">${fd?.emailForNotices || '—'}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Signed At</td><td style="padding:8px 0;color:#111827">${caSignedAt}</td></tr>
+    </table>
+    <div style="margin-top:24px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
+      <p style="color:#15803d;font-size:13px;margin:0">✅ The Customer Agreement is now fully executed by the customer. Log in to YULLR Builder to countersign.</p>
+    </div>
+  </div>
+  <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb">
+    <p style="color:#9ca3af;font-size:12px;margin:0">YULLR Builder · Automated Notification</p>
+  </div>
+</div>`;
+    const caText = `Customer Agreement Signed\n\nFacility: ${caMountainName}\nLegal Entity: ${fd?.customerLegalName || '—'}\nEntity Type: ${fd?.entityType || '—'}\nState: ${fd?.stateOfFormation || '—'}\nSigner: ${caSignerName}\nTitle: ${caSignerTitle}\nEmail: ${fd?.emailForNotices || '—'}\nSigned At: ${caSignedAt}`;
+    sendPostmarkEmail(`✅ Customer Agreement Signed — ${caMountainName} — ${caSignerName}`, caHtml, caText).catch(console.error);
+
+    return c.json({ success: true });
+  } catch (err) { console.error("Error saving CA client sig:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
+
+app.post("/make-server-a0d4ba78/customer-agreements/sign/:token/yullr", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const { name, signatureImage } = await c.req.json();
+    if (!name?.trim()) return c.json({ error: "Name is required" }, 400);
+    const record = (await withRetry(() => kv.get(`ca:${token}`), "get ca for yullr sig")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Not found" }, 404);
+    record.yullrSignature = {
+      name: name.trim(),
+      signatureImage: signatureImage || null,
+      signedAt: new Date().toISOString(),
+    };
+    await withRetry(() => kv.set(`ca:${token}`, record), "set ca yullr sig");
+    console.log(`YULLR signed CA: token=${token} name=${name.trim()}`);
+    return c.json({ success: true });
+  } catch (err) { console.error("Error saving CA YULLR sig:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
+
+app.post("/make-server-a0d4ba78/customer-agreements/sign/:token/clear", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const record = (await withRetry(() => kv.get(`ca:${token}`), "get ca for clear")) as Record<string, any> | null;
+    if (!record) return c.json({ error: "Not found" }, 404);
+    record.yullrSignature = null; record.clientSignature = null;
+    await withRetry(() => kv.set(`ca:${token}`, record), "set ca clear sigs");
+    return c.json({ success: true });
+  } catch (err) { console.error("Error clearing CA sigs:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
+
+app.delete("/make-server-a0d4ba78/customer-agreements/:token", async (c) => {
+  try {
+    const token = c.req.param("token");
+    const record = (await withRetry(() => kv.get(`ca:${token}`), "get ca for delete")) as Record<string, any> | null;
+    if (record?.mountainId) await withRetry(() => kv.del(`caToken:${record.mountainId}`), "del caToken");
+    await withRetry(() => kv.del(`ca:${token}`), "del ca");
+    return c.json({ success: true });
+  } catch (err) { console.error("Error deleting CA:", err); return c.json({ error: `Failed: ${err}` }, 500); }
+});
 
 app.get("/make-server-a0d4ba78/mountains", async (c) => {
   try {
@@ -497,7 +1248,19 @@ app.delete("/make-server-a0d4ba78/mountains/:id/cascade", async (c) => {
     await withRetry(() => kv.set(MOUNTAIN_INDEX, mountainIds.filter((id: string) => id !== mountainId)), 'set mountain index');
     await withRetry(() => kv.del(`mountain:${mountainId}`), 'del mountain');
 
-    // 2. Find all locations for this mountain, delete each one
+    // 2. Find and delete all trails for this mountain
+    const trailIds: string[] = (await withRetry(() => kv.get(TRAIL_INDEX), 'get trail index')) || [];
+    const trailKeys = trailIds.map((id: string) => `trail:${id}`);
+    const trailRecords = trailKeys.length > 0 ? await batchedMget(trailKeys) : [];
+    const orphanTrailIds: string[] = trailRecords
+      .filter((t): t is Record<string, unknown> => !!t && (t as any).mountainId === mountainId)
+      .map((t: any) => t.id as string);
+    if (orphanTrailIds.length > 0) {
+      await withRetry(() => kv.set(TRAIL_INDEX, trailIds.filter((id: string) => !orphanTrailIds.includes(id))), 'set trail index');
+      await withRetry(() => kv.mdel(orphanTrailIds.map((id: string) => `trail:${id}`)), 'mdel trails');
+    }
+
+    // 3. Find all locations for this mountain, delete each one
     const locationIds: string[] = (await withRetry(() => kv.get(LOCATION_INDEX), 'get location index')) || [];
     const locationKeys = locationIds.map((id: string) => `location:${id}`);
     const locationRecords = locationKeys.length > 0 ? await batchedMget(locationKeys) : [];
@@ -511,7 +1274,7 @@ app.delete("/make-server-a0d4ba78/mountains/:id/cascade", async (c) => {
       await withRetry(() => kv.mdel(orphanLocationIds.map((id: string) => `location:${id}`)), 'mdel locations');
     }
 
-    // 3. Find all assets for those locations, delete each one
+    // 4. Find all assets for those locations, delete each one
     const assetIds: string[] = (await withRetry(() => kv.get(ASSET_INDEX), 'get asset index')) || [];
     const assetKeys = assetIds.map((id: string) => `asset:${id}`);
     const assetRecords = assetKeys.length > 0 ? await batchedMget(assetKeys) : [];
@@ -525,7 +1288,7 @@ app.delete("/make-server-a0d4ba78/mountains/:id/cascade", async (c) => {
       await withRetry(() => kv.mdel(orphanAssetIds.map((id: string) => `asset:${id}`)), 'mdel assets');
     }
 
-    // 4. Find and delete all site inspections for this mountain
+    // 5. Find and delete all site inspections for this mountain
     const siIds: string[] = (await withRetry(() => kv.get(SI_INDEX), 'get si index')) || [];
     const siKeys = siIds.map((id: string) => `siLoc:${id}`);
     const siRecords = siKeys.length > 0 ? await batchedMget(siKeys) : [];
@@ -539,7 +1302,7 @@ app.delete("/make-server-a0d4ba78/mountains/:id/cascade", async (c) => {
       await withRetry(() => kv.mdel(orphanSiIds.map((id: string) => `siLoc:${id}`)), 'mdel si');
     }
 
-    // 5. Find and delete all notes for this mountain
+    // 6. Find and delete all notes for this mountain
     const noteIds: string[] = (await withRetry(() => kv.get(NOTE_INDEX), 'get note index')) || [];
     const noteKeys = noteIds.map((id: string) => `note:${id}`);
     const noteRecords = noteKeys.length > 0 ? await batchedMget(noteKeys) : [];
@@ -553,11 +1316,63 @@ app.delete("/make-server-a0d4ba78/mountains/:id/cascade", async (c) => {
       await withRetry(() => kv.mdel(orphanNoteIds.map((id: string) => `note:${id}`)), 'mdel notes');
     }
 
-    console.log(`Cascade-deleted mountain ${mountainId}: ${orphanLocationIds.length} locations, ${orphanAssetIds.length} assets, ${orphanSiIds.length} site inspections, ${orphanNoteIds.length} notes`);
-    return c.json({ success: true, deletedLocations: orphanLocationIds.length, deletedAssets: orphanAssetIds.length, deletedSiteInspections: orphanSiIds.length, deletedNotes: orphanNoteIds.length });
+    console.log(`Cascade-deleted mountain ${mountainId}: ${orphanTrailIds.length} trails, ${orphanLocationIds.length} locations, ${orphanAssetIds.length} assets, ${orphanSiIds.length} site inspections, ${orphanNoteIds.length} notes`);
+    return c.json({ success: true, deletedTrails: orphanTrailIds.length, deletedLocations: orphanLocationIds.length, deletedAssets: orphanAssetIds.length, deletedSiteInspections: orphanSiIds.length, deletedNotes: orphanNoteIds.length });
   } catch (error) {
     console.error("Error cascade-deleting mountain:", error);
     return c.json({ error: `Failed to delete mountain: ${error}` }, 500);
+  }
+});
+
+// ─── Trails ───────────────────────────────────────────────────────────────────
+
+app.get("/make-server-a0d4ba78/trails", async (c) => {
+  try {
+    const trails = await getByIndex(TRAIL_INDEX, "trail:");
+    return c.json({ trails });
+  } catch (error) {
+    console.error("Error fetching trails:", error);
+    return c.json({ error: `Failed to fetch trails: ${error}` }, 500);
+  }
+});
+
+app.post("/make-server-a0d4ba78/trails", async (c) => {
+  try {
+    const trail = await c.req.json();
+    await withRetry(() => kv.set(`trail:${trail.id}`, trail), 'set trail');
+    await addToIndex(TRAIL_INDEX, trail.id);
+    return c.json({ success: true, trail });
+  } catch (error) {
+    console.error("Error creating trail:", error);
+    return c.json({ error: `Failed to create trail: ${error}` }, 500);
+  }
+});
+
+app.put("/make-server-a0d4ba78/trails/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const updates = await c.req.json();
+    const existing = (await withRetry(() => kv.get(`trail:${id}`), 'get trail')) as Record<string, unknown> | null;
+    const updated = { ...(existing || {}), ...updates, id };
+    await withRetry(() => kv.set(`trail:${id}`, updated), 'set trail');
+    await addToIndex(TRAIL_INDEX, id);
+    return c.json({ success: true, trail: updated });
+  } catch (error) {
+    console.error("Error updating trail:", error);
+    return c.json({ error: `Failed to update trail: ${error}` }, 500);
+  }
+});
+
+app.delete("/make-server-a0d4ba78/trails/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const trailIds: string[] = (await withRetry(() => kv.get(TRAIL_INDEX), 'get trail index')) || [];
+    await withRetry(() => kv.set(TRAIL_INDEX, trailIds.filter((tid: string) => tid !== id)), 'set trail index');
+    await withRetry(() => kv.del(`trail:${id}`), 'del trail');
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting trail:", error);
+    return c.json({ error: `Failed to delete trail: ${error}` }, 500);
   }
 });
 
@@ -613,7 +1428,7 @@ app.delete("/make-server-a0d4ba78/site-inspections/:id", async (c) => {
   }
 });
 
-// ─── Install Locations ────────────────────────────────────────────────────────
+// ─── Install Locations ──────��─────────────────────────────────────────────────
 
 app.get("/make-server-a0d4ba78/locations", async (c) => {
   try {
@@ -942,6 +1757,61 @@ app.get("/make-server-a0d4ba78/places/geocode", async (c) => {
   } catch (error) {
     console.error("Error geocoding address:", error);
     return c.json({ location: null });
+  }
+});
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+// POST /auth/login  { password } → { token } or 401
+app.post("/make-server-a0d4ba78/auth/login", async (c) => {
+  try {
+    const { password } = await c.req.json();
+    const correctPassword = Deno.env.get("BUILDER_PASSWORD");
+    if (!correctPassword) {
+      console.error("BUILDER_PASSWORD env var not set");
+      return c.json({ error: "Auth not configured on server" }, 500);
+    }
+    if (password !== correctPassword) {
+      return c.json({ error: "Invalid password" }, 401);
+    }
+    const token = crypto.randomUUID();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+    await withRetry(() => kv.set(`session:${token}`, { token, createdAt: now.toISOString(), expiresAt }), "set session");
+    return c.json({ token });
+  } catch (error) {
+    console.error("Auth login error:", error);
+    return c.json({ error: `Login failed: ${error}` }, 500);
+  }
+});
+
+// POST /auth/verify  { token } → { valid: bool }
+app.post("/make-server-a0d4ba78/auth/verify", async (c) => {
+  try {
+    const { token } = await c.req.json();
+    if (!token) return c.json({ valid: false });
+    const session = await withRetry(() => kv.get(`session:${token}`), "get session") as { expiresAt: string } | null;
+    if (!session) return c.json({ valid: false });
+    if (new Date(session.expiresAt) < new Date()) {
+      await withRetry(() => kv.del(`session:${token}`), "del expired session");
+      return c.json({ valid: false });
+    }
+    return c.json({ valid: true });
+  } catch (error) {
+    console.error("Auth verify error:", error);
+    return c.json({ valid: false });
+  }
+});
+
+// DELETE /auth/logout  { token } → { success }
+app.delete("/make-server-a0d4ba78/auth/logout", async (c) => {
+  try {
+    const { token } = await c.req.json();
+    if (token) await withRetry(() => kv.del(`session:${token}`), "del session");
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Auth logout error:", error);
+    return c.json({ success: false });
   }
 });
 

@@ -1,20 +1,50 @@
-import { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
-import type { Contact } from '../context/DataContext';
-import { ArrowLeft, Plus, X, Trash2 } from 'lucide-react';
+import type { Contact, TechAdmin, Annotation } from '../context/DataContext';
+import { ArrowLeft, Plus, X, Trash2, Upload, ZoomIn, ExternalLink, ImageIcon, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPhone } from '../utils/formatPhone';
 import { ContactForm } from './ContactForm';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { AddressAutocomplete } from './AddressAutocomplete';
 import { AddableSelect } from './AddableSelect';
+import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { UnsavedChangesDialog } from './UnsavedChangesDialog';
+import { ImageAnnotator } from './ImageAnnotator';
+
+const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
+const AUTH_HEADER = { Authorization: `Bearer ${publicAnonKey}` };
 
 const DEFAULT_PARENT_ORGS = ['Altera Mountain Co', 'Boyne Resorts', 'Powder Corporation', 'Vail Resorts'];
 
 const emptyContact = (): Contact => ({
   name: '', title: '', email: '', phone: '', phoneType: 'Office', role: undefined, teamName: '', notes: '',
 });
+
+// ── Compress image before upload ─────────────────────────────────────────────
+async function compressImage(dataUrl: string): Promise<string> {
+  return new Promise(resolve => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 2400;
+        let { naturalWidth: w, naturalHeight: h } = img;
+        if (w > MAX || h > MAX) {
+          const r = Math.min(MAX / w, MAX / h);
+          w = Math.round(w * r); h = Math.round(h * r);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    } catch { resolve(dataUrl); }
+  });
+}
 
 export function EditMountain() {
   const { mountainId } = useParams();
@@ -38,18 +68,113 @@ export function EditMountain() {
     phone: mountain?.phone || '',
     website: mountain?.website || '',
     notes: mountain?.notes || '',
-    ipSubnet: mountain?.ipSubnet || '',
+    trailCount: mountain?.trailCount?.toString() || '',
+    acreage: mountain?.acreage?.toString() || '',
+    verticalDrop: mountain?.verticalDrop?.toString() || '',
+    slackEmail: mountain?.slackEmail || '',
+    region: mountain?.region || '',
     adminContact: { ...emptyContact(), ...(mountain?.adminContact || {}) } as Contact,
     technicalContact: { ...emptyContact(), ...(mountain?.technicalContact || {}) } as Contact,
     additionalContacts: (mountain?.additionalContacts || []).map(c => ({ ...emptyContact(), ...c })) as Contact[],
   });
 
+  const [techAdmins, setTechAdmins] = useState<TechAdmin[]>(
+    mountain?.technicalAdministrators?.map(a => ({ ...a })) || []
+  );
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  // Toggle: billing address same as main address
+  const [timingSystems, setTimingSystems] = useState<string[]>(mountain?.timingSystems || []);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const TIMING_OPTIONS = ['Live Timing', 'VOLA', 'Other'];
+  const toggleTiming = (opt: string) =>
+    setTimingSystems(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]);
   const [billingSameAsMain, setBillingSameAsMain] = useState(
     !!mountain?.billingAddress && mountain.billingAddress === mountain.address
   );
+
+  // ── Trail map state ──────────────────────────────────────────────────────
+  const [mapUrl, setMapUrl] = useState<string | null>(null);
+  const [mapMime, setMapMime] = useState<string | null>(null);
+  const [mapFileName, setMapFileName] = useState<string | null>(null);
+  const [mapLoading, setMapLoading] = useState(!!mountain?.trailMapType);
+  const [mapUploading, setMapUploading] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [showAnnotator, setShowAnnotator] = useState(false);
+  const [showDeleteMapModal, setShowDeleteMapModal] = useState(false);
+  const mapFileRef = useRef<HTMLInputElement>(null);
+
+  // Load existing trail map URL from server on mount
+  useEffect(() => {
+    if (!mountainId || !mountain?.trailMapType) { setMapLoading(false); return; }
+    fetch(`${API_BASE}/trail-map/${mountainId}`, { headers: AUTH_HEADER })
+      .then(r => r.json())
+      .then((data: any) => {
+        if (data.url) { setMapUrl(data.url); setMapMime(data.mimeType); setMapFileName(data.fileName); }
+      })
+      .catch(err => console.error('Failed to load trail map URL:', err))
+      .finally(() => setMapLoading(false));
+  }, [mountainId]);
+
+  const handleMapUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !mountainId) return;
+    setMapUploading(true);
+    e.target.value = '';
+    try {
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((res, rej) => {
+        reader.onload = ev => res(ev.target!.result as string);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      const finalDataUrl = file.type.startsWith('image/') ? await compressImage(dataUrl) : dataUrl;
+      const resp = await fetch(`${API_BASE}/trail-map/upload`, {
+        method: 'POST',
+        headers: { ...AUTH_HEADER, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mountainId, dataUrl: finalDataUrl, mimeType: file.type, fileName: file.name }),
+      });
+      const data = await resp.json() as any;
+      if (!resp.ok || data.error) throw new Error(data.error || 'Upload failed');
+      const mapType: 'image' | 'pdf' = file.type === 'application/pdf' ? 'pdf' : 'image';
+      updateMountain(mountainId, {
+        trailMapType: mapType,
+        trailMapUploadedAt: new Date().toISOString()
+      });
+      setMapUrl(data.url);
+      setMapMime(file.type);
+      setMapFileName(file.name);
+      toast.success('Trail map uploaded');
+    } catch (err) {
+      console.error('Trail map upload error:', err);
+      toast.error('Upload failed — please try again');
+    } finally {
+      setMapUploading(false);
+    }
+  };
+
+  const handleDeleteMap = async () => {
+    if (!mountainId) return;
+    setShowDeleteMapModal(false);
+    try {
+      await fetch(`${API_BASE}/trail-map/${mountainId}`, {
+        method: 'DELETE',
+        headers: AUTH_HEADER,
+      });
+      updateMountain(mountainId, {
+        trailMapType: undefined,
+        trailMapUploadedAt: undefined
+      });
+      setMapUrl(null); setMapMime(null); setMapFileName(null);
+      toast.success('Trail map removed');
+    } catch (err) {
+      console.error('Trail map delete error:', err);
+      toast.error('Could not remove trail map');
+    }
+  };
+
+  const isMapImage = mapMime?.startsWith('image/');
+  const isMapPdf = mapMime === 'application/pdf';
 
   if (!mountain) {
     return (
@@ -77,16 +202,58 @@ export function EditMountain() {
     allContacts.map(c => c.teamName).filter((t): t is string => !!t && t !== '__new__' && t.trim() !== '')
   )];
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Track form changes
+  useEffect(() => {
+    if (!mountain) return;
+
+    const hasChanges =
+      formData.name !== mountain.name ||
+      formData.address !== mountain.address ||
+      formData.billingAddress !== (mountain.billingAddress || '') ||
+      formData.parentOrganization !== (mountain.parentOrganization || '') ||
+      formData.legalEntity !== (mountain.legalEntity || '') ||
+      formData.phone !== mountain.phone ||
+      formData.website !== mountain.website ||
+      formData.notes !== (mountain.notes || '') ||
+      formData.trailCount !== (mountain.trailCount?.toString() || '') ||
+      formData.acreage !== (mountain.acreage?.toString() || '') ||
+      formData.verticalDrop !== (mountain.verticalDrop?.toString() || '') ||
+      formData.slackEmail !== (mountain.slackEmail || '') ||
+      formData.region !== (mountain.region || '') ||
+      JSON.stringify(formData.adminContact) !== JSON.stringify(mountain.adminContact || emptyContact()) ||
+      JSON.stringify(formData.technicalContact) !== JSON.stringify(mountain.technicalContact || emptyContact()) ||
+      JSON.stringify(formData.additionalContacts) !== JSON.stringify(mountain.additionalContacts || []) ||
+      JSON.stringify(timingSystems) !== JSON.stringify(mountain.timingSystems || []) ||
+      JSON.stringify(techAdmins) !== JSON.stringify(mountain.technicalAdministrators || []);
+
+    setHasUnsavedChanges(hasChanges);
+  }, [formData, timingSystems, techAdmins, mountain]);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     updateMountain(mountainId!, {
       ...formData,
       billingAddress: billingSameAsMain ? formData.address : formData.billingAddress,
       email: mountain!.email || '',
+      timingSystems: timingSystems.length > 0 ? timingSystems : undefined,
+      technicalAdministrators: techAdmins,
+      trailCount: formData.trailCount ? parseInt(formData.trailCount) : undefined,
+      acreage: formData.acreage ? parseInt(formData.acreage) : undefined,
+      verticalDrop: formData.verticalDrop ? parseInt(formData.verticalDrop) : undefined,
+      slackEmail: formData.slackEmail || undefined,
+      region: formData.region || undefined,
     });
     toast.success('Mountain updated successfully!');
+    setHasUnsavedChanges(false);
     navigate(`/mountains/${mountainId}`);
   };
+
+  // Unsaved changes protection
+  const { showPrompt, handleSave, handleDiscard, handleCancel } = useUnsavedChanges({
+    when: hasUnsavedChanges,
+    message: 'You have unsaved changes to this mountain. Do you want to save before leaving?',
+    onSave: handleSubmit,
+  });
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -196,13 +363,26 @@ export function EditMountain() {
           </div>
 
           <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">IP Subnet</label>
-            <input type="text" value={formData.ipSubnet} onChange={e => updateField('ipSubnet', e.target.value)}
-              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
-              placeholder="e.g. 192.168.1." />
-            <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
-              Default IP prefix for all assets at this mountain
-            </p>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Timing Systems</label>
+            <div className="flex flex-wrap gap-3">
+              {TIMING_OPTIONS.map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => toggleTiming(opt)}
+                  className="flex items-center gap-2 active:opacity-70"
+                >
+                  <div className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center flex-shrink-0 transition-colors ${timingSystems.includes(opt) ? 'bg-[#ff5c39] border-[#ff5c39]' : 'bg-white border-[#d1d5db]'}`}>
+                    {timingSystems.includes(opt) && (
+                      <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                        <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                  <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">{opt}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -210,6 +390,213 @@ export function EditMountain() {
             <textarea value={formData.notes} onChange={e => updateField('notes', e.target.value)}
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] min-h-[80px]"
               placeholder="Additional notes about this mountain..." />
+          </div>
+
+          {/* ── Trail Map ── */}
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Trail Map</label>
+
+            {mapLoading ? (
+              <div className="h-24 bg-[#f3f3f5] rounded-[8px] flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-[#ff5c39] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : mapUrl ? (
+              <div className="border border-[rgba(0,0,0,0.1)] rounded-[10px] overflow-hidden">
+                {isMapImage ? (
+                  <div className="relative">
+                    <img src={mapUrl} alt="Trail Map" className="w-full object-contain max-h-52 bg-[#f3f3f5]" />
+                    <button
+                      type="button"
+                      onClick={() => setLightboxOpen(true)}
+                      className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 active:bg-black/70"
+                    >
+                      <ZoomIn size={15} />
+                    </button>
+                  </div>
+                ) : isMapPdf ? (
+                  <div className="flex items-center gap-3 px-4 py-4 bg-[#f9fafb]">
+                    <div className="w-10 h-10 bg-[#fff3f0] rounded-[8px] flex items-center justify-center flex-shrink-0">
+                      <ExternalLink size={18} className="text-[#ff5c39]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[13px] truncate">{mapFileName}</p>
+                      <p className="text-[#6a7282] text-[12px]">PDF</p>
+                    </div>
+                    <a href={mapUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-[#307fe2] text-[12px] font-['Inter:Medium',sans-serif] px-2 py-1 bg-[#eef3fb] rounded-[6px]">
+                      Open
+                    </a>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between px-3 py-2.5 border-t border-[rgba(0,0,0,0.06)] bg-white">
+                  <div className="flex items-center gap-2 flex-1">
+                    <p className="text-[#6a7282] text-[12px] truncate flex-1">{mapFileName}</p>
+                    {mountain?.trailMapAnnotations && mountain.trailMapAnnotations.length > 0 && (
+                      <span className="bg-[#fff5f3] text-[#ff5c39] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full flex-shrink-0">
+                        {mountain.trailMapAnnotations.length} annotation{mountain.trailMapAnnotations.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isMapImage && (
+                      <button type="button" onClick={() => setShowAnnotator(true)}
+                        className="flex items-center gap-1 text-[#ff5c39] text-[12px] font-['Inter:Medium',sans-serif] bg-[#fff5f3] px-2.5 py-1.5 rounded-[6px] active:bg-[#ffe8e3]">
+                        <Edit3 size={12} /> Annotate
+                      </button>
+                    )}
+                    <button type="button" onClick={() => mapFileRef.current?.click()}
+                      className="flex items-center gap-1 text-[#307fe2] text-[12px] font-['Inter:Medium',sans-serif] bg-[#eef3fb] px-2.5 py-1.5 rounded-[6px] active:bg-[#dce8f4]">
+                      <Upload size={12} /> Replace
+                    </button>
+                    <button type="button" onClick={() => setShowDeleteMapModal(true)}
+                      className="p-1.5 bg-[#fff0ee] rounded-[6px] active:bg-[#ffe0da]">
+                      <Trash2 size={14} className="text-[#ff5c39]" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => mapFileRef.current?.click()}
+                disabled={mapUploading}
+                className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[rgba(0,0,0,0.12)] rounded-[10px] py-7 text-[#6a7282] active:border-[#ff5c39] active:text-[#ff5c39] transition-colors bg-[#f9fafb] disabled:opacity-60"
+              >
+                {mapUploading ? (
+                  <div className="w-6 h-6 border-2 border-[#ff5c39] border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <ImageIcon size={26} className="text-[#d1d5db]" />
+                    <span className="font-['Inter:Medium',sans-serif] text-[14px]">Upload Trail Map</span>
+                    <span className="font-['Inter:Regular',sans-serif] text-[12px] text-[#9ca3af]">Image or PDF</span>
+                  </>
+                )}
+              </button>
+            )}
+            {mapUploading && mapUrl === null && (
+              <p className="text-[#6a7282] text-[12px] mt-1.5 text-center">Uploading…</p>
+            )}
+            <input
+              ref={mapFileRef}
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={handleMapUpload}
+            />
+          </div>
+
+          {/* ── Mountain Stats ── */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Trails</label>
+              <input
+                type="number"
+                min="0"
+                value={formData.trailCount}
+                onChange={e => updateField('trailCount', e.target.value)}
+                className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+                placeholder="e.g., 150"
+              />
+            </div>
+            <div>
+              <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Acreage</label>
+              <input
+                type="number"
+                min="0"
+                value={formData.acreage}
+                onChange={e => updateField('acreage', e.target.value)}
+                className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+                placeholder="e.g., 5280"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Vertical (ft)</label>
+              <input
+                type="number"
+                min="0"
+                value={formData.verticalDrop}
+                onChange={e => updateField('verticalDrop', e.target.value)}
+                className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+                placeholder="e.g., 3000"
+              />
+            </div>
+            <div>
+              <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Region *</label>
+              <select
+                value={formData.region}
+                onChange={e => updateField('region', e.target.value)}
+                required
+                className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+              >
+                <option value="">Select region</option>
+                <option value="Rocky Mountains">Rocky Mountains</option>
+                <option value="Sierra Nevada">Sierra Nevada</option>
+                <option value="Pacific Northwest">Pacific Northwest</option>
+                <option value="Northeast">Northeast</option>
+                <option value="Mid-Atlantic">Mid-Atlantic</option>
+                <option value="Midwest">Midwest</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Slack Email</label>
+            <input
+              type="email"
+              value={formData.slackEmail}
+              onChange={e => updateField('slackEmail', e.target.value)}
+              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+              placeholder="team@slack.com"
+            />
+          </div>
+        </div>
+
+        {/* Portal */}
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Mountain Portal</h2>
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Mountain / Team Logo</label>
+            <p className="text-[#6a7282] text-[12px] mb-2">Displayed alongside the YULLR logo on the public portal page.</p>
+            {mountain?.mountainLogo && (
+              <div className="mb-3 flex items-center gap-3">
+                <img src={mountain.mountainLogo} alt="Mountain logo" className="h-12 object-contain rounded-[6px] bg-[#f3f3f5] px-2" />
+                <button
+                  type="button"
+                  onClick={() => updateMountain(mountainId!, { mountainLogo: undefined })}
+                  className="text-[12px] text-[#F95C39]"
+                >Remove</button>
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => updateMountain(mountainId!, { mountainLogo: ev.target?.result as string });
+                reader.readAsDataURL(file);
+              }}
+              className="w-full text-[14px] text-[#6a7282]"
+            />
+          </div>
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Portal Link</label>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={`${window.location.origin}/portal/${mountainId}`}
+                className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#6a7282] text-[13px] font-mono outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${mountainId}`); toast.success('Link copied'); }}
+                className="px-3 py-2.5 bg-[#1D2930] text-white rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80 whitespace-nowrap"
+              >Copy</button>
+            </div>
           </div>
         </div>
 
@@ -309,6 +696,94 @@ export function EditMountain() {
           )}
         </div>
 
+        {/* Technical Administrators */}
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+                Technical Administrators
+              </h2>
+              <p className="text-[#6a7282] text-[12px] font-['Inter:Regular',sans-serif] mt-0.5">
+                Responsible for camera configuration &amp; technical settings at the facility.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTechAdmins(prev => [...prev, { id: crypto.randomUUID(), name: '', role: '', email: '', phone: '' }])}
+              className="flex items-center gap-1.5 text-[#ff5c39] font-['Inter:Medium',sans-serif] text-[14px] active:opacity-70 flex-shrink-0"
+            >
+              <Plus size={16} /> Add
+            </button>
+          </div>
+
+          {techAdmins.map((admin, i) => (
+            <div key={admin.id} className="border border-[rgba(0,0,0,0.1)] rounded-[8px] p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[#0a0a0a] text-[13px] font-['Inter:Medium',sans-serif] font-medium">
+                  Admin {i + 1}{admin.name ? ` — ${admin.name}` : ''}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setTechAdmins(prev => prev.filter((_, idx) => idx !== i))}
+                  className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]"
+                >
+                  <X size={13} className="text-[#ff5c39]" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[11px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 uppercase tracking-wider">Name *</p>
+                  <input
+                    type="text"
+                    value={admin.name}
+                    onChange={e => setTechAdmins(prev => prev.map((a, idx) => idx === i ? { ...a, name: e.target.value } : a))}
+                    className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[14px] text-[#0a0a0a] font-['Inter:Regular',sans-serif] outline-none"
+                    placeholder="Full name"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 uppercase tracking-wider">Role *</p>
+                  <input
+                    type="text"
+                    value={admin.role}
+                    onChange={e => setTechAdmins(prev => prev.map((a, idx) => idx === i ? { ...a, role: e.target.value } : a))}
+                    className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[14px] text-[#0a0a0a] font-['Inter:Regular',sans-serif] outline-none"
+                    placeholder="e.g. IT Manager"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[11px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 uppercase tracking-wider">Email *</p>
+                  <input
+                    type="email"
+                    value={admin.email}
+                    onChange={e => setTechAdmins(prev => prev.map((a, idx) => idx === i ? { ...a, email: e.target.value } : a))}
+                    className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[14px] text-[#0a0a0a] font-['Inter:Regular',sans-serif] outline-none"
+                    placeholder="admin@mountain.com"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 uppercase tracking-wider">Phone</p>
+                  <input
+                    type="tel"
+                    value={admin.phone}
+                    onChange={e => setTechAdmins(prev => prev.map((a, idx) => idx === i ? { ...a, phone: e.target.value } : a))}
+                    className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[14px] text-[#0a0a0a] font-['Inter:Regular',sans-serif] outline-none"
+                    placeholder="(000) 000-0000"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {techAdmins.length === 0 && (
+            <p className="text-[#6a7282] text-[13px] text-center py-3 font-['Inter:Regular',sans-serif]">
+              No technical administrators yet.
+            </p>
+          )}
+        </div>
+
         {/* Save */}
         <button type="submit"
           className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 font-['Inter:Medium',sans-serif] font-medium active:opacity-80">
@@ -326,6 +801,77 @@ export function EditMountain() {
         </button>
 
       </form>
+
+      {/* Image lightbox */}
+      {lightboxOpen && mapUrl && isMapImage && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            type="button"
+            className="absolute top-4 right-4 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center active:bg-white/30"
+            onClick={() => setLightboxOpen(false)}
+          >
+            <X size={20} className="text-white" />
+          </button>
+          <img
+            src={mapUrl}
+            alt="Trail Map"
+            className="max-w-full max-h-full object-contain p-4"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* Annotator */}
+      {showAnnotator && mapUrl && isMapImage && (
+        <ImageAnnotator
+          imageUrl={mapUrl}
+          existingAnnotations={mountain?.trailMapAnnotations || []}
+          onSave={(annotations: Annotation[]) => {
+            updateMountain(mountainId, { trailMapAnnotations: annotations });
+            setShowAnnotator(false);
+          }}
+          onClose={() => setShowAnnotator(false)}
+          title={`Annotate Trail Map - ${mountain?.name}`}
+        />
+      )}
+
+      {/* Unsaved changes dialog */}
+      <UnsavedChangesDialog
+        isOpen={showPrompt}
+        onSave={handleSave}
+        onDiscard={handleDiscard}
+        onCancel={handleCancel}
+      />
+
+      {/* Delete trail map confirmation */}
+      {showDeleteMapModal && (
+        <DeleteConfirmModal
+          title="Delete trail map?"
+          description={
+            <>
+              This will permanently delete the trail map{' '}
+              {mapFileName && (
+                <>
+                  (
+                  <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
+                    {mapFileName}
+                  </span>
+                  )
+                </>
+              )}
+              {mountain?.trailMapAnnotations && mountain.trailMapAnnotations.length > 0 && (
+                <>, including {mountain.trailMapAnnotations.length} annotation{mountain.trailMapAnnotations.length !== 1 ? 's' : ''}</>
+              )}
+              . This cannot be undone.
+            </>
+          }
+          onConfirm={handleDeleteMap}
+          onCancel={() => setShowDeleteMapModal(false)}
+        />
+      )}
     </div>
   );
 }

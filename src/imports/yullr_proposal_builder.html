@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a1a; background: #f4f4f4; }
+
+  #builder { max-width: 860px; margin: 0 auto; padding: 24px; }
+  #builder h1 { font-size: 18px; font-weight: 700; color: #FF5C39; margin-bottom: 4px; }
+  #builder p.sub { font-size: 12px; color: #888; margin-bottom: 24px; }
+  .section { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .section h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #FF5C39; margin-bottom: 14px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 11.5px; color: #666; margin-bottom: 4px; font-weight: 600; }
+  .field input, .field textarea { width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 12.5px; font-family: inherit; color: #1a1a1a; background: #fafafa; }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .row.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .trail-row { display: grid; grid-template-columns: 1.8fr 1fr 2.5fr 1fr 1fr 28px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .trail-row input { padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: inherit; width: 100%; }
+  .trail-header { display: grid; grid-template-columns: 1.8fr 1fr 2.5fr 1fr 1fr 28px; gap: 8px; margin-bottom: 4px; }
+  .trail-header span, .req-header span, .bulk-header span { font-size: 11px; color: #999; font-weight: 600; text-transform: uppercase; }
+
+  .req-row { display: grid; grid-template-columns: 1.5fr 1.5fr 2fr 1fr 28px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .req-row input { padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: inherit; width: 100%; }
+  .req-header { display: grid; grid-template-columns: 1.5fr 1.5fr 2fr 1fr 28px; gap: 8px; margin-bottom: 4px; }
+
+  .bulk-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 28px; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .bulk-row input { padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: inherit; width: 100%; }
+  .bulk-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 28px; gap: 8px; margin-bottom: 4px; }
+
+  .quote-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .quote-row span { font-size: 12.5px; color: #444; }
+  .quote-row input { width: 140px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: inherit; text-align: right; }
+  .qs-label { font-size: 11.5px; color: #FF5C39; font-weight: 700; text-transform: uppercase; margin: 14px 0 6px; }
+
+  .btn-remove { background: none; border: none; color: #ccc; font-size: 16px; cursor: pointer; padding: 0; line-height: 1; }
+  .btn-remove:hover { color: #FF5C39; }
+  .btn-add { background: none; border: 1px dashed #FF5C39; color: #FF5C39; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; margin-top: 4px; }
+  .btn-add:hover { background: #fff3f0; }
+
+  #generate-btn { width: 100%; padding: 14px; background: #FF5C39; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+  #generate-btn:hover { background: #e04a28; }
+
+  #preview { display: none; max-width: 860px; margin: 30px auto; background: #fff; padding: 60px 70px; box-shadow: 0 2px 20px rgba(0,0,0,0.1); }
+  #btn-row { display: none; max-width: 860px; margin: 20px auto; gap: 8px; }
+  #back-btn { display: block; padding: 10px 24px; background: #fff; border: 1px solid #FF5C39; color: #FF5C39; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  #back-btn:hover { background: #fff3f0; }
+  #print-btn { display: block; padding: 10px 24px; background: #FF5C39; border: none; color: #fff; border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+  .p-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #FF5C39; padding-bottom: 24px; margin-bottom: 32px; }
+  .p-header-info { text-align: right; color: #555; font-size: 12px; line-height: 1.9; }
+  .p-header-info strong { color: #1a1a1a; }
+  .p-title { background: #fff3f0; border-left: 4px solid #FF5C39; padding: 16px 20px; margin-bottom: 28px; border-radius: 0 6px 6px 0; }
+  .p-title h1 { font-size: 19px; color: #FF5C39; margin-bottom: 4px; }
+  .p-title h2 { font-size: 15px; color: #555; font-weight: 400; }
+  .p-h2 { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #FF5C39; border-bottom: 1px solid #ffd5cc; padding-bottom: 6px; margin: 28px 0 12px; }
+  .p-p { line-height: 1.75; color: #333; margin-bottom: 10px; font-size: 13px; }
+  .p-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+  .p-table th { background: #FF5C39; color: #fff; text-align: left; padding: 9px 12px; font-weight: 600; font-size: 12px; }
+  .p-table td { padding: 8px 12px; border-bottom: 1px solid #fde8e3; }
+  .p-table tr:nth-child(even) td { background: #fff8f7; }
+  .p-table .tr { text-align: right; }
+  .p-table .total-row td { font-weight: 700; background: #fff3f0 !important; border-top: 2px solid #FF5C39; }
+  .p-table .subtotal-row td { font-weight: 600; background: #fef6f4 !important; border-top: 1px solid #ffd5cc; font-size: 12px; }
+  .p-table .section-row td { background: #fff3f0 !important; font-weight: 600; color: #FF5C39; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; }
+  .p-table .spacer-row td { background: #fff !important; border: none; padding: 6px; }
+  .sub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 10px; page-break-inside: avoid; break-inside: avoid; }
+  .sub-card { border: 1px solid #ffd5cc; border-radius: 8px; padding: 16px; text-align: center; }
+  .sub-card h3 { font-size: 13px; color: #FF5C39; margin-bottom: 4px; }
+  .sub-card .price { font-size: 22px; font-weight: 800; color: #1a1a1a; }
+  .sub-card .scope { font-size: 11px; color: #777; margin-bottom: 6px; }
+  .bulk-box { background: #fff3f0; border: 2px solid #FF5C39; border-radius: 8px; padding: 14px 18px; margin-top: 14px; page-break-inside: avoid; break-inside: avoid; }
+  .bulk-box h3 { color: #FF5C39; font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .bulk-box ul { list-style: none; font-size: 12.5px; color: #333; line-height: 2; }
+  .bulk-box ul li::before { content: "- "; color: #FF5C39; font-weight: 700; }
+  .profit-box { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 14px 18px; margin-top: 12px; page-break-inside: avoid; break-inside: avoid; }
+  .profit-box h3 { color: #15803d; font-size: 12.5px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+  .profit-box p { color: #166534; font-size: 12.5px; line-height: 1.8; margin: 0; }
+  .note-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 10px 14px; margin-top: 10px; font-size: 12px; color: #78350f; page-break-inside: avoid; break-inside: avoid; }
+  .note-box strong { display: block; margin-bottom: 3px; }
+  .terms-list { list-style: none; counter-reset: terms; }
+  .terms-list li { counter-increment: terms; padding: 7px 0 7px 26px; position: relative; border-bottom: 1px solid #f0f0f0; font-size: 12.5px; line-height: 1.6; color: #444; page-break-inside: avoid; break-inside: avoid; }
+  .terms-list li::before { content: counter(terms) "."; position: absolute; left: 0; font-weight: 700; color: #FF5C39; }
+  .p-footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #FF5C39; display: flex; justify-content: space-between; page-break-inside: avoid; break-inside: avoid; }
+  .sig-block { font-size: 12px; color: #555; width: 340px; }
+  .sig-line { display: flex; justify-content: space-between; border-top: 1px solid #999; width: 340px; margin-top: 36px; padding-top: 5px; }
+  .sig-line span { font-size: 11px; color: #888; }
+  .page-note { font-size: 11px; color: #aaa; text-align: center; margin-top: 16px; }
+  .dotlist { margin-left: 18px; line-height: 2.2; color: #444; font-size: 12.5px; }
+
+  @media print {
+    #builder, #btn-row { display: none !important; }
+    #preview { display: block !important; box-shadow: none; margin: 0; padding: 40px 50px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="builder">
+  <h1>YULLR Proposal Builder</h1>
+  <p class="sub">Fill in the fields below, then click Generate Proposal.</p>
+
+  <div class="section">
+    <h2>Proposal Info</h2>
+    <div class="row two">
+      <div class="field"><label>Proposal #</label><input id="prop-num" placeholder="YLR-2026-001"></div>
+      <div class="field"><label>Date</label><input id="prop-date" type="date"></div>
+    </div>
+    <div class="field" style="max-width:50%;"><label>Valid Until</label><input id="prop-valid" type="date"></div>
+  </div>
+
+  <div class="section">
+    <h2>Client Details</h2>
+    <div class="row two">
+      <div class="field"><label>Client / Company Name</label><input id="client-name" value="Pleasant Mountain"></div>
+      <div class="field"><label>Mountain Name</label><input id="mountain-name" value="Pleasant Mountain"></div>
+    </div>
+    <div class="field"><label>Site Address</label><input id="client-address" value="119 Mountain Road, Bridgton, Maine 04009"></div>
+  </div>
+
+  <div class="section">
+    <h2>Trails / Capture Points</h2>
+    <div class="trail-header">
+      <span>Trail Name</span><span>Capture Points</span><span>Notes</span><span>Unit Price</span><span>Total</span><span></span>
+    </div>
+    <div id="trail-rows">
+      <div class="trail-row"><input placeholder="Trail name"><input type="number" placeholder="1" min="1" class="cam-qty"><input placeholder="Notes"><input class="unit-price" value="1000"><input placeholder="$0.00" class="total-price" readonly><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+    </div>
+    <button class="btn-add" onclick="addTrailRow()">+ Add Trail</button>
+  </div>
+
+  <div class="section">
+    <h2>Installation Notes</h2>
+    <div class="field"><label>Estimated Install Duration</label><input id="install-days" placeholder="e.g. 2 days"></div>
+    <div class="field"><label>Additional Notes (one per line)</label><textarea id="install-notes" placeholder="e.g. All installs during non-operational hours"></textarea></div>
+  </div>
+
+  <div class="section">
+    <h2>Site Requirements</h2>
+    <div class="req-header">
+      <span>Location</span><span>Requirement</span><span>Details</span><span>Responsibility</span><span></span>
+    </div>
+    <div id="req-rows">
+      <div class="req-row"><input placeholder="e.g. Summit"><input placeholder="Power Supply"><input placeholder="120V AC within 2m of mount point"><input placeholder="Client"><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+      <div class="req-row"><input placeholder="e.g. All Locations"><input placeholder="Network / Internet"><input placeholder="Stable broadband, min. 10Mbps upload per camera"><input placeholder="Client"><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+      <div class="req-row"><input placeholder="e.g. All Locations"><input placeholder="Mounting Surface"><input placeholder="Solid timber, steel pole, or concrete rated for wind load"><input placeholder="Client"><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+      <div class="req-row"><input placeholder="e.g. All Locations"><input placeholder="Site Access"><input placeholder="Unrestricted access to all trail locations on install day"><input placeholder="Client"><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+    </div>
+    <button class="btn-add" onclick="addReqRow()">+ Add Requirement</button>
+  </div>
+
+  <div class="section">
+    <h2>Final Quote</h2>
+    <div class="qs-label">Hardware &amp; Installation</div>
+    <div class="quote-row"><span>Integration Fee</span><input id="q-integration" placeholder="$0.00"></div>
+    <div class="quote-row"><span>Installation &amp; Commissioning</span><input id="q-install" placeholder="$0.00"></div>
+    <div class="qs-label">Annual Bulk Subscriptions (Optional)</div>
+    <div class="bulk-header"><span>Pass Type</span><span>Qty</span><span>Unit Price</span><span>Total</span><span></span></div>
+    <div id="bulk-rows">
+      <div class="bulk-row"><input value="Day Passes"><input type="number" placeholder="0" class="bk-qty" min="0"><input class="bk-unit" value="10"><input placeholder="$0.00" class="bk-total" readonly><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+      <div class="bulk-row"><input value="Mountain Passes"><input type="number" placeholder="0" class="bk-qty" min="0"><input class="bk-unit" value="75"><input placeholder="$0.00" class="bk-total" readonly><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+      <div class="bulk-row"><input value="Season Passes"><input type="number" placeholder="0" class="bk-qty" min="0"><input class="bk-unit" value="100"><input placeholder="$0.00" class="bk-total" readonly><button class="btn-remove" onclick="removeRow(this)">x</button></div>
+    </div>
+    <button class="btn-add" onclick="addBulkRow()">+ Add Pass Type</button>
+    <div style="margin-top:14px;">
+      <div class="quote-row"><span>Miscellaneous / Travel</span><input id="q-misc" placeholder="$0.00"></div>
+    </div>
+    <div class="field" style="margin-top:10px;"><label>Payment Terms</label><textarea id="q-payment" style="min-height:48px;">50% deposit is due upon execution of the Customer Agreement. The remaining 50% balance is due on or before November 1, 2026.</textarea></div>
+  </div>
+
+  <div class="section">
+    <h2>Additional Terms (optional — one per line)</h2>
+    <div class="field"><textarea id="terms-extra" placeholder="e.g. All installations are covered by a 12-month workmanship warranty."></textarea></div>
+  </div>
+
+  <button id="generate-btn" onclick="generateProposal()">Generate Proposal</button>
+</div>
+
+<div id="btn-row" style="display:none;flex-direction:row;">
+  <button id="back-btn" onclick="goBack()">Edit Proposal</button>
+  <button id="print-btn" onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<div id="preview"></div>
+
+<script>
+function addTrailRow() {
+  var row = document.createElement('div');
+  row.className = 'trail-row';
+  row.innerHTML = '<input placeholder="Trail name"><input type="number" placeholder="1" min="1" class="cam-qty"><input placeholder="Notes"><input class="unit-price" value="1000"><input placeholder="$0.00" class="total-price" readonly><button class="btn-remove" onclick="removeRow(this)">x</button>';
+  document.getElementById('trail-rows').appendChild(row);
+  bindTrailCalc(row);
+}
+function addReqRow() {
+  var row = document.createElement('div');
+  row.className = 'req-row';
+  row.innerHTML = '<input placeholder="Location"><input placeholder="Requirement"><input placeholder="Details"><input placeholder="Responsibility"><button class="btn-remove" onclick="removeRow(this)">x</button>';
+  document.getElementById('req-rows').appendChild(row);
+}
+function addBulkRow() {
+  var row = document.createElement('div');
+  row.className = 'bulk-row';
+  row.innerHTML = '<input placeholder="Pass type"><input type="number" placeholder="0" class="bk-qty" min="0"><input placeholder="$0.00" class="bk-unit"><input placeholder="$0.00" class="bk-total" readonly><button class="btn-remove" onclick="removeRow(this)">x</button>';
+  document.getElementById('bulk-rows').appendChild(row);
+  bindBulkCalc(row);
+}
+function removeRow(btn) { btn.closest('div').remove(); }
+
+function bindTrailCalc(row) {
+  var qty = row.querySelector('.cam-qty');
+  var unit = row.querySelector('.unit-price');
+  var total = row.querySelector('.total-price');
+  function calc() {
+    var q = parseFloat(qty.value) || 0;
+    var u = parseAmt(unit.value);
+    total.value = (q && u) ? fmtNum(q * u) : '';
+  }
+  qty.addEventListener('input', calc);
+  unit.addEventListener('input', calc);
+  calc();
+}
+function bindBulkCalc(row) {
+  var qty = row.querySelector('.bk-qty');
+  var unit = row.querySelector('.bk-unit');
+  var total = row.querySelector('.bk-total');
+  function calc() {
+    var q = parseFloat(qty.value) || 0;
+    var u = parseAmt(unit.value);
+    total.value = (q && u) ? fmtNum(q * u) : '';
+  }
+  qty.addEventListener('input', calc);
+  unit.addEventListener('input', calc);
+}
+
+document.querySelectorAll('.trail-row').forEach(bindTrailCalc);
+document.querySelectorAll('.bulk-row').forEach(bindBulkCalc);
+
+function parseAmt(v) { return parseFloat((v || '').replace(/[$,]/g, '')) || 0; }
+function fmtNum(n) { return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function fmtDate(d) { if (!d) return '[Date]'; var p = d.split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+
+function generateProposal() {
+  var propNum = document.getElementById('prop-num').value || '[000]';
+  var propDate = fmtDate(document.getElementById('prop-date').value);
+  var propValid = fmtDate(document.getElementById('prop-valid').value);
+  var clientName = document.getElementById('client-name').value || '[Client]';
+  var mountainName = document.getElementById('mountain-name').value || clientName;
+  var clientAddr = document.getElementById('client-address').value || '[Address]';
+  var installDays = document.getElementById('install-days').value || '[X]';
+  var installNotes = document.getElementById('install-notes').value.split('\n').filter(function(l) { return l.trim(); });
+  var termsExtra = document.getElementById('terms-extra').value.split('\n').filter(function(l) { return l.trim(); });
+  var qPayment = document.getElementById('q-payment').value || '[Payment terms]';
+
+  var trailHTML = '';
+  var trailQuoteHTML = '';
+  var trailSubtotal = 0;
+  document.querySelectorAll('.trail-row').forEach(function(row) {
+    var inp = row.querySelectorAll('input');
+    var name = inp[0].value || '-';
+    var qty = parseFloat(inp[1].value) || 0;
+    var notes = inp[2].value || '-';
+    var unitAmt = parseAmt(inp[3].value);
+    var totalAmt = parseAmt(inp[4].value);
+    trailSubtotal += totalAmt;
+    trailHTML += '<tr><td>' + name + '</td><td class="tr">' + (qty || '-') + '</td><td>' + notes + '</td><td class="tr">' + (unitAmt ? fmtNum(unitAmt) : '-') + '</td><td class="tr">' + (totalAmt ? fmtNum(totalAmt) : '-') + '</td></tr>';
+    if (totalAmt > 0) {
+      trailQuoteHTML += '<tr><td style="padding-left:24px;">' + name + '</td><td class="tr">' + qty + '</td><td class="tr">' + fmtNum(unitAmt) + '</td><td class="tr">' + fmtNum(totalAmt) + '</td></tr>';
+    }
+  });
+
+  var reqHTML = '';
+  document.querySelectorAll('.req-row').forEach(function(row) {
+    var inp = row.querySelectorAll('input');
+    reqHTML += '<tr><td>' + (inp[0].value || '') + '</td><td>' + (inp[1].value || '') + '</td><td>' + (inp[2].value || '') + '</td><td>' + (inp[3].value || '') + '</td></tr>';
+  });
+
+  var bulkHTML = '';
+  var bulkSubtotal = 0;
+  document.querySelectorAll('.bulk-row').forEach(function(row) {
+    var inp = row.querySelectorAll('input');
+    var totalAmt = parseAmt(inp[3].value);
+    if (totalAmt > 0) {
+      bulkSubtotal += totalAmt;
+      bulkHTML += '<tr><td style="padding-left:24px;">' + (inp[0].value || '-') + '</td><td class="tr">' + (inp[1].value || '0') + '</td><td class="tr">' + fmtNum(parseAmt(inp[2].value)) + '</td><td class="tr">' + fmtNum(totalAmt) + '</td></tr>';
+    }
+  });
+
+  var qIntegration = parseAmt(document.getElementById('q-integration').value);
+  var qInstall = parseAmt(document.getElementById('q-install').value);
+  var qMisc = parseAmt(document.getElementById('q-misc').value);
+  var hwTotal = trailSubtotal + qIntegration + qInstall + qMisc;
+
+  var hwRows = trailQuoteHTML;
+  if (qIntegration > 0) hwRows += '<tr><td>Integration Fee</td><td class="tr">-</td><td class="tr">-</td><td class="tr">' + fmtNum(qIntegration) + '</td></tr>';
+  if (qInstall > 0) hwRows += '<tr><td>Installation &amp; Commissioning</td><td class="tr">-</td><td class="tr">-</td><td class="tr">' + fmtNum(qInstall) + '</td></tr>';
+  if (qMisc > 0) hwRows += '<tr><td>Miscellaneous / Travel</td><td class="tr">-</td><td class="tr">-</td><td class="tr">' + fmtNum(qMisc) + '</td></tr>';
+
+  var bulkSection = '';
+  if (bulkSubtotal > 0) {
+    bulkSection += '<tr class="spacer-row"><td colspan="4">&nbsp;</td></tr>';
+    bulkSection += '<tr class="section-row"><td colspan="4">Annual Bulk Subscriptions (Optional)</td></tr>';
+    bulkSection += bulkHTML;
+    bulkSection += '<tr class="subtotal-row"><td colspan="3" style="padding-left:12px;">Annual Bulk Subscriptions Total</td><td class="tr">' + fmtNum(bulkSubtotal) + '</td></tr>';
+  }
+
+  var installExtra = installNotes.map(function(n) { return '<li>' + n + '</li>'; }).join('');
+  var extraTermsHTML = termsExtra.map(function(t) { return '<li>' + t + '</li>'; }).join('');
+
+  var out = [];
+  out.push('<div class="p-header">');
+  out.push('<img src="https://race.yullr.com/_assets/v11/8b719608599361ca2b1d142742df531a9af04c08.png" alt="YULLR" style="height:48px;">');
+  out.push('<div class="p-header-info">');
+  out.push('<div><strong>Proposal #:</strong> ' + propNum + '</div>');
+  out.push('<div><strong>Date:</strong> ' + propDate + '</div>');
+  out.push('<div><strong>Valid until:</strong> ' + propValid + '</div>');
+  out.push('</div></div>');
+
+  out.push('<div class="p-title"><h1>Project Proposal</h1><h2>' + clientName + '</h2></div>');
+
+  out.push('<div class="p-h2">1. Project Summary</div>');
+  out.push('<p class="p-p">This proposal outlines the scope, hardware, subscription services, and associated costs for deploying the YULLR platform at <strong>' + mountainName + '</strong>, located at <strong>' + clientAddr + '</strong>.</p>');
+  out.push('<p class="p-p">Built for demanding alpine environments, the YULLR system is designed to operate reliably in sub-zero temperatures, high winds, and heavy snowfall. Each camera is remotely managed through the YULLR cloud platform, providing real-time monitoring, firmware updates, and centralized footage management with minimal on-site maintenance.</p>');
+
+  out.push('<div class="p-h2">2. Trails</div>');
+  out.push('<p class="p-p">The following trails have been identified for YULLR Capture Points. Capture Point quantities and positioning are subject to adjustment based on site conditions.</p>');
+  out.push('<table class="p-table"><thead><tr><th>Trail Name</th><th class="tr">Capture Points</th><th>Notes</th><th class="tr">Unit Price</th><th class="tr">Total</th></tr></thead><tbody>');
+  out.push(trailHTML);
+  out.push('<tr class="total-row"><td colspan="4">Trail Capture Points Total</td><td class="tr">' + fmtNum(trailSubtotal) + '</td></tr>');
+  out.push('</tbody></table>');
+
+  out.push('<div class="p-h2">3. Installation Notes</div>');
+  out.push('<p class="p-p">Installation will be carried out by a YULLR technician or approved installation partner. The following conditions apply:</p>');
+  out.push('<ul class="dotlist">');
+  out.push('<li>Installation is estimated to take <strong>' + installDays + '</strong> to complete.</li>');
+  out.push('<li>All installations will be scheduled and coordinated with designated on mountain contact.</li>');
+  out.push('<li>Each Capture Point will be mounted, aligned, and tested on-site before sign-off.</li>');
+  out.push('<li>YULLR will provide full system commissioning and staff orientation prior to the start of the season.</li>');
+  out.push(installExtra);
+  out.push('</ul>');
+
+  out.push('<div class="p-h2">4. Site Requirements</div>');
+  out.push('<p class="p-p">The following requirements must be in place at each designated location prior to the installation date. Unless otherwise agreed in writing.</p>');
+  out.push('<table class="p-table"><thead><tr><th>Location</th><th>Requirement</th><th>Details</th><th>Responsibility</th></tr></thead><tbody>');
+  out.push(reqHTML);
+  out.push('</tbody></table>');
+
+  out.push('<div class="p-h2">5. YULLR Subscriptions</div>');
+  out.push('<p class="p-p">Skiers and riders at ' + mountainName + ' can purchase YULLR subscriptions to receive their footage. The following subscription types are available at published rates:</p>');
+  out.push('<div class="sub-grid">');
+  out.push('<div class="sub-card"><h3>Day Pass</h3><div class="price">$20</div><div class="scope">1 Mountain &middot; 1 Day</div><p style="font-size:11.5px;color:#555;text-align:left;">Access to all YULLR footage captured at ' + mountainName + ' for a single visit day.</p></div>');
+  out.push('<div class="sub-card"><h3>Mountain Pass</h3><div class="price">$150</div><div class="scope">1 Mountain &middot; Full Season</div><p style="font-size:11.5px;color:#555;text-align:left;">Unlimited footage access at ' + mountainName + ' for the entire ski season.</p></div>');
+  out.push('<div class="sub-card"><h3>Season Pass</h3><div class="price">$200</div><div class="scope">All YULLR Mountains &middot; Full Season</div><p style="font-size:11.5px;color:#555;text-align:left;">Unlimited footage access across all YULLR-enabled mountains for the full season.</p></div>');
+  out.push('</div>');
+  out.push('<div class="bulk-box"><h3>Bulk Purchase Program</h3><ul>');
+  out.push('<li>A <strong>50% discount</strong> applies to all bulk purchases of <strong>25 or more passes</strong> of any type.</li>');
+  out.push('<li>Bulk passes may be resold up to the published retail rate.</li>');
+  out.push('<li>Bulk passes are non-refundable and valid for the current season only.</li>');
+  out.push('<li>Additional bulk pass purchases after the initial order must be made in increments of 25.</li>');
+  out.push('</ul></div>');
+  out.push('<div class="profit-box"><h3>Revenue Share - YULLR.COM Sales</h3>');
+  out.push('<p>' + mountainName + ' will receive a <strong>15% profit share</strong> on all pass purchases completed through YULLR.COM that are attributable to ' + mountainName + '. This includes all sales tracked through referral links, promo codes, QR codes, on-mountain signage, and any other trackable attribution method. Revenue share payments will be calculated per season and remitted within <strong>30 days</strong> of the end of the season, accompanied by a detailed sales report.</p>');
+  out.push('</div>');
+
+  out.push('<div class="p-h2">6. Final Quote</div>');
+  out.push('<table class="p-table"><thead><tr><th>Item</th><th class="tr">Qty</th><th class="tr">Unit Price</th><th class="tr">Amount</th></tr></thead><tbody>');
+  out.push('<tr class="section-row"><td colspan="4">Hardware &amp; Installation</td></tr>');
+  out.push(hwRows);
+  out.push('<tr class="subtotal-row"><td colspan="3" style="padding-left:12px;">Hardware &amp; Installation Total</td><td class="tr">' + fmtNum(hwTotal) + '</td></tr>');
+  out.push(bulkSection);
+  out.push('</tbody></table>');
+  out.push('<div class="note-box"><strong>Payment Terms</strong>' + qPayment + '</div>');
+
+  out.push('<div class="p-h2">7. Terms</div>');
+  out.push('<ol class="terms-list">');
+  out.push('<li>This proposal is valid for 30 days from the date of issue. After this period, pricing may be subject to change.</li>');
+  out.push('<li>Acceptance of this proposal constitutes agreement to execute the Customer Agreement and Order Form within 30 days.</li>');
+  out.push('<li>All hardware remains the property of YULLR.</li>');
+  out.push('<li>Installation dates are subject to availability and will be confirmed upon receipt of deposit.</li>');
+  out.push('<li>YULLR is not responsible for delays caused by site conditions that do not meet the requirements outlined in Section 4.</li>');
+  out.push('<li>Subscription and pass pricing is subject to change at the start of each new ski season.</li>');
+  out.push('<li>An annual maintenance fee of $250.00 will apply to each Capture Point starting in year 2.</li>');
+  out.push('<li>The YULLR Customer Agreement is for a five (5) year Initial Term.</li>');
+  out.push(extraTermsHTML);
+  out.push('</ol>');
+
+  out.push('<div class="p-footer">');
+  out.push('<div class="sig-block"><div style="font-weight:600;margin-bottom:4px;">Accepted by (' + clientName + ')</div><div class="sig-line"><span>Signature</span><span>Date</span></div></div>');
+  out.push('<div class="sig-block" style="text-align:right;"><div style="font-weight:600;margin-bottom:4px;">Authorized by (YULLR)</div><div class="sig-line"><span>Signature</span><span>Date</span></div></div>');
+  out.push('</div>');
+  out.push('<div class="page-note">YULLR, Inc. &nbsp;|&nbsp; Confidential Proposal &nbsp;|&nbsp; Proposal # ' + propNum + '</div>');
+
+  document.getElementById('preview').innerHTML = out.join('');
+  document.getElementById('builder').style.display = 'none';
+  document.getElementById('preview').style.display = 'block';
+  document.getElementById('btn-row').style.display = 'flex';
+}
+
+function goBack() {
+  document.getElementById('builder').style.display = 'block';
+  document.getElementById('preview').style.display = 'none';
+  document.getElementById('btn-row').style.display = 'none';
+}
+
+var today = new Date().toISOString().split('T')[0];
+document.getElementById('prop-date').value = today;
+var future = new Date();
+future.setDate(future.getDate() + 30);
+document.getElementById('prop-valid').value = future.toISOString().split('T')[0];
+</script>
+</body>
+</html>

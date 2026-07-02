@@ -1,12 +1,225 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router';
 import {
-  ArrowLeft, MapPin, Loader2, CheckCircle2, X, Image, Video, RefreshCw,
+  ArrowLeft, MapPin, Loader2, CheckCircle2, X, Image, Video, RefreshCw, Map,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
 import * as locMediaDB from '../utils/locationMediaDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { UnsavedChangesDialog } from './UnsavedChangesDialog';
+import L from 'leaflet';
+
+// ─── Map Picker Modal ─────────────────────────────────────────────────────────
+
+interface MapPickerProps {
+  mountainAddress?: string;
+  initialCoords?: { latitude: number; longitude: number } | null;
+  onSelect: (coords: { latitude: number; longitude: number }) => void;
+  onClose: () => void;
+}
+
+function MapPicker({ mountainAddress, initialCoords, onSelect, onClose }: MapPickerProps) {
+  const mapRef = useRef<L.Map | null>(null);
+  const mapDivRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const [selectedCoords, setSelectedCoords] = useState<{ latitude: number; longitude: number } | null>(
+    initialCoords || null
+  );
+  const [geocoding, setGeocoding] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+
+  // Geocode the mountain address
+  const geocodeMountainAddress = useCallback(async (map: L.Map) => {
+    if (!mountainAddress) {
+      map.setView([39.5501, -105.7821], 10);
+      return;
+    }
+    setGeocoding(true);
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(mountainAddress)}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data = await resp.json() as any[];
+      if (data.length > 0) {
+        map.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14);
+      } else {
+        map.setView([39.5501, -105.7821], 10);
+      }
+    } catch {
+      map.setView([39.5501, -105.7821], 10);
+    } finally {
+      setGeocoding(false);
+    }
+  }, [mountainAddress]);
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapDivRef.current || mapRef.current) return;
+
+    const map = L.map(mapDivRef.current, { zoomControl: false, attributionControl: true });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    mapRef.current = map;
+
+    // Center on mountain or initial coords
+    if (initialCoords) {
+      map.setView([initialCoords.latitude, initialCoords.longitude], 16);
+    } else {
+      geocodeMountainAddress(map);
+    }
+
+    // Click to place/move pin
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      const coords = { latitude: e.latlng.lat, longitude: e.latlng.lng };
+      setSelectedCoords(coords);
+
+      if (markerRef.current) {
+        markerRef.current.setLatLng(e.latlng);
+      } else {
+        const marker = L.marker(e.latlng, {
+          icon: L.divIcon({
+            html: `<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;background:#ff5c39;border:2px solid white;display:flex;align-items:center;justify-content:center;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`,
+            className: '',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+          }),
+        }).addTo(map);
+        markerRef.current = marker;
+      }
+    });
+
+    // Place initial marker if coords exist
+    if (initialCoords) {
+      const marker = L.marker([initialCoords.latitude, initialCoords.longitude], {
+        icon: L.divIcon({
+          html: `<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;background:#ff5c39;border:2px solid white;display:flex;align-items:center;justify-content:center;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`,
+          className: '',
+          iconSize: [32, 32],
+          iconAnchor: [16, 32],
+        }),
+      }).addTo(map);
+      markerRef.current = marker;
+    }
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConfirm = () => {
+    if (selectedCoords) {
+      onSelect(selectedCoords);
+      onClose();
+      toast.success('Location set');
+    } else {
+      toast.error('Click on the map to select a location');
+    }
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim() || !mapRef.current) return;
+
+    setSearching(true);
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data = await resp.json() as any[];
+      if (data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+        mapRef.current.setView([lat, lng], 16);
+        toast.success('Location found');
+      } else {
+        toast.error('Location not found. Try a different search.');
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+      toast.error('Search failed. Please try again.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      <div ref={mapDivRef} className="flex-1 relative" />
+
+      {geocoding && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-white/90 rounded-full px-4 py-2 flex items-center gap-2 shadow z-[1001]">
+          <Loader2 size={14} className="text-[#6a7282] animate-spin" />
+          <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px]">Finding resort…</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 z-[1001] bg-white/95 backdrop-blur border-b border-[rgba(0,0,0,0.1)] px-4 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+            Select Location on Map
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px] active:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={!selectedCoords}
+              className="px-4 py-2 bg-[#ff5c39] text-white rounded-[8px] font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+
+        {/* Search bar */}
+        <form onSubmit={handleSearch} className="flex gap-2 mb-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search for an address or place..."
+            className="flex-1 bg-white border border-[#d1d5db] rounded-[8px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px] outline-none focus:border-[#ff5c39]"
+          />
+          <button
+            type="submit"
+            disabled={searching || !searchQuery.trim()}
+            className="px-4 py-2 bg-[#0a0a0a] text-white rounded-[8px] font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50"
+          >
+            {searching ? <Loader2 size={16} className="animate-spin" /> : 'Search'}
+          </button>
+        </form>
+
+        <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">
+          {selectedCoords
+            ? `${selectedCoords.latitude.toFixed(6)}, ${selectedCoords.longitude.toFixed(6)}`
+            : 'Search for a location or click anywhere on the map to drop a pin'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main EditLocation Component ─────────────────────────────────────────────
 
 export function EditLocation() {
   const { mountainId, locationId } = useParams();
@@ -20,6 +233,8 @@ export function EditLocation() {
   const [nickname, setNickname] = useState(location?.name || '');
   const [trailName, setTrailName] = useState(location?.trailName || '');
   const [notes, setNotes] = useState(location?.notes || '');
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4 | 5 | null>(location?.difficulty || null);
+  const [validationErrors, setValidationErrors] = useState<{ name?: string }>({});
 
   // ─── GPS ─────────────────────────────────────────────────────────────────────
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(
@@ -38,11 +253,31 @@ export function EditLocation() {
 
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const savingRef = useRef(false); // Immediate guard against double-submission
+  const isNavigatingAfterSaveRef = useRef(false); // Track intentional navigation after save
 
   const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
 
   // Trail suggestions — mountain-wide
   const existingTrails = getMountainTrailNames(mountainId!);
+
+  // Track changes
+  useEffect(() => {
+    if (!location) return;
+
+    const hasChanges =
+      nickname !== (location.name || '') ||
+      trailName !== (location.trailName || '') ||
+      notes !== (location.notes || '') ||
+      difficulty !== (location.difficulty || null) ||
+      JSON.stringify(coords) !== JSON.stringify(location.coordinates || null) ||
+      photos.length !== 0 || // New photos added
+      videos.length !== 0;   // New videos added
+
+    setHasUnsavedChanges(hasChanges);
+  }, [nickname, trailName, notes, difficulty, coords, photos, videos, location]);
 
   // Load existing media from IndexedDB on mount; fall back to cloud if empty
   useEffect(() => {
@@ -144,10 +379,25 @@ export function EditLocation() {
   // ─── Save ─────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
-    if (!nickname.trim()) {
-      toast.error('Location name is required');
+    // Prevent double-submission
+    if (savingRef.current) {
+      console.log('[EditLocation] Save already in progress, ignoring duplicate call');
       return;
     }
+
+    // Validate required fields
+    if (!nickname.trim()) {
+      setValidationErrors({ name: 'Location name is required' });
+      toast.error('Please fix the errors before saving');
+      return;
+    }
+
+    // Disable the blocker immediately since we're intentionally saving and navigating
+    isNavigatingAfterSaveRef.current = true;
+
+    // Clear any previous validation errors
+    setValidationErrors({});
+    savingRef.current = true;
     setSaving(true);
     try {
       updateLocation(locationId!, {
@@ -155,6 +405,7 @@ export function EditLocation() {
         trailName: trailName.trim() || undefined,
         coordinates: coords || undefined,
         notes: notes.trim() || undefined,
+        difficulty: difficulty || undefined,
       });
 
       // Only save local data: URLs to IndexedDB (not cloud signed URLs)
@@ -185,14 +436,27 @@ export function EditLocation() {
       }
 
       toast.success('Location updated');
+      // Force synchronous state update before navigation to prevent blocker from triggering
+      flushSync(() => {
+        setHasUnsavedChanges(false);
+      });
       navigate(`/mountains/${mountainId}/locations/${locationId}`);
     } catch (err) {
       console.error('Save error:', err);
       toast.error('Failed to save. Please try again.');
+      isNavigatingAfterSaveRef.current = false; // Re-enable blocker if save failed
     } finally {
       setSaving(false);
+      savingRef.current = false;
     }
   };
+
+  // Unsaved changes protection
+  const { showPrompt, handleSave: handleSaveDialog, handleDiscard, handleCancel } = useUnsavedChanges({
+    when: hasUnsavedChanges && !isNavigatingAfterSaveRef.current,
+    message: 'You have unsaved changes. Do you want to save before leaving?',
+    onSave: handleSave,
+  });
 
   if (!location || !mountain) {
     return (
@@ -242,10 +506,24 @@ export function EditLocation() {
             <input
               type="text"
               value={nickname}
-              onChange={e => setNickname(e.target.value)}
+              onChange={e => {
+                setNickname(e.target.value);
+                // Clear validation error when user starts typing
+                if (validationErrors.name) {
+                  setValidationErrors({});
+                }
+              }}
               placeholder="e.g. Top of Chairlift 3"
-              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none"
+              className={`w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none ${
+                validationErrors.name ? 'border-2 border-[#ff5c39] bg-[#fff5f3]' : ''
+              }`}
             />
+            {validationErrors.name && (
+              <p className="text-[#ff5c39] font-['Inter:Regular',sans-serif] text-[12px] mt-1.5 flex items-center gap-1">
+                <span className="inline-block w-1 h-1 rounded-full bg-[#ff5c39]"></span>
+                {validationErrors.name}
+              </p>
+            )}
           </div>
 
           <div>
@@ -279,6 +557,40 @@ export function EditLocation() {
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none resize-none"
             />
           </div>
+
+          <div>
+            <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-2">
+              Installation Difficulty
+            </label>
+            <div className="grid grid-cols-5 gap-2">
+              {([1, 2, 3, 4, 5] as const).map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setDifficulty(level)}
+                  className={`h-12 rounded-[8px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                    difficulty === level
+                      ? 'bg-[#ff5c39] text-white'
+                      : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
+                  }`}
+                >
+                  <span className="font-['Inter:Bold',sans-serif] font-bold text-[18px]">{level}</span>
+                  <span className="font-['Inter:Regular',sans-serif] text-[9px]">
+                    {level === 1 ? 'Easy' : level === 5 ? 'Hard' : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {difficulty && (
+              <button
+                type="button"
+                onClick={() => setDifficulty(null)}
+                className="mt-2 text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] active:opacity-60"
+              >
+                Clear rating
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── GPS ── */}
@@ -309,19 +621,29 @@ export function EditLocation() {
                   <X size={18} className="text-[#6a7282]" />
                 </button>
               </div>
-              {/* Update GPS button */}
-              <button
-                type="button"
-                onClick={getGPS}
-                disabled={gpsLoading}
-                className="w-full bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium active:bg-[#e8e8ea] disabled:opacity-50"
-              >
-                {gpsLoading
-                  ? <Loader2 size={18} className="animate-spin text-[#6a7282]" />
-                  : <RefreshCw size={18} className="text-[#6a7282]" />
-                }
-                {gpsLoading ? 'Updating…' : 'Update GPS'}
-              </button>
+              {/* Update GPS buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={getGPS}
+                  disabled={gpsLoading}
+                  className="bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium active:bg-[#e8e8ea] disabled:opacity-50"
+                >
+                  {gpsLoading
+                    ? <Loader2 size={18} className="animate-spin text-[#6a7282]" />
+                    : <RefreshCw size={18} className="text-[#6a7282]" />
+                  }
+                  {gpsLoading ? 'Updating…' : 'Update GPS'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMapPicker(true)}
+                  className="bg-white border border-[#d1d5db] text-[#0a0a0a] rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium active:bg-[#f9fafb]"
+                >
+                  <Map size={18} className="text-[#6a7282]" />
+                  Adjust on Map
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -337,14 +659,23 @@ export function EditLocation() {
 
               <button
                 type="button"
-                onClick={() => setShowManual(v => !v)}
-                className="w-full text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px] py-1 active:opacity-60"
+                onClick={() => setShowMapPicker(true)}
+                className="w-full bg-white border border-[#d1d5db] text-[#0a0a0a] rounded-[8px] px-4 py-3.5 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium active:bg-[#f9fafb]"
               >
-                Enter coordinates manually
+                <Map size={20} className="text-[#6a7282]" />
+                Select on Map
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowManual(v => !v)}
+                className="w-full text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] py-1 active:opacity-60"
+              >
+                {showManual ? 'Hide manual entry' : 'Or enter coordinates manually'}
               </button>
 
               {showManual && (
-                <div className="space-y-2">
+                <div className="space-y-2 pt-2">
                   <input type="number" step="any" value={manualLat}
                     onChange={e => setManualLat(e.target.value)}
                     placeholder="Latitude (e.g. 39.5501)"
@@ -457,6 +788,28 @@ export function EditLocation() {
         </button>
 
       </div>
+
+      {/* Unsaved changes dialog */}
+      <UnsavedChangesDialog
+        isOpen={showPrompt}
+        onSave={handleSaveDialog}
+        onDiscard={handleDiscard}
+        onCancel={handleCancel}
+        showSaveButton={!!nickname.trim()}
+      />
+
+      {/* Map picker modal */}
+      {showMapPicker && (
+        <MapPicker
+          mountainAddress={mountain?.address}
+          initialCoords={coords}
+          onSelect={(coords) => {
+            setCoords(coords);
+            setShowManual(false);
+          }}
+          onClose={() => setShowMapPicker(false)}
+        />
+      )}
     </div>
   );
 }

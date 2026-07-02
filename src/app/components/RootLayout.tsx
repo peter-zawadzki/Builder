@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation, Outlet } from 'react-router';
 import { DataProvider } from '../context/DataContext';
 import { OfflineBanner } from './OfflineBanner';
+import { PasswordGate } from './PasswordGate';
 
 /** Root layout for every route.
  *  - Wraps all children in DataProvider so context is always inside the router tree.
@@ -16,9 +17,11 @@ export function RootLayout() {
   }, [pathname]);
 
   return (
-    <DataProvider>
-      <OfflineBanner />
-      <Outlet />
-    </DataProvider>
+    <PasswordGate>
+      <DataProvider>
+        <OfflineBanner />
+        <Outlet />
+      </DataProvider>
+    </PasswordGate>
   );
 }

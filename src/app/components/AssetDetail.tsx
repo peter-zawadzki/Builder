@@ -179,6 +179,9 @@ export function AssetDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Inventory items (managed via admin) are read-only outside the admin panel
+  const isInventoryItem = !!(asset?.yullrInventoryNumber || asset?.inventoryCategory);
+
   // ── Edit form state ────────────────────────────────────────────────────────
   const [formData, setFormData] = useState<Partial<Asset>>({});
   const [namedCounts, setNamedCounts] = useState<Record<string, number>>({});
@@ -658,7 +661,7 @@ export function AssetDetail() {
             )}
           </div>
 
-          {!isEditing && (
+          {!isEditing && !isInventoryItem && (
             <>
               <button onClick={enterEditMode} className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" aria-label="Edit asset">
                 <Pencil size={18} className="text-[#0a0a0a]" />
@@ -667,6 +670,11 @@ export function AssetDetail() {
                 <Trash2 size={18} className="text-[#ff5c39]" />
               </button>
             </>
+          )}
+          {!isEditing && isInventoryItem && (
+            <span className="text-[11px] text-[#6a7282] bg-[#f3f3f5] px-2.5 py-1 rounded-full font-['Inter:Medium',sans-serif]">
+              Edit in Admin
+            </span>
           )}
         </div>
       </div>

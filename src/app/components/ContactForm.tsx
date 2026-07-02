@@ -12,8 +12,8 @@ interface ContactFormProps {
 }
 
 export function ContactForm({ contact, onChange, knownTeamNames = [], compact }: ContactFormProps) {
-  const inputCls = `w-full bg-[#F2F3F5] rounded-[8px] px-3 ${compact ? 'py-2.5 text-[14px]' : 'py-3 text-[15px]'} text-[#1D2930] font-['Inter:Regular',sans-serif] focus:outline-none focus:ring-2 focus:ring-[#F95C39]/30`;
-  const labelCls = `block text-[#1D2930] font-['Inter:Medium',sans-serif] font-medium ${compact ? 'text-[13px]' : 'text-[14px]'} mb-1.5`;
+  const inputCls = `w-full bg-[#f3f3f5] rounded-[8px] px-3 ${compact ? 'py-2.5 text-[14px]' : 'py-3 text-[15px]'} text-[#0a0a0a] font-['Inter:Regular',sans-serif] focus:outline-none focus:ring-2 focus:ring-[#ff5c39]/30`;
+  const labelCls = `block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium ${compact ? 'text-[13px]' : 'text-[14px]'} mb-1.5`;
 
   return (
     <div className="space-y-3">
@@ -72,8 +72,8 @@ export function ContactForm({ contact, onChange, knownTeamNames = [], compact }:
                 onClick={() => onChange('phoneType', pt)}
                 className={`px-3 ${compact ? 'py-2' : 'py-2.5'} rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] font-medium border transition-colors ${
                   (contact.phoneType || 'Office') === pt
-                    ? 'bg-[#F95C39] border-[#F95C39] text-white'
-                    : 'bg-[#F2F3F5] border-[rgba(29,41,48,0.1)] text-[#1D2930] active:bg-[#E8E9EA]'
+                    ? 'bg-[#ff5c39] border-[#ff5c39] text-white'
+                    : 'bg-[#f3f3f5] border-[rgba(0,0,0,0.1)] text-[#0a0a0a] active:bg-[#e8e8ea]'
                 }`}
               >
                 {pt}
@@ -94,8 +94,8 @@ export function ContactForm({ contact, onChange, knownTeamNames = [], compact }:
               onClick={() => onChange('role', role)}
               className={`py-2.5 px-3 rounded-[8px] border text-[14px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${
                 contact.role === role
-                  ? 'bg-[#F95C39] border-[#F95C39] text-white'
-                  : 'bg-[#F2F3F5] border-[rgba(29,41,48,0.1)] text-[#1D2930] active:bg-[#E8E9EA]'
+                  ? 'bg-[#ff5c39] border-[#ff5c39] text-white'
+                  : 'bg-[#f3f3f5] border-[rgba(0,0,0,0.1)] text-[#0a0a0a] active:bg-[#e8e8ea]'
               }`}
             >
               {role}

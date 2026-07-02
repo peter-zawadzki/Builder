@@ -39,7 +39,7 @@ export function AddableSelect({
 
   const baseClass =
     className ??
-    "w-full bg-[#F2F3F5] rounded-[8px] px-4 py-4 text-[#1D2930] font-['Inter:Regular',sans-serif] text-[16px] disabled:opacity-50";
+    "w-full bg-[#f3f3f5] rounded-[8px] px-4 py-4 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[16px] disabled:opacity-50";
 
   const handleConfirm = () => {
     const trimmed = newValue.trim();
@@ -68,7 +68,7 @@ export function AddableSelect({
           }}
           autoFocus
           placeholder="Type name, press Enter"
-          className="flex-1 bg-[#F2F3F5] rounded-[8px] px-4 py-4 text-[#1D2930] font-['Inter:Regular',sans-serif] text-[16px]"
+          className="flex-1 bg-[#f3f3f5] rounded-[8px] px-4 py-4 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[16px]"
         />
         <button
           type="button"
@@ -80,7 +80,7 @@ export function AddableSelect({
         <button
           type="button"
           onClick={handleCancel}
-          className="w-14 h-[54px] bg-[#F2F3F5] text-[#6D7B83] rounded-[8px] flex items-center justify-center active:opacity-70 shrink-0"
+          className="w-14 h-[54px] bg-[#f3f3f5] text-[#6a7282] rounded-[8px] flex items-center justify-center active:opacity-70 shrink-0"
         >
           <X size={20} />
         </button>
