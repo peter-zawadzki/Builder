@@ -25,6 +25,15 @@ import { SignInPage } from "./components/SignInPage";
 import { SignUpPage } from "./components/SignUpPage";
 import { TeamPage } from "./components/TeamPage";
 import { SystemCheck } from "./components/SystemCheck";
+// New-model screens (on the local API); legacy components remain for
+// not-yet-migrated routes.
+import { MountainsScreen } from "./screens/MountainsScreen";
+import { MountainScreen } from "./screens/MountainScreen";
+import { MountainFormScreen } from "./screens/MountainFormScreen";
+import { TrailScreen } from "./screens/TrailScreen";
+import { TrailFormScreen } from "./screens/TrailFormScreen";
+import { LocationScreen } from "./screens/LocationScreen";
+import { LocationFormScreen } from "./screens/LocationFormScreen";
 
 export const router = createBrowserRouter([
   {
@@ -60,27 +69,28 @@ export const router = createBrowserRouter([
       {
         Component: RootLayout,
         children: [
-          { path: "/", Component: MountainsList },
+          { path: "/", Component: MountainsScreen },
           { path: "/admin", Component: AdminCatalog },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
           { path: "/system-check", Component: SystemCheck },
-          { path: "/mountains/new", Component: CreateMountain },
-          { path: "/mountains/:mountainId", Component: MountainDetail },
-          { path: "/mountains/:mountainId/edit", Component: EditMountain },
+          { path: "/mountains/new", Component: MountainFormScreen },
+          { path: "/mountains/:mountainId", Component: MountainScreen },
+          { path: "/mountains/:mountainId/edit", Component: MountainFormScreen },
           { path: "/mountains/:mountainId/proposal", Component: ProposalBuilder },
           { path: "/mountains/:mountainId/agreement", Component: CustomerAgreementBuilder },
           { path: "/mountains/:mountainId/invoice", Component: InvoiceViewer },
-          // ── Trails ────────────────────────────────────────────────────────
-          { path: "/mountains/:mountainId/trails/new", Component: CreateTrail },
-          { path: "/mountains/:mountainId/trails/:trailId", Component: TrailDetail },
-          { path: "/mountains/:mountainId/trails/:trailId/locations/new", Component: CreateLocation },
-          // ── Inventory (mountain-level asset creation) ──────────────────────
+          // ── Trails (new model) ────────────────────────────────────────────
+          { path: "/mountains/:mountainId/trails/new", Component: TrailFormScreen },
+          { path: "/mountains/:mountainId/trails/:trailId", Component: TrailScreen },
+          { path: "/mountains/:mountainId/trails/:trailId/edit", Component: TrailFormScreen },
+          { path: "/mountains/:mountainId/trails/:trailId/locations/new", Component: LocationFormScreen },
+          // ── Inventory (mountain-level asset creation) — legacy for now ─────
           { path: "/mountains/:mountainId/inventory/new", Component: AddAsset },
-          // ── Locations (still accessible directly) ─────────────────────────
-          { path: "/mountains/:mountainId/locations/new", Component: CreateLocation },
-          { path: "/mountains/:mountainId/locations/:locationId", Component: LocationDetail },
-          { path: "/mountains/:mountainId/locations/:locationId/edit", Component: EditLocation },
+          // ── Locations (new model) ─────────────────────────────────────────
+          { path: "/mountains/:mountainId/locations/new", Component: LocationFormScreen },
+          { path: "/mountains/:mountainId/locations/:locationId", Component: LocationScreen },
+          { path: "/mountains/:mountainId/locations/:locationId/edit", Component: LocationFormScreen },
           { path: "/mountains/:mountainId/locations/:locationId/inspection", Component: AddInspection },
           { path: "/mountains/:mountainId/locations/:locationId/assets/new", Component: AddAsset },
           { path: "/mountains/:mountainId/locations/:locationId/assets/:assetId", Component: AssetDetail },

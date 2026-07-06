@@ -5,6 +5,8 @@ import { cors } from "hono/cors";
 import { pool } from "./db";
 import { requireAuth, type HonoEnv } from "./auth";
 import { mountains } from "./routes/mountains";
+import { trails } from "./routes/trails";
+import { locations } from "./routes/locations";
 
 const app = new Hono<HonoEnv>();
 
@@ -37,6 +39,8 @@ app.get("/api/me", (c) => c.json({ user: c.get("user") }));
 
 // Domain routes (all behind requireAuth).
 app.route("/api/mountains", mountains);
+app.route("/api/trails", trails);
+app.route("/api/locations", locations);
 
 const port = Number(process.env.API_PORT ?? 8787);
 serve({ fetch: app.fetch, port });
