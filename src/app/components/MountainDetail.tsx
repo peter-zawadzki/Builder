@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { useAuth } from '@clerk/clerk-react';
 import { useData } from '../context/DataContext';
 import type { Asset } from '../context/DataContext';
 import {
@@ -44,6 +45,26 @@ export function MountainDetail() {
   const [showExport, setShowExport] = useState(false);
   const [assigningLocationId, setAssigningLocationId] = useState<string | null>(null);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<Asset | null>(null);
+
+  // Updates feed for the Status pane.
+  const { getToken } = useAuth();
+  const [updates, setUpdates] = useState<Array<{ id: string; type: string; summary: string; actor: string; timestamp: string }>>([]);
+  useEffect(() => {
+    if (!mountainId) return;
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`/api/legacy/activity?mountainId=${mountainId}`, {
+          headers: { Authorization: `Bearer ${token ?? ''}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (alive) setUpdates(data.activity || []);
+      } catch { /* ignore */ }
+    })();
+    return () => { alive = false; };
+  }, [mountainId, getToken, trails.length, allLocations.length]);
 
   if (!mountain) {
     return (
@@ -199,13 +220,28 @@ export function MountainDetail() {
                 </div>
               ))}
             </div>
-            {(mountain.region || mountain.phone || mountain.website) && (
-              <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)] space-y-1.5">
-                {mountain.region && <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><MapPin size={13} className="text-[#6a7282]" /> {mountain.region}</div>}
-                {mountain.phone && <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><Phone size={13} className="text-[#6a7282]" /> {mountain.phone}</div>}
-                {mountain.website && <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><Globe size={13} className="text-[#6a7282]" /> {mountain.website}</div>}
+            {mountain.phone && (
+              <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
+                <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><Phone size={13} className="text-[#6a7282]" /> {mountain.phone}</div>
               </div>
             )}
+
+            {/* Updates */}
+            <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
+              <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-2">Updates</div>
+              {updates.length === 0 ? (
+                <div className="text-[12px] text-[#8992a0]">No activity yet.</div>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto">
+                  {updates.map((u) => (
+                    <div key={u.id} className="text-[12px]">
+                      <div className="text-[#0a0a0a]">{u.summary}</div>
+                      <div className="text-[#8992a0]">{u.actor} · {new Date(u.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── Contacts Pane ── */}

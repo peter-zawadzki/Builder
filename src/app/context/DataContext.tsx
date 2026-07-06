@@ -539,6 +539,13 @@ function removePendingPhoto(assetId: string) {
   localStorage.setItem(STORAGE_KEYS.PENDING_PHOTOS, JSON.stringify(ids.filter(id => id !== assetId)));
 }
 
+// Fire-and-forget activity entry for the Updates feed. The server stamps which
+// authenticated user performed the action.
+function logActivity(mountainId: string | undefined, type: string, summary: string) {
+  if (!mountainId) return;
+  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId, type, summary }) }).catch(() => {});
+}
+
 export function DataProvider({ children }: { children: ReactNode }) {
   const [mountains, setMountains] = useState<Mountain[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.MOUNTAINS) || '[]'); }
@@ -936,6 +943,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setMountains(prev => [...prev, newMountain]);
     syncOrQueue('/mountains', 'POST', JSON.stringify(newMountain))
       .catch(e => console.error('Mountain sync error:', e));
+    logActivity(id, 'mountain_added', `Added mountain "${newMountain.name}"`);
     return id;
   };
 
@@ -977,6 +985,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setLocations(prev => [...prev, newLocation]);
     syncOrQueue('/locations', 'POST', JSON.stringify(newLocation))
       .catch(e => console.error('Location sync error:', e));
+    logActivity(newLocation.mountainId, 'location_added', `Added location "${newLocation.name}"`);
     return id;
   };
 
@@ -1038,6 +1047,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     syncOrQueue('/assets', 'POST', JSON.stringify(stripPhotos(newAsset)))
       .catch(e => console.error('Asset sync error:', e));
+    logActivity(newAsset.mountainId, 'asset_added', `Added ${newAsset.type} to inventory`);
     return id;
   };
 
@@ -1089,6 +1099,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTrails(prev => [...prev, newTrail]);
     syncOrQueue('/trails', 'POST', JSON.stringify(newTrail))
       .catch(e => console.error('Trail sync error:', e));
+    logActivity(newTrail.mountainId, 'trail_added', `Added trail "${newTrail.name}"`);
     return id;
   };
 
@@ -1124,6 +1135,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setNotes(prev => [...prev, newNote]);
     syncOrQueue('/notes', 'POST', JSON.stringify(newNote))
       .catch(e => console.error('Note sync error:', e));
+    logActivity(mountainId, 'note_added', 'Added a note');
     return id;
   };
 

@@ -133,3 +133,32 @@ legacy.post("/item-prices", async (c) => {
   await upsert("item-prices", "__all__", dict);
   return c.json({ ok: true });
 });
+
+// ── Activity feed (Updates) — the actor is the authenticated user ─────────────
+legacy.get("/activity", async (c) => {
+  const mountainId = c.req.query("mountainId");
+  const rows = mountainId
+    ? await query<{ data: any }>(
+        `SELECT data FROM legacy_records WHERE collection='activity' AND data->>'mountainId' = $1 ORDER BY updated_at DESC LIMIT 50`,
+        [mountainId]
+      )
+    : await query<{ data: any }>(
+        `SELECT data FROM legacy_records WHERE collection='activity' ORDER BY updated_at DESC LIMIT 50`
+      );
+  return c.json({ activity: rows.map((r) => r.data) });
+});
+legacy.post("/activity", async (c) => {
+  const user = c.get("user");
+  const b = await c.req.json().catch(() => ({}));
+  const rec = {
+    id: crypto.randomUUID(),
+    mountainId: b.mountainId ?? null,
+    type: b.type ?? "update",
+    summary: b.summary ?? "",
+    actor: user.name || user.email || "Someone",
+    actorId: user.id,
+    timestamp: new Date().toISOString(),
+  };
+  await upsert("activity", rec.id, rec);
+  return c.json({ ok: true, activity: rec });
+});
