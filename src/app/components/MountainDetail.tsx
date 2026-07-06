@@ -6,7 +6,7 @@ import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
-  Calendar, Truck, Barcode, Cpu,
+  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, CheckCircle2, Circle,
 } from 'lucide-react';
 import { MountainNotes } from './MountainNotes';
 import { MountainDocuments } from './MountainDocuments';
@@ -172,6 +172,85 @@ export function MountainDetail() {
             <button onClick={() => updateMountain(mountainId!, { confirmedInstallDate: undefined })} className="text-[12px] text-[#6a7282]">Clear</button>
           </div>
         )}
+
+        {/* Status + Contacts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Status Pane ── */}
+          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Info size={16} className="text-[#6a7282]" />
+              <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Status</h2>
+            </div>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] text-[#6a7282]">Pipeline stage</span>
+                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{mountain.pipelineStage || '—'}</span>
+              </div>
+              {[
+                { label: 'Proposal created', done: !!mountain.proposalCreated },
+                { label: 'Invoice', done: !!mountain.invoice },
+                { label: 'Install confirmed', done: !!mountain.confirmedInstallDate },
+              ].map((s) => (
+                <div key={s.label} className="flex items-center justify-between">
+                  <span className="text-[13px] text-[#6a7282]">{s.label}</span>
+                  {s.done
+                    ? <CheckCircle2 size={16} className="text-[#16a34a]" />
+                    : <Circle size={16} className="text-[#d1d5db]" />}
+                </div>
+              ))}
+            </div>
+            {(mountain.region || mountain.phone || mountain.website) && (
+              <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)] space-y-1.5">
+                {mountain.region && <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><MapPin size={13} className="text-[#6a7282]" /> {mountain.region}</div>}
+                {mountain.phone && <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><Phone size={13} className="text-[#6a7282]" /> {mountain.phone}</div>}
+                {mountain.website && <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><Globe size={13} className="text-[#6a7282]" /> {mountain.website}</div>}
+              </div>
+            )}
+          </div>
+
+          {/* ── Contacts Pane ── */}
+          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users size={16} className="text-[#6a7282]" />
+                <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Contacts</h2>
+              </div>
+              <button onClick={() => navigate(`/mountains/${mountainId}/edit`)} className="text-[12px] text-[#6a7282] active:opacity-60">Edit</button>
+            </div>
+            {(() => {
+              const list = [
+                mountain.adminContact?.name ? { ...mountain.adminContact, _role: 'Admin' } : null,
+                mountain.technicalContact?.name ? { ...mountain.technicalContact, _role: 'Technical' } : null,
+                ...(mountain.additionalContacts || []).filter((c) => c.name).map((c) => ({ ...c, _role: c.role || 'Contact' })),
+              ].filter(Boolean) as any[];
+              if (list.length === 0) {
+                return (
+                  <div className="text-[13px] text-[#6a7282]">
+                    No contacts yet.{' '}
+                    <button onClick={() => navigate(`/mountains/${mountainId}/edit`)} className="text-[#307fe2]">Add</button>
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-2">
+                  {list.map((c, i) => (
+                    <div key={i} className="border border-[rgba(0,0,0,0.06)] rounded-[10px] p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{c.name}</span>
+                        <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full shrink-0">{c._role}</span>
+                      </div>
+                      {c.title && <div className="text-[12px] text-[#6a7282]">{c.title}</div>}
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        {c.email && <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 text-[12px] text-[#307fe2] truncate"><Mail size={12} className="shrink-0" /> {c.email}</a>}
+                        {c.phone && <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 text-[12px] text-[#6a7282]"><Phone size={12} className="shrink-0" /> {c.phone}</a>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
 
         {/* Top Row: Trails + Notes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
