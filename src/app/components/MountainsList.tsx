@@ -396,6 +396,9 @@ export function MountainsList() {
                         {mountain.name}
                       </h3>
                       <div className="flex flex-wrap gap-1.5">
+                        <span className={`text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full ${mountain.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+                          {mountain.proposalCreated ? 'Customer' : 'Prospect'}
+                        </span>
                         {mountain.trailMapType && (
                           <button
                             onClick={e => openMap(e, mountain.id, mountain.name)}

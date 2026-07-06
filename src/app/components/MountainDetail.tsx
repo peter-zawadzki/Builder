@@ -198,9 +198,14 @@ export function MountainDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* ── Status Pane ── */}
           <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Info size={16} className="text-[#6a7282]" />
-              <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Status</h2>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Info size={16} className="text-[#6a7282]" />
+                <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Status</h2>
+              </div>
+              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] font-medium ${mountain.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+                {mountain.proposalCreated ? 'Customer' : 'Prospect'}
+              </span>
             </div>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
