@@ -234,7 +234,8 @@ export function CreateLocation() {
   const [trailName, setTrailName] = useState(trail?.name || '');
   const [notes, setNotes] = useState('');
   const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
-  const [validationErrors, setValidationErrors] = useState<{ name?: string }>({});
+  const [locationType, setLocationType] = useState<string>('');
+  const [validationErrors, setValidationErrors] = useState<{ name?: string; locationType?: string }>({});
 
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -356,6 +357,11 @@ export function CreateLocation() {
       toast.error('Please fix the errors before saving');
       return null;
     }
+    if (!locationType) {
+      setValidationErrors({ locationType: 'Please select a location type' });
+      toast.error('Please select a location type');
+      return null;
+    }
 
     // Disable the blocker immediately since we're intentionally saving and navigating
     if (!skipNavigation) {
@@ -375,6 +381,7 @@ export function CreateLocation() {
         coordinates: coords || undefined,
         notes: notes.trim() || undefined,
         difficulty: difficulty || undefined,
+        locationType: locationType as any,
       });
 
       if (photos.length > 0 || videos.length > 0) {
@@ -568,6 +575,29 @@ export function CreateLocation() {
               rows={3}
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none resize-none"
             />
+          </div>
+
+          <div>
+            <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-2">
+              Location Type <span className="text-[#ff5c39]">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['Install Site', 'Power Location', 'Start/Finish', 'Misc.'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setLocationType(t); setValidationErrors(v => ({ ...v, locationType: undefined })); }}
+                  className={`h-11 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] transition-colors ${
+                    locationType === t ? 'bg-[#ff5c39] text-white' : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            {validationErrors.locationType && (
+              <p className="text-[#ef4444] font-['Inter:Regular',sans-serif] text-[12px] mt-1">{validationErrors.locationType}</p>
+            )}
           </div>
 
           <div>

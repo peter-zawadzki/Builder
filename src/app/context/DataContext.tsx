@@ -150,6 +150,7 @@ export interface Location {
   trailName?: string;      // legacy / display label
   notes?: string;
   difficulty?: 1 | 2 | 3 | 4 | 5; // Installation difficulty rating
+  locationType?: 'Install Site' | 'Power Location' | 'Start/Finish' | 'Misc.';
   coordinates?: {
     latitude: number;
     longitude: number;

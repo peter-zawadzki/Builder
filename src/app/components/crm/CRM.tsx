@@ -195,7 +195,8 @@ export function Pipeline() {
   const [dealModal, setDealModal] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    let list = mountains;
+    // Pipeline is prospects only — mountains without a signed agreement.
+    let list = mountains.filter(m => !m.proposalCreated);
     if (filterStalled) list = list.filter(m => m.isStalled);
     if (search) list = list.filter(m => m.name.toLowerCase().includes(search.toLowerCase()));
     return list;
