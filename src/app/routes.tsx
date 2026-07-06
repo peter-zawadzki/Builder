@@ -69,28 +69,27 @@ export const router = createBrowserRouter([
       {
         Component: RootLayout,
         children: [
-          { path: "/", Component: MountainsScreen },
+          { path: "/", Component: MountainsList },
           { path: "/admin", Component: AdminCatalog },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
           { path: "/system-check", Component: SystemCheck },
-          { path: "/mountains/new", Component: MountainFormScreen },
-          { path: "/mountains/:mountainId", Component: MountainScreen },
-          { path: "/mountains/:mountainId/edit", Component: MountainFormScreen },
+          { path: "/mountains/new", Component: CreateMountain },
+          { path: "/mountains/:mountainId", Component: MountainDetail },
+          { path: "/mountains/:mountainId/edit", Component: EditMountain },
           { path: "/mountains/:mountainId/proposal", Component: ProposalBuilder },
           { path: "/mountains/:mountainId/agreement", Component: CustomerAgreementBuilder },
           { path: "/mountains/:mountainId/invoice", Component: InvoiceViewer },
-          // ── Trails (new model) ────────────────────────────────────────────
-          { path: "/mountains/:mountainId/trails/new", Component: TrailFormScreen },
-          { path: "/mountains/:mountainId/trails/:trailId", Component: TrailScreen },
-          { path: "/mountains/:mountainId/trails/:trailId/edit", Component: TrailFormScreen },
-          { path: "/mountains/:mountainId/trails/:trailId/locations/new", Component: LocationFormScreen },
-          // ── Inventory (mountain-level asset creation) — legacy for now ─────
+          // ── Trails ────────────────────────────────────────────────────────
+          { path: "/mountains/:mountainId/trails/new", Component: CreateTrail },
+          { path: "/mountains/:mountainId/trails/:trailId", Component: TrailDetail },
+          { path: "/mountains/:mountainId/trails/:trailId/locations/new", Component: CreateLocation },
+          // ── Inventory (mountain-level asset creation) ─────────────────────
           { path: "/mountains/:mountainId/inventory/new", Component: AddAsset },
-          // ── Locations (new model) ─────────────────────────────────────────
-          { path: "/mountains/:mountainId/locations/new", Component: LocationFormScreen },
-          { path: "/mountains/:mountainId/locations/:locationId", Component: LocationScreen },
-          { path: "/mountains/:mountainId/locations/:locationId/edit", Component: LocationFormScreen },
+          // ── Locations ─────────────────────────────────────────────────────
+          { path: "/mountains/:mountainId/locations/new", Component: CreateLocation },
+          { path: "/mountains/:mountainId/locations/:locationId", Component: LocationDetail },
+          { path: "/mountains/:mountainId/locations/:locationId/edit", Component: EditLocation },
           { path: "/mountains/:mountainId/locations/:locationId/inspection", Component: AddInspection },
           { path: "/mountains/:mountainId/locations/:locationId/assets/new", Component: AddAsset },
           { path: "/mountains/:mountainId/locations/:locationId/assets/:assetId", Component: AssetDetail },
