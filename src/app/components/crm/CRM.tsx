@@ -1001,6 +1001,13 @@ function CRMContent() {
               <Bell size={12} /> {overdueCount}
             </button>
           )}
+          <button
+            onClick={() => navigate('/mountains/new')}
+            className="shrink-0 flex items-center gap-1 bg-[#ff5c39] text-white px-3 py-1.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
+            title="Add a mountain"
+          >
+            <Plus size={14} /> Mountain
+          </button>
         </div>
         <div className="flex gap-1 mt-3 overflow-x-auto pb-0.5">
           {TABS.map(tab => (
