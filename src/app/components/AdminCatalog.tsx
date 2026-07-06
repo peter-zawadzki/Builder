@@ -8,6 +8,7 @@ import {
 import { InventoryTab } from './InventoryTab';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { useIsSuperAdmin } from '../hooks/useRole';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -304,61 +305,63 @@ function EquipmentItemsTab() {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Pages ────────────────────────────────────────────────────────────────────
 
-type Tab = 'equipment' | 'inventory';
-
-function AdminCatalogContent() {
+function PageHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('inventory');
-
-  const TABS: { id: Tab; icon: React.ReactNode; label: string }[] = [
-    { id: 'inventory', icon: <Boxes size={13} />, label: 'Inventory' },
-    { id: 'equipment', icon: <Wrench size={13} />, label: 'Inspection Items' },
-  ];
-
   return (
-    <div className="min-h-screen bg-[#f9fafb]">
-      {/* Header */}
-      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="p-1 active:opacity-60">
-            <ArrowLeft size={24} className="text-[#0a0a0a]" />
-          </button>
-          <div className="flex items-center gap-2 flex-1">
-            <Settings size={20} className="text-[#307fe2]" />
-            <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px]">Admin Catalog</h1>
-          </div>
+    <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate('/')} className="p-1 active:opacity-60">
+          <ArrowLeft size={24} className="text-[#0a0a0a]" />
+        </button>
+        <div className="flex items-center gap-2 flex-1">
+          {icon}
+          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px]">{title}</h1>
         </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 mt-3 bg-[#f3f3f5] rounded-[8px] p-1">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1 rounded-[6px] py-2 text-[11px] font-['Inter:Medium',sans-serif] transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-white text-[#0a0a0a] shadow-sm'
-                  : 'text-[#6a7282]'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="p-4 pb-16">
-        {activeTab === 'inventory' && <InventoryTab />}
-        {activeTab === 'equipment' && <EquipmentItemsTab />}
       </div>
     </div>
   );
 }
 
-export function AdminCatalog() {
-  return <AdminCatalogContent />;
+// Inventory — available to all signed-in users.
+export function InventoryPage() {
+  return (
+    <div className="min-h-screen bg-[#f9fafb]">
+      <PageHeader icon={<Boxes size={20} className="text-[#307fe2]" />} title="Inventory" />
+      <div className="p-4 pb-16">
+        <InventoryTab />
+      </div>
+    </div>
+  );
+}
+
+// Inspection items catalog — super-admin only (lives under the profile menu).
+export function InspectionItemsPage() {
+  const navigate = useNavigate();
+  const isSuperAdmin = useIsSuperAdmin();
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-[#f3f3f5] flex items-center justify-center">
+          <Lock size={24} className="text-[#6a7282]" />
+        </div>
+        <div>
+          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Not available</h1>
+          <p className="text-[#6a7282] text-[14px] mt-1">Inspection items are restricted to super admins.</p>
+        </div>
+        <button onClick={() => navigate('/')} className="bg-[#1D2930] text-white rounded-[8px] px-5 py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px]">Back to app</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f9fafb]">
+      <PageHeader icon={<Wrench size={20} className="text-[#307fe2]" />} title="Inspection Items" />
+      <div className="p-4 pb-16">
+        <EquipmentItemsTab />
+      </div>
+    </div>
+  );
 }

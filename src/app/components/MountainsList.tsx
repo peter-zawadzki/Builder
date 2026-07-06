@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
-import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes } from 'lucide-react';
+import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes, Wrench } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -247,6 +247,11 @@ export function MountainsList() {
                     onClick={() => navigate('/team')}
                   />
                   <UserButton.Action
+                    label="Inspection items"
+                    labelIcon={<Wrench size={16} />}
+                    onClick={() => navigate('/inspection-items')}
+                  />
+                  <UserButton.Action
                     label="Local DB check"
                     labelIcon={<Database size={16} />}
                     onClick={() => navigate('/system-check')}
@@ -267,7 +272,7 @@ export function MountainsList() {
                 <Users size={20} className="text-[#6a7282]" />
               </button>
             </Link>
-            <Link to="/admin">
+            <Link to="/inventory">
               <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Inventory">
                 <Boxes size={20} className="text-[#6a7282]" />
               </button>

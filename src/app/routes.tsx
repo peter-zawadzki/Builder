@@ -10,7 +10,7 @@ import { EditMountain } from "./components/EditMountain";
 import { CreateLocation } from "./components/CreateLocation";
 import { EditLocation } from "./components/EditLocation";
 import { AddInspection } from "./components/AddInspection";
-import { AdminCatalog } from "./components/AdminCatalog";
+import { InventoryPage, InspectionItemsPage } from "./components/AdminCatalog";
 import { ProposalBuilder } from "./components/ProposalBuilder";
 import { InvoiceViewer } from "./components/InvoiceViewer";
 import { CreateTrail } from "./components/CreateTrail";
@@ -61,7 +61,8 @@ export const router = createBrowserRouter([
         Component: RootLayout,
         children: [
           { path: "/", Component: MountainsList },
-          { path: "/admin", Component: AdminCatalog },
+          { path: "/inventory", Component: InventoryPage },
+          { path: "/inspection-items", Component: InspectionItemsPage },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
           { path: "/system-check", Component: SystemCheck },
