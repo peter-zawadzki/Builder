@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
-import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus } from 'lucide-react';
+import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -258,6 +258,13 @@ export function MountainsList() {
               <Link to="/team">
                 <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Team &amp; invites">
                   <UserPlus size={20} className="text-[#6a7282]" />
+                </button>
+              </Link>
+            )}
+            {isSuperAdmin && (
+              <Link to="/system-check">
+                <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Local DB check">
+                  <Database size={20} className="text-[#6a7282]" />
                 </button>
               </Link>
             )}

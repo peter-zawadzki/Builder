@@ -24,6 +24,7 @@ import { ClerkRoot } from "./components/ClerkRoot";
 import { SignInPage } from "./components/SignInPage";
 import { SignUpPage } from "./components/SignUpPage";
 import { TeamPage } from "./components/TeamPage";
+import { SystemCheck } from "./components/SystemCheck";
 
 export const router = createBrowserRouter([
   {
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
           { path: "/admin", Component: AdminCatalog },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
+          { path: "/system-check", Component: SystemCheck },
           { path: "/mountains/new", Component: CreateMountain },
           { path: "/mountains/:mountainId", Component: MountainDetail },
           { path: "/mountains/:mountainId/edit", Component: EditMountain },

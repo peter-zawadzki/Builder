@@ -31,6 +31,16 @@ export default defineConfig({
     },
   },
 
+  // Proxy API calls to the local Hono server so the browser talks same-origin.
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
+  },
+
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv', '**/*.pdf'],
 })
