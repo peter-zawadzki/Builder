@@ -232,7 +232,7 @@ export function MountainsList() {
       {/* Header */}
       <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4">
         <div className="flex flex-col items-center justify-center relative">
-          <img src={imgImageYullrLogo} alt="Yullr" className="h-16 mb-3" />
+          <Link to="/"><img src={imgImageYullrLogo} alt="Yullr" className="h-16 mb-3" /></Link>
           <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[24px]">
             Mountain Builder
           </h1>
@@ -262,7 +262,7 @@ export function MountainsList() {
           </div>
           {/* Right: primary navigation — Mountains · People · Inventory */}
           <div className="absolute right-0 top-0 flex items-center gap-2">
-            <Link to="/">
+            <Link to="/mountains">
               <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Mountains">
                 <Mountain size={20} className="text-[#6a7282]" />
               </button>

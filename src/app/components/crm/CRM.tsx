@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  ArrowLeft, Users, Building2, Activity, Bell, LayoutDashboard,
+  ArrowLeft, Users, Building2, Activity, Bell, LayoutDashboard, Mountain,
   Plus, Search, X, ChevronRight, Pencil, Trash2, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Phone, Mail, Star, Calendar,
   ExternalLink, Check, MessageSquare, ListTodo, ChevronLeft,
@@ -39,7 +39,7 @@ const CONTACT_TAGS: ContactTag[] = ['Decision Maker', 'Technical', 'Champion', '
 const ORG_TYPES: OrgType[] = ['Partner', 'Vendor', 'Investor Group', 'Advisory', 'Corporate Group'];
 const STALL_REASONS: StallReason[] = ['No response', 'Waiting on legal', 'Budget hold', 'Timing — offseason', 'Other'];
 
-type CRMTab = 'dashboard' | 'pipeline' | 'contacts' | 'organizations' | 'activity' | 'followups';
+type CRMTab = 'dashboard' | 'pipeline' | 'contacts' | 'organizations' | 'activity' | 'followups' | 'mountains';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -184,7 +184,7 @@ function Dashboard({ setTab }: { setTab: (t: CRMTab) => void }) {
 
 // ─── Pipeline ─────────────────────────────────────────────────────────────────
 
-function Pipeline() {
+export function Pipeline() {
   const { mountains, updateMountain, addNote } = useData();
   const navigate = useNavigate();
   const [filterStalled, setFilterStalled] = useState(false);
@@ -856,7 +856,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
 
 // ─── Activity Feed ────────────────────────────────────────────────────────────
 
-function ActivityFeed() {
+export function ActivityFeed() {
   const { notes, mountains } = useData();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -913,7 +913,7 @@ function ActivityFeed() {
 
 // ─── Follow-ups ───────────────────────────────────────────────────────────────
 
-function FollowUps() {
+export function FollowUps() {
   const { notes, mountains, updateNote } = useData();
   const navigate = useNavigate();
 
@@ -972,19 +972,39 @@ export function CRMSection() {
   return <CRMContent />;
 }
 
+// Mountains tab — a simple roster with add; the operational mountains list
+// lives under the Mountains icon (/mountains).
+function MountainsTab() {
+  const { mountains } = useData();
+  const navigate = useNavigate();
+  const sorted = [...mountains].sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <div className="p-4">
+      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] divide-y divide-[rgba(0,0,0,0.06)]">
+        {sorted.map(m => (
+          <button key={m.id} onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between p-3 text-left active:bg-[#f9fafb]">
+            <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+              {m.proposalCreated ? 'Customer' : 'Prospect'}
+            </span>
+          </button>
+        ))}
+        {sorted.length === 0 && (
+          <div className="p-4 text-[13px] text-[#6a7282]">No mountains yet. Use “+ Mountain” above to add one.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CRMContent() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<CRMTab>('dashboard');
-  const { notes } = useData();
-  const overdueCount = notes.filter(n => n.followUpDate && isOverdue(n.followUpDate)).length;
+  const [activeTab, setActiveTab] = useState<CRMTab>('contacts');
 
   const TABS: { id: CRMTab; icon: React.ReactNode; label: string }[] = [
-    { id: 'dashboard',     icon: <LayoutDashboard size={14} />, label: 'Dashboard' },
-    { id: 'pipeline',      icon: <TrendingUp size={14} />,      label: 'Pipeline' },
-    { id: 'contacts',      icon: <Users size={14} />,           label: 'Contacts' },
-    { id: 'organizations', icon: <Building2 size={14} />,       label: 'Organizations' },
-    { id: 'activity',      icon: <Activity size={14} />,        label: 'Activity' },
-    { id: 'followups',     icon: <Bell size={14} />,            label: 'Follow-ups' },
+    { id: 'contacts',      icon: <Users size={14} />,     label: 'Contacts' },
+    { id: 'organizations', icon: <Building2 size={14} />, label: 'Organizations' },
+    { id: 'mountains',     icon: <Mountain size={14} />,  label: 'Mountains' },
   ];
 
   return (
@@ -996,11 +1016,6 @@ function CRMContent() {
             <div className="w-7 h-7 rounded-[7px] bg-[#1D2930] flex items-center justify-center"><Users size={14} className="text-white" /></div>
             <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px]">CRM</h1>
           </div>
-          {overdueCount > 0 && (
-            <button onClick={() => setActiveTab('followups')} className="flex items-center gap-1 bg-[#fff4f1] text-[#F95C39] px-2.5 py-1 rounded-full text-[12px] font-['Inter:Medium',sans-serif]">
-              <Bell size={12} /> {overdueCount}
-            </button>
-          )}
           <button
             onClick={() => navigate('/mountains/new')}
             className="shrink-0 flex items-center gap-1 bg-[#ff5c39] text-white px-3 py-1.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
@@ -1015,21 +1030,15 @@ function CRMContent() {
               className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-[#1D2930] text-white' : 'text-[#6a7282] hover:bg-[#f3f3f5]'}`}>
               {tab.icon}
               {tab.label}
-              {tab.id === 'followups' && overdueCount > 0 && (
-                <span className="bg-[#F95C39] text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">{overdueCount}</span>
-              )}
             </button>
           ))}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-8">
-        {activeTab === 'dashboard'     && <Dashboard setTab={setActiveTab} />}
-        {activeTab === 'pipeline'      && <Pipeline />}
         {activeTab === 'contacts'      && <Contacts />}
         {activeTab === 'organizations' && <Organizations />}
-        {activeTab === 'activity'      && <ActivityFeed />}
-        {activeTab === 'followups'     && <FollowUps />}
+        {activeTab === 'mountains'     && <MountainsTab />}
       </div>
     </div>
   );
