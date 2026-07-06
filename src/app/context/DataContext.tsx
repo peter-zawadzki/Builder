@@ -455,12 +455,37 @@ async function migratePhotosFromLocalStorage(): Promise<void> {
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
 
+// ── Local-DB toggle ───────────────────────────────────────────────────────────
+// When the 'yullr_use_local' flag is set, data-collection calls are routed to
+// the local API (which serves the exact old record shapes from the local DB),
+// authenticated with the Clerk session token. Everything else (media, auth,
+// places) still goes to Supabase. Off by default — the live app is unchanged
+// until this flag is flipped (from the super-admin System check screen).
+const LOCAL_API_BASE = '/api/legacy';
+const DATA_ENDPOINT = /^\/(mountains|trails|locations|assets|notes|site-inspections|options|item-prices)(\/|\?|$)/;
+
+let localTokenGetter: (() => Promise<string | null>) | null = null;
+export function registerLocalTokenGetter(fn: () => Promise<string | null>) {
+  localTokenGetter = fn;
+}
+function useLocalFor(endpoint: string): boolean {
+  try { return localStorage.getItem('yullr_use_local') === '1' && DATA_ENDPOINT.test(endpoint); }
+  catch { return false; }
+}
+
 async function apiCall(endpoint: string, options: RequestInit = {}) {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const local = useLocalFor(endpoint);
+  const base = local ? LOCAL_API_BASE : API_BASE;
+  let authorization = `Bearer ${publicAnonKey}`;
+  if (local) {
+    const token = localTokenGetter ? await localTokenGetter() : null;
+    authorization = `Bearer ${token ?? ''}`;
+  }
+  const response = await fetch(`${base}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${publicAnonKey}`,
+      'Authorization': authorization,
       ...options.headers,
     },
   });

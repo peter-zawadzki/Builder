@@ -24,7 +24,9 @@ mountains.get("/", async (c) => {
   return c.json({ mountains: rows });
 });
 
-// One mountain, full row + its primary project.
+// One mountain, full row + its primary project + panel summary counts and the
+// contacts/notes lists (so the detail page can render panel header pills and
+// content in a single call).
 mountains.get("/:id", async (c) => {
   const id = c.req.param("id");
   const mountain = await queryOne(`SELECT * FROM mountains WHERE id = $1`, [id]);
@@ -33,7 +35,33 @@ mountains.get("/:id", async (c) => {
     `SELECT * FROM projects WHERE mountain_id = $1 ORDER BY created_at LIMIT 1`,
     [id]
   );
-  return c.json({ mountain, project });
+  const counts = await queryOne(
+    `SELECT
+       (SELECT count(*)::int FROM trails     WHERE mountain_id = $1) AS trails,
+       (SELECT count(*)::int FROM locations  WHERE mountain_id = $1) AS locations,
+       (SELECT count(*)::int FROM assets     WHERE mountain_id = $1) AS inventory,
+       (SELECT count(*)::int FROM contacts   WHERE mountain_id = $1) AS contacts,
+       (SELECT count(*)::int FROM notes      WHERE mountain_id = $1) AS notes,
+       (SELECT count(*)::int FROM documents  WHERE mountain_id = $1) AS documents,
+       (SELECT count(*)::int FROM activity_log WHERE mountain_id = $1) AS updates`,
+    [id]
+  );
+  const contacts = await query(
+    `SELECT c.*,
+            COALESCE(array_agg(cr.role) FILTER (WHERE cr.role IS NOT NULL), '{}') AS roles
+       FROM contacts c LEFT JOIN contact_roles cr ON cr.contact_id = c.id
+      WHERE c.mountain_id = $1 GROUP BY c.id ORDER BY c.is_primary DESC, c.name`,
+    [id]
+  );
+  const notes = await query(
+    `SELECT * FROM notes WHERE mountain_id = $1 ORDER BY created_at DESC`,
+    [id]
+  );
+  const updates = await query(
+    `SELECT * FROM activity_log WHERE mountain_id = $1 ORDER BY created_at DESC LIMIT 20`,
+    [id]
+  );
+  return c.json({ mountain, project, counts, contacts, notes, updates });
 });
 
 const MOUNTAIN_COLS = [

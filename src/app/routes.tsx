@@ -25,15 +25,6 @@ import { SignInPage } from "./components/SignInPage";
 import { SignUpPage } from "./components/SignUpPage";
 import { TeamPage } from "./components/TeamPage";
 import { SystemCheck } from "./components/SystemCheck";
-// New-model screens (on the local API); legacy components remain for
-// not-yet-migrated routes.
-import { MountainsScreen } from "./screens/MountainsScreen";
-import { MountainScreen } from "./screens/MountainScreen";
-import { MountainFormScreen } from "./screens/MountainFormScreen";
-import { TrailScreen } from "./screens/TrailScreen";
-import { TrailFormScreen } from "./screens/TrailFormScreen";
-import { LocationScreen } from "./screens/LocationScreen";
-import { LocationFormScreen } from "./screens/LocationFormScreen";
 
 export const router = createBrowserRouter([
   {

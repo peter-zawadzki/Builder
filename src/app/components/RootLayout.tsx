@@ -4,6 +4,7 @@ import { DataProvider } from '../context/DataContext';
 import { OfflineBanner } from './OfflineBanner';
 import { PasswordGate } from './PasswordGate';
 import { OrgActivator } from './OrgActivator';
+import { LocalApiBridge } from './LocalApiBridge';
 
 /** Root layout for every route.
  *  - Wraps all children in DataProvider so context is always inside the router tree.
@@ -20,6 +21,7 @@ export function RootLayout() {
   return (
     <PasswordGate>
       <OrgActivator>
+        <LocalApiBridge />
         <DataProvider>
           <OfflineBanner />
           <Outlet />

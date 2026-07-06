@@ -71,6 +71,27 @@ export function SystemCheck() {
       </div>
 
       <div className="max-w-2xl mx-auto p-4 flex flex-col gap-4">
+        {/* Data source toggle — flips the whole app between Supabase (live) and the local DB */}
+        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 flex items-center justify-between">
+          <div>
+            <div className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px]">Data source</div>
+            <div className="text-[13px] text-[#6a7282]">
+              {localStorage.getItem("yullr_use_local") === "1" ? "Local database (preview)" : "Supabase (live)"}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const now = localStorage.getItem("yullr_use_local") === "1";
+              if (now) localStorage.removeItem("yullr_use_local");
+              else localStorage.setItem("yullr_use_local", "1");
+              window.location.href = "/";
+            }}
+            className="bg-[#1D2930] text-white rounded-[8px] px-4 py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px]"
+          >
+            {localStorage.getItem("yullr_use_local") === "1" ? "Switch to Supabase" : "Switch to Local DB"}
+          </button>
+        </div>
+
         <button
           onClick={refresh}
           disabled={busy}
