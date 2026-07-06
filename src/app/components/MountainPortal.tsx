@@ -83,7 +83,6 @@ export function MountainPortal() {
   }
 
   const agreementSigned = !!mountain.proposalCreated;
-  const invoicePaid = !!mountain.invoicePaid;
   const hasAdminContact = !!(mountain.adminContact?.name && mountain.adminContact?.email);
   const hasTechContact = !!(mountain.technicalContact?.name && mountain.technicalContact?.email);
 
@@ -171,7 +170,6 @@ export function MountainPortal() {
         <Section title="Setup Status" icon={<CheckCircle size={18} />}>
           <div className="space-y-2">
             <StatusCard label="Customer Agreement Signed" done={agreementSigned} note={!agreementSigned ? 'Required before selecting install dates' : undefined} />
-            <StatusCard label="Invoice Paid" done={invoicePaid} note={!invoicePaid ? 'Contact your YULLR rep if you have questions' : undefined} />
             <StatusCard label="Management Contact on File" done={hasAdminContact} note={!hasAdminContact ? 'Please contact your YULLR rep to update' : mountain.adminContact?.name} />
             <StatusCard label="Technical Contact on File" done={hasTechContact} note={!hasTechContact ? 'Please contact your YULLR rep to update' : mountain.technicalContact?.name} />
           </div>

@@ -173,20 +173,6 @@ export function MountainDetail() {
           </div>
         )}
 
-        {/* Invoice paid toggle */}
-        <div className="flex items-center justify-between bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3">
-          <div>
-            <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Invoice Paid</p>
-            <p className="text-[12px] text-[#6a7282]">Shows as paid on the mountain portal</p>
-          </div>
-          <button
-            onClick={() => updateMountain(mountainId!, { invoicePaid: !mountain.invoicePaid })}
-            className={`w-12 h-6 rounded-full transition-colors relative ${mountain.invoicePaid ? 'bg-[#16a34a]' : 'bg-[#d1d5db]'}`}
-          >
-            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${mountain.invoicePaid ? 'translate-x-6' : 'translate-x-0.5'}`} />
-          </button>
-        </div>
-
         {/* Top Row: Trails + Notes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
