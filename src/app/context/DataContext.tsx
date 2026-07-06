@@ -377,48 +377,48 @@ if (!(globalThis as any)[_CTX_KEY]) {
 }
 const DataContext = (globalThis as any)[_CTX_KEY] as ReturnType<typeof createContext<DataContextType | undefined>>;
 
+// Fresh local cache namespace. Renamed from the old 'skiInstall_' prefix so the
+// previously-cached Supabase data is never read again — a guaranteed clean slate
+// on the local DB.
 const STORAGE_KEYS = {
-  MOUNTAINS: 'skiInstall_mountains',
-  LOCATIONS: 'skiInstall_locations',
-  ASSETS: 'skiInstall_assets',
-  NOTES: 'skiInstall_notes',
-  TRAILS: 'skiInstall_trails',
-  OPTIONS: 'skiInstall_options',
-  ITEM_PRICES: 'skiInstall_item_prices',
-  PENDING_PHOTOS: 'skiInstall_pendingPhotoSync',
-  CONTACTS: 'skiInstall_crm_contacts',
-  ORGANIZATIONS: 'skiInstall_crm_organizations',
+  MOUNTAINS: 'yullrLocal_mountains',
+  LOCATIONS: 'yullrLocal_locations',
+  ASSETS: 'yullrLocal_assets',
+  NOTES: 'yullrLocal_notes',
+  TRAILS: 'yullrLocal_trails',
+  OPTIONS: 'yullrLocal_options',
+  ITEM_PRICES: 'yullrLocal_item_prices',
+  PENDING_PHOTOS: 'yullrLocal_pendingPhotoSync',
+  CONTACTS: 'yullrLocal_crm_contacts',
+  ORGANIZATIONS: 'yullrLocal_crm_organizations',
 };
 
-// One-time reset to a clean local slate: drop any cached Supabase data (and the
-// old toggle flag) so the app starts empty on the local DB. Runs before the
-// provider reads localStorage.
-(function resetToLocalOnce() {
+// Remove the old Supabase-era caches entirely (housekeeping). The prefix change
+// above is what actually guarantees the fresh start; this just frees the space.
+(function clearOldCaches() {
   try {
-    if (localStorage.getItem('yullr_local_only_v1') === '1') return;
     Object.keys(localStorage)
       .filter((k) => k.startsWith('skiInstall_'))
       .forEach((k) => localStorage.removeItem(k));
     localStorage.removeItem('yullr_use_local');
-    localStorage.setItem('yullr_local_only_v1', '1');
   } catch { /* ignore */ }
 })();
 
 // ─── Tombstone helpers — track locally-deleted IDs so server data can't resurrect them ──
 
 function getTombstones(type: string): string[] {
-  try { return JSON.parse(localStorage.getItem(`skiInstall_deleted_${type}`) || '[]'); }
+  try { return JSON.parse(localStorage.getItem(`yullrLocal_deleted_${type}`) || '[]'); }
   catch { return []; }
 }
 function addTombstone(type: string, id: string) {
   const current = getTombstones(type);
   if (!current.includes(id)) {
-    localStorage.setItem(`skiInstall_deleted_${type}`, JSON.stringify([...current, id]));
+    localStorage.setItem(`yullrLocal_deleted_${type}`, JSON.stringify([...current, id]));
   }
 }
 function removeTombstone(type: string, id: string) {
   const current = getTombstones(type);
-  localStorage.setItem(`skiInstall_deleted_${type}`, JSON.stringify(current.filter(i => i !== id)));
+  localStorage.setItem(`yullrLocal_deleted_${type}`, JSON.stringify(current.filter(i => i !== id)));
 }
 
 // Fields that live in IndexedDB, never in localStorage or the server payload
