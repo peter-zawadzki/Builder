@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
-import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database } from 'lucide-react';
+import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -236,41 +236,40 @@ export function MountainsList() {
           <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[24px]">
             Mountain Builder
           </h1>
-          {/* Left: signed-in user (identity + sign out) */}
+          {/* Left: signed-in user — identity, sign out, and (super-admin) admin actions */}
           <div className="absolute left-0 top-0 flex items-center h-9">
-            <UserButton
-              appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }}
-            />
+            <UserButton appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }}>
+              {isSuperAdmin && (
+                <UserButton.MenuItems>
+                  <UserButton.Action
+                    label="Team &amp; invites"
+                    labelIcon={<UserPlus size={16} />}
+                    onClick={() => navigate('/team')}
+                  />
+                  <UserButton.Action
+                    label="Local DB check"
+                    labelIcon={<Database size={16} />}
+                    onClick={() => navigate('/system-check')}
+                  />
+                </UserButton.MenuItems>
+              )}
+            </UserButton>
           </div>
-          {/* Right: add mountain + catalog */}
+          {/* Right: primary navigation — Mountains · People · Inventory */}
           <div className="absolute right-0 top-0 flex items-center gap-2">
-            <Link to="/mountains/new">
-              <button className="p-2 bg-[#ff5c39] rounded-[8px] active:opacity-80" title="Add New Mountain">
-                <Plus size={20} className="text-white" />
+            <Link to="/">
+              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Mountains">
+                <Mountain size={20} className="text-[#6a7282]" />
               </button>
             </Link>
             <Link to="/crm">
-              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="CRM">
+              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="People &amp; contacts">
                 <Users size={20} className="text-[#6a7282]" />
               </button>
             </Link>
-            {isSuperAdmin && (
-              <Link to="/team">
-                <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Team &amp; invites">
-                  <UserPlus size={20} className="text-[#6a7282]" />
-                </button>
-              </Link>
-            )}
-            {isSuperAdmin && (
-              <Link to="/system-check">
-                <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Local DB check">
-                  <Database size={20} className="text-[#6a7282]" />
-                </button>
-              </Link>
-            )}
             <Link to="/admin">
-              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Admin">
-                <Settings size={20} className="text-[#6a7282]" />
+              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Inventory">
+                <Boxes size={20} className="text-[#6a7282]" />
               </button>
             </Link>
           </div>
