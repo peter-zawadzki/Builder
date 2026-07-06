@@ -11,6 +11,9 @@ import { PWASetup } from './components/PWASetup';
 // identity, so nesting them is safe — the inner provider simply shadows the
 // outer one with fresher state.
 export default function App() {
+  // ClerkProvider now lives inside the router (see ClerkRoot) so Clerk can
+  // navigate via React Router. DataProvider stays outside the router here, as
+  // before, to keep the globalThis-shared context identity.
   return (
     <DataProvider>
       <PWASetup />

@@ -16,9 +16,6 @@ import { DeleteConfirmModal } from '../DeleteConfirmModal';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const CRM_PASSWORD = 'Waterville';
-const CRM_SESSION_KEY = 'crm_session';
-
 const PIPELINE_STAGES: PipelineStage[] = [
   'Prospect', 'Contacted', 'Demo Scheduled', 'Positive',
   'Verbal Yes', 'Contract Sent', 'Signed', 'Installing', 'Live', 'Churned',
@@ -52,39 +49,6 @@ function daysAgo(iso: string) {
 function isOverdue(dateStr?: string) {
   if (!dateStr) return false;
   return new Date(dateStr) < new Date();
-}
-
-// ─── Password Gate ────────────────────────────────────────────────────────────
-
-function CRMPasswordGate({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate();
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(CRM_SESSION_KEY) === 'true');
-  const [pw, setPw] = useState('');
-  const [error, setError] = useState('');
-
-  if (unlocked) return <>{children}</>;
-
-  return (
-    <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center p-6">
-      <div className="bg-white rounded-[16px] shadow-sm border border-[rgba(0,0,0,0.08)] w-full max-w-sm p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-[10px] bg-[#1D2930] flex items-center justify-center">
-            <Users size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">YULLR CRM</h1>
-            <p className="text-[#6a7282] text-[13px]">Enter password to continue</p>
-          </div>
-        </div>
-        <form onSubmit={e => { e.preventDefault(); if (pw === CRM_PASSWORD) { sessionStorage.setItem(CRM_SESSION_KEY, 'true'); setUnlocked(true); } else setError('Incorrect password'); }} className="space-y-3">
-          <input type="password" value={pw} onChange={e => { setPw(e.target.value); setError(''); }} placeholder="Password" autoFocus className="w-full bg-[#f3f3f5] rounded-[8px] px-4 py-3 text-[#0a0a0a] text-[15px] outline-none border-2 border-transparent focus:border-[#1D2930]" />
-          {error && <p className="text-[#F95C39] text-[13px]">{error}</p>}
-          <button type="submit" className="w-full bg-[#1D2930] text-white rounded-[8px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Unlock CRM</button>
-          <button type="button" onClick={() => navigate('/')} className="w-full bg-[#f3f3f5] text-[#6a7282] rounded-[8px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Back</button>
-        </form>
-      </div>
-    </div>
-  );
 }
 
 function StageBadge({ stage }: { stage?: PipelineStage }) {
@@ -1005,7 +969,7 @@ function FollowUps() {
 // ─── CRM Shell ────────────────────────────────────────────────────────────────
 
 export function CRMSection() {
-  return <CRMPasswordGate><CRMContent /></CRMPasswordGate>;
+  return <CRMContent />;
 }
 
 function CRMContent() {

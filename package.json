@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.29.2",
+    "@clerk/clerk-react": "^5.61.8",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@googlemaps/js-api-loader": "^2.0.2",

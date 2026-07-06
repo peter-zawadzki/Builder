@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(clerk config pull *)",
+      "Bash(clerk config schema *)",
+      "Bash(clerk whoami *)",
+      "Bash(clerk api GET *)",
+      "Bash(curl -s http://localhost:5173/*)"
+    ]
+  }
+}

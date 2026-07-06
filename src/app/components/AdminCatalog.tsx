@@ -304,93 +304,6 @@ function EquipmentItemsTab() {
   );
 }
 
-// ─── Admin Password Gate ──────────────────────────────────────────────────────
-
-const ADMIN_PASSWORD = 'Attitash';
-const ADMIN_SESSION_KEY = 'admin_session';
-
-function AdminPasswordGate({ children }: { children: React.ReactNode }) {
-  const [password, setPassword] = useState('');
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
-
-  // Check for existing session
-  useEffect(() => {
-    const session = sessionStorage.getItem(ADMIN_SESSION_KEY);
-    if (session === 'unlocked') {
-      setIsUnlocked(true);
-    }
-  }, []);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(ADMIN_SESSION_KEY, 'unlocked');
-      setIsUnlocked(true);
-      setError('');
-    } else {
-      setError('Incorrect password');
-      setPassword('');
-    }
-  };
-
-  if (isUnlocked) {
-    return <>{children}</>;
-  }
-
-  return (
-    <div className="min-h-screen bg-[#1D2930] flex items-center justify-center p-4">
-      <div className="bg-white rounded-[16px] p-8 max-w-sm w-full shadow-2xl">
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 bg-[#eef3fb] rounded-full flex items-center justify-center mb-4">
-            <Lock size={28} className="text-[#307fe2]" />
-          </div>
-          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px] mb-1">
-            Admin Access
-          </h1>
-          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px] text-center">
-            Enter the admin password to continue
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={e => { setPassword(e.target.value); setError(''); }}
-              placeholder="Enter password"
-              autoFocus
-              className="w-full bg-[#f3f3f5] rounded-[8px] px-4 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none border-2 border-transparent focus:border-[#307fe2]"
-            />
-            {error && (
-              <p className="text-[#ff5c39] text-[13px] font-['Inter:Regular',sans-serif] mt-2">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-[#307fe2] text-white rounded-[8px] px-4 py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:opacity-80"
-          >
-            Unlock
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="w-full bg-[#f3f3f5] text-[#6a7282] rounded-[8px] px-4 py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:bg-[#e8e8ea]"
-          >
-            Back to Home
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 type Tab = 'equipment' | 'inventory';
@@ -446,11 +359,6 @@ function AdminCatalogContent() {
   );
 }
 
-// Export the password-protected version
 export function AdminCatalog() {
-  return (
-    <AdminPasswordGate>
-      <AdminCatalogContent />
-    </AdminPasswordGate>
-  );
+  return <AdminCatalogContent />;
 }
