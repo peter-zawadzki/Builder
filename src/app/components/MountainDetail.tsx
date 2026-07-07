@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData } from '../context/DataContext';
-import type { Asset } from '../context/DataContext';
+import type { Asset, Contact, ContactNote } from '../context/DataContext';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
-  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, CheckCircle2, Circle, Maximize2,
+  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, CheckCircle2, Circle, Maximize2, Pencil,
 } from 'lucide-react';
+
+type ContactSlot =
+  | { type: 'admin' }
+  | { type: 'technical' }
+  | { type: 'additional'; index: number };
 import { MountainNotes } from './MountainNotes';
 import { MountainDocuments } from './MountainDocuments';
 import { MountainMapView } from './MountainMapView';
@@ -125,9 +130,12 @@ export function MountainDetail() {
   const [showExport, setShowExport] = useState(false);
   const [assigningLocationId, setAssigningLocationId] = useState<string | null>(null);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<Asset | null>(null);
+  const [contactSlot, setContactSlot] = useState<ContactSlot | null>(null);
 
   // Updates feed for the Status pane.
   const { getToken } = useAuth();
+  const { user } = useUser();
+  const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const [updates, setUpdates] = useState<Array<{ id: string; type: string; summary: string; actor: string; timestamp: string }>>([]);
   useEffect(() => {
     if (!mountainId) return;
@@ -172,6 +180,22 @@ export function MountainDetail() {
 
   const inventoryTotalCost = inventoryAssets.reduce((sum, a) => sum + (a.cost || 0), 0);
   const fmtCost = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  // Resolve / persist a single contact by its slot in the mountain record.
+  const contactForSlot = (slot: ContactSlot): Contact | undefined =>
+    slot.type === 'admin' ? mountain.adminContact
+      : slot.type === 'technical' ? mountain.technicalContact
+        : mountain.additionalContacts?.[slot.index];
+
+  const persistContact = (slot: ContactSlot, updated: Contact) => {
+    if (slot.type === 'admin') updateMountain(mountainId!, { adminContact: updated });
+    else if (slot.type === 'technical') updateMountain(mountainId!, { technicalContact: updated });
+    else {
+      const arr = [...(mountain.additionalContacts || [])];
+      arr[slot.index] = updated;
+      updateMountain(mountainId!, { additionalContacts: arr });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -337,10 +361,11 @@ export function MountainDetail() {
             }
           >
             {(() => {
-              const list = [
-                mountain.adminContact?.name ? { ...mountain.adminContact, _role: 'Admin' } : null,
-                mountain.technicalContact?.name ? { ...mountain.technicalContact, _role: 'Technical' } : null,
-                ...(mountain.additionalContacts || []).filter((c) => c.name).map((c) => ({ ...c, _role: c.role || 'Contact' })),
+              const list: Array<{ c: Contact; _role: string; slot: ContactSlot }> = [
+                mountain.adminContact?.name ? { c: mountain.adminContact, _role: 'Admin', slot: { type: 'admin' as const } } : null,
+                mountain.technicalContact?.name ? { c: mountain.technicalContact, _role: 'Technical', slot: { type: 'technical' as const } } : null,
+                ...(mountain.additionalContacts || []).map((c, index) =>
+                  c.name ? { c, _role: c.role || 'Contact', slot: { type: 'additional' as const, index } } : null),
               ].filter(Boolean) as any[];
               if (list.length === 0) {
                 return (
@@ -352,19 +377,32 @@ export function MountainDetail() {
               }
               return (
                 <div className="space-y-2">
-                  {list.map((c, i) => (
-                    <div key={i} className="border border-[rgba(0,0,0,0.06)] rounded-[10px] p-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{c.name}</span>
-                        <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full shrink-0">{c._role}</span>
-                      </div>
-                      {c.title && <div className="text-[12px] text-[#6a7282]">{c.title}</div>}
-                      <div className="flex flex-col gap-0.5 mt-1">
-                        {c.email && <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 text-[12px] text-[#307fe2] truncate"><Mail size={12} className="shrink-0" /> {c.email}</a>}
-                        {c.phone && <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 text-[12px] text-[#6a7282]"><Phone size={12} className="shrink-0" /> {c.phone}</a>}
-                      </div>
-                    </div>
-                  ))}
+                  {list.map(({ c, _role, slot }, i) => {
+                    const noteCount = c.contactNotes?.length || 0;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setContactSlot(slot)}
+                        className="w-full text-left border border-[rgba(0,0,0,0.06)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)]"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{c.name}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {noteCount > 0 && (
+                              <span className="text-[11px] bg-[#eff6ff] text-[#307fe2] px-2 py-0.5 rounded-full">{noteCount} note{noteCount === 1 ? '' : 's'}</span>
+                            )}
+                            <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{_role}</span>
+                            <ChevronRight size={14} className="text-[#c0c4cc]" />
+                          </div>
+                        </div>
+                        {c.title && <div className="text-[12px] text-[#6a7282]">{c.title}</div>}
+                        <div className="flex flex-col gap-0.5 mt-1">
+                          {c.email && <span className="flex items-center gap-1.5 text-[12px] text-[#307fe2] truncate"><Mail size={12} className="shrink-0" /> {c.email}</span>}
+                          {c.phone && <span className="flex items-center gap-1.5 text-[12px] text-[#6a7282]"><Phone size={12} className="shrink-0" /> {c.phone}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })()}
@@ -660,6 +698,19 @@ export function MountainDetail() {
           onClose={() => setSelectedInventoryItem(null)}
         />
       )}
+      {contactSlot && contactForSlot(contactSlot) && (
+        <ContactDetailModal
+          contact={contactForSlot(contactSlot)!}
+          roleLabel={
+            contactSlot.type === 'admin' ? 'Admin'
+              : contactSlot.type === 'technical' ? 'Technical'
+                : (contactForSlot(contactSlot)!.role || 'Contact')
+          }
+          authorName={authorName}
+          onSave={(updated) => persistContact(contactSlot, updated)}
+          onClose={() => setContactSlot(null)}
+        />
+      )}
 
     </div>
   );
@@ -816,6 +867,189 @@ function InventoryItemDetailModal({
           >
             Close
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Contact Detail Modal ────────────────────────────────────────────────────
+
+function ContactDetailModal({
+  contact,
+  roleLabel,
+  authorName,
+  onSave,
+  onClose,
+}: {
+  contact: Contact;
+  roleLabel: string;
+  authorName: string;
+  onSave: (updated: Contact) => void;
+  onClose: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [form, setForm] = useState({
+    name: contact.name || '',
+    title: contact.title || '',
+    email: contact.email || '',
+    phone: contact.phone || '',
+    phoneType: contact.phoneType || 'Office',
+    role: contact.role || '',
+  });
+
+  const notes = [...(contact.contactNotes || [])].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  const addNote = () => {
+    const text = noteDraft.trim();
+    if (!text) return;
+    const note: ContactNote = {
+      id: `n_${Date.now()}`,
+      text,
+      author: authorName,
+      timestamp: new Date().toISOString(),
+    };
+    onSave({ ...contact, contactNotes: [...(contact.contactNotes || []), note] });
+    setNoteDraft('');
+  };
+
+  const saveDetails = () => {
+    if (!form.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    onSave({
+      ...contact,
+      name: form.name.trim(),
+      title: form.title.trim() || undefined,
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      phoneType: form.phoneType as Contact['phoneType'],
+      role: (form.role || undefined) as Contact['role'],
+    });
+    setEditing(false);
+    toast.success('Contact updated');
+  };
+
+  const inputCls = 'w-full border border-[rgba(0,0,0,0.12)] rounded-[10px] px-3 py-2 text-[14px] text-[#0a0a0a] focus:outline-none focus:border-[#307fe2]';
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-t-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
+          <div className="flex-1 min-w-0 pr-3">
+            <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[17px] truncate">{contact.name || 'Contact'}</p>
+            <span className="inline-block mt-1 text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{roleLabel}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!editing && (
+              <button onClick={() => setEditing(true)} className="p-1.5 rounded-full bg-[#f3f3f5] active:bg-[#e5e7eb]" aria-label="Edit contact" title="Edit details">
+                <Pencil size={15} className="text-[#6a7282]" />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5] active:bg-[#e5e7eb]" aria-label="Close">
+              <X size={16} className="text-[#6a7282]" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-5 py-4">
+          {editing ? (
+            /* ── Edit core details ── */
+            <div className="space-y-3">
+              <div>
+                <label className="text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 block">Name</label>
+                <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 block">Title</label>
+                <input className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 block">Email</label>
+                <input className={inputCls} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 block">Phone</label>
+                  <input className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </div>
+                <div className="w-28">
+                  <label className="text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 block">Type</label>
+                  <select className={inputCls} value={form.phoneType} onChange={(e) => setForm({ ...form, phoneType: e.target.value as any })}>
+                    <option value="Office">Office</option>
+                    <option value="Cell">Cell</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif] mb-1 block">Role</label>
+                <select className={inputCls} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })}>
+                  <option value="">—</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Technical">Technical</option>
+                  <option value="Team">Team</option>
+                  <option value="Operations">Operations</option>
+                </select>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { setEditing(false); setForm({ name: contact.name || '', title: contact.title || '', email: contact.email || '', phone: contact.phone || '', phoneType: contact.phoneType || 'Office', role: contact.role || '' }); }} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:bg-[#e5e7eb]">Cancel</button>
+                <button onClick={saveDetails} className="flex-1 bg-[#ff5c39] text-white rounded-[10px] py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80">Save</button>
+              </div>
+            </div>
+          ) : (
+            /* ── Read-only details ── */
+            <div className="space-y-2.5">
+              {contact.title && (
+                <div className="flex items-center gap-2 text-[14px] text-[#0a0a0a]"><Tag size={14} className="text-[#6a7282] shrink-0" /> {contact.title}</div>
+              )}
+              {contact.email && (
+                <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-[14px] text-[#307fe2] break-all"><Mail size={14} className="shrink-0" /> {contact.email}</a>
+              )}
+              {contact.phone && (
+                <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-[14px] text-[#0a0a0a]"><Phone size={14} className="text-[#6a7282] shrink-0" /> {contact.phone}{contact.phoneType ? ` · ${contact.phoneType}` : ''}</a>
+              )}
+              {!contact.title && !contact.email && !contact.phone && (
+                <div className="text-[13px] text-[#8992a0]">No details yet — tap the pencil to add them.</div>
+              )}
+            </div>
+          )}
+
+          {/* ── Notes ── */}
+          {!editing && (
+            <div className="mt-5 pt-4 border-t border-[rgba(0,0,0,0.06)]">
+              <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-2">Notes</div>
+              <div className="flex gap-2 mb-3">
+                <input
+                  className={inputCls}
+                  placeholder="Add a note…"
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addNote(); }}
+                />
+                <button onClick={addNote} disabled={!noteDraft.trim()} className="bg-[#ff5c39] text-white rounded-[10px] px-3.5 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-40 shrink-0 flex items-center gap-1">
+                  <Plus size={15} /> Add
+                </button>
+              </div>
+              {notes.length === 0 ? (
+                <div className="text-[13px] text-[#8992a0]">No notes yet.</div>
+              ) : (
+                <div className="space-y-2.5">
+                  {notes.map((n) => (
+                    <div key={n.id} className="bg-[#f9fafb] rounded-[10px] px-3 py-2.5">
+                      <div className="text-[13px] text-[#0a0a0a] whitespace-pre-wrap">{n.text}</div>
+                      <div className="text-[11px] text-[#8992a0] mt-1">{n.author} · {new Date(n.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -10,6 +10,13 @@ import * as cloudAnnotationSync from '../utils/cloudAnnotationSync';
 import * as offlineQueue from '../utils/offlineQueue';
 import { toast } from 'sonner';
 
+export interface ContactNote {
+  id: string;
+  text: string;
+  author: string;
+  timestamp: string;
+}
+
 export interface Contact {
   name: string;
   title?: string;
@@ -19,6 +26,7 @@ export interface Contact {
   role?: 'Admin' | 'Technical' | 'Team' | 'Operations';
   teamName?: string;
   notes?: string;
+  contactNotes?: ContactNote[];
 }
 
 export interface TechAdmin {
