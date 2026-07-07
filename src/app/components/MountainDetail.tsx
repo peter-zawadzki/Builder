@@ -206,10 +206,18 @@ export function MountainDetail() {
           <button onClick={() => navigate('/')} className="p-1.5 active:opacity-60">
             <ArrowLeft size={22} className="text-[#0a0a0a]" />
           </button>
-          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px] flex-1 truncate">
+          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px] truncate">
             {mountain.name}
           </h1>
-          <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => navigate(`/mountains/${mountainId}/edit`)}
+            className="p-1 active:opacity-60 shrink-0"
+            aria-label="Edit mountain details"
+            title="Edit mountain details"
+          >
+            <Pencil size={16} className="text-[#6a7282]" />
+          </button>
+          <div className="flex items-center gap-1.5 ml-auto">
             <button
               onClick={() => navigate(`/mountains/${mountainId}/proposal`)}
               className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
@@ -357,7 +365,7 @@ export function MountainDetail() {
             title="Contacts"
             icon={<Users size={16} className="text-[#6a7282]" />}
             headerRight={
-              <button onClick={() => navigate(`/mountains/${mountainId}/edit`)} className="text-[12px] text-[#6a7282] active:opacity-60">Edit</button>
+              <button onClick={() => navigate('/crm')} className="text-[12px] text-[#307fe2] active:opacity-60">Add in CRM</button>
             }
           >
             {(() => {
@@ -371,7 +379,7 @@ export function MountainDetail() {
                 return (
                   <div className="text-[13px] text-[#6a7282]">
                     No contacts yet.{' '}
-                    <button onClick={() => navigate(`/mountains/${mountainId}/edit`)} className="text-[#307fe2]">Add</button>
+                    <button onClick={() => navigate('/crm')} className="text-[#307fe2]">Add in CRM</button>
                   </div>
                 );
               }
