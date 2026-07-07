@@ -68,6 +68,41 @@ function ExpandablePane({
   );
 }
 
+// Wraps a pane that already has its own header (Trails, Notes, Inventory,
+// Documents). Caps the inline card height and reveals the full content in a
+// modal, so these panes don't grow the page without bound.
+function ExpandableSection({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <div className="max-h-[400px] overflow-hidden relative rounded-[12px]">
+        {children}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
+      </div>
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-1.5 w-full flex items-center justify-center gap-1 text-[12px] text-[#307fe2] py-1 active:opacity-70"
+      >
+        <Maximize2 size={13} /> Open full view
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto p-4 sm:p-6" onClick={() => setOpen(false)}>
+          <div className="w-full max-w-3xl mx-auto" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setOpen(false)}
+              className="mb-2 ml-auto flex items-center gap-1 text-[13px] text-white active:opacity-70"
+            >
+              <X size={18} /> Close
+            </button>
+            {children}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MountainDetail() {
   const { mountainId } = useParams();
   const navigate = useNavigate();
@@ -340,6 +375,7 @@ export function MountainDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* ── Trails Pane ── */}
+          <ExpandableSection>
           <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
@@ -357,7 +393,7 @@ export function MountainDetail() {
               </button>
             </div>
 
-            <div className="space-y-2 max-h-[320px] overflow-y-auto">
+            <div className="space-y-2">
               {trails.length === 0 ? (
                 <div className="py-8 text-center">
                   <MapPin className="mx-auto mb-3 text-[#6a7282]" size={32} />
@@ -502,11 +538,14 @@ export function MountainDetail() {
               )}
             </div>
           </div>
+          </ExpandableSection>
 
           {/* ── Notes Pane ── */}
-          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
-            <MountainNotes mountainId={mountainId!} />
-          </div>
+          <ExpandableSection>
+            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+              <MountainNotes mountainId={mountainId!} />
+            </div>
+          </ExpandableSection>
 
         </div>
 
@@ -514,6 +553,7 @@ export function MountainDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Inventory */}
+          <ExpandableSection>
           <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -598,11 +638,14 @@ export function MountainDetail() {
             </>
           )}
           </div>
+          </ExpandableSection>
 
           {/* Documents */}
-          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
-            <MountainDocuments mountainId={mountainId!} />
-          </div>
+          <ExpandableSection>
+            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+              <MountainDocuments mountainId={mountainId!} />
+            </div>
+          </ExpandableSection>
 
         </div>
 
