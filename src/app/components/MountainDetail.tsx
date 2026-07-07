@@ -7,7 +7,7 @@ import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
-  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, CheckCircle2, Circle,
+  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, CheckCircle2, Circle, Maximize2,
 } from 'lucide-react';
 import { MountainNotes } from './MountainNotes';
 import { MountainDocuments } from './MountainDocuments';
@@ -22,6 +22,51 @@ const ASSET_TYPE_COLORS: Record<string, string> = {
   Miscellaneous: 'bg-[#f5f5f5] text-[#6a7282]',
 };
 const ASSET_ICONS = { Camera, 'Network Gear': Wifi, Miscellaneous: Box, Server };
+
+// A pane that shows a capped preview and opens the full content in a modal on
+// click, so the mountain view doesn't grow endlessly.
+function ExpandablePane({
+  title, icon, headerRight, children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  headerRight?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => setOpen(true)} className="flex items-center gap-2 active:opacity-70">
+            {icon}
+            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{title}</h2>
+          </button>
+          <div className="flex items-center gap-2">
+            {headerRight}
+            <button onClick={() => setOpen(true)} title="Expand" className="text-[#6a7282] active:opacity-60"><Maximize2 size={15} /></button>
+          </div>
+        </div>
+        <div className="max-h-[240px] overflow-hidden relative">
+          {children}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent" />
+        </div>
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4" onClick={() => setOpen(false)}>
+          <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)] sticky top-0 bg-white">
+              <div className="flex items-center gap-2">{icon}<h2 className="text-[18px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{title}</h2></div>
+              <button onClick={() => setOpen(false)} className="p-1 active:opacity-60"><X size={20} className="text-[#6a7282]" /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-5">{children}</div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export function MountainDetail() {
   const { mountainId } = useParams();
@@ -197,16 +242,15 @@ export function MountainDetail() {
         {/* Status + Contacts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* ── Status Pane ── */}
-          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Info size={16} className="text-[#6a7282]" />
-                <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Status</h2>
-              </div>
+          <ExpandablePane
+            title="Status"
+            icon={<Info size={16} className="text-[#6a7282]" />}
+            headerRight={
               <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] font-medium ${mountain.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
                 {mountain.proposalCreated ? 'Customer' : 'Prospect'}
               </span>
-            </div>
+            }
+          >
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[13px] text-[#6a7282]">Pipeline stage</span>
@@ -237,7 +281,7 @@ export function MountainDetail() {
               {updates.length === 0 ? (
                 <div className="text-[12px] text-[#8992a0]">No activity yet.</div>
               ) : (
-                <div className="space-y-2 max-h-56 overflow-y-auto">
+                <div className="space-y-2">
                   {updates.map((u) => (
                     <div key={u.id} className="text-[12px]">
                       <div className="text-[#0a0a0a]">{u.summary}</div>
@@ -247,17 +291,16 @@ export function MountainDetail() {
                 </div>
               )}
             </div>
-          </div>
+          </ExpandablePane>
 
           {/* ── Contacts Pane ── */}
-          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Users size={16} className="text-[#6a7282]" />
-                <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Contacts</h2>
-              </div>
+          <ExpandablePane
+            title="Contacts"
+            icon={<Users size={16} className="text-[#6a7282]" />}
+            headerRight={
               <button onClick={() => navigate(`/mountains/${mountainId}/edit`)} className="text-[12px] text-[#6a7282] active:opacity-60">Edit</button>
-            </div>
+            }
+          >
             {(() => {
               const list = [
                 mountain.adminContact?.name ? { ...mountain.adminContact, _role: 'Admin' } : null,
@@ -290,7 +333,7 @@ export function MountainDetail() {
                 </div>
               );
             })()}
-          </div>
+          </ExpandablePane>
         </div>
 
         {/* Top Row: Trails + Notes */}
@@ -314,7 +357,7 @@ export function MountainDetail() {
               </button>
             </div>
 
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+            <div className="space-y-2 max-h-[320px] overflow-y-auto">
               {trails.length === 0 ? (
                 <div className="py-8 text-center">
                   <MapPin className="mx-auto mb-3 text-[#6a7282]" size={32} />
