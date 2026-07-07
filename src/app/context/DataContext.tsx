@@ -368,6 +368,7 @@ interface DataContextType {
   updateOrganization: (id: string, updates: Partial<CRMOrganization>) => void;
   deleteOrganization: (id: string) => void;
   importContactsFromMountains: () => void;
+  logActivity: (mountainId: string, type: string, summary: string) => void;
 }
 
 // Persist the context object on globalThis so that Vite's React Fast Refresh
@@ -1432,6 +1433,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         updateOrganization,
         deleteOrganization,
         importContactsFromMountains,
+        logActivity,
       }}
     >
       {children}

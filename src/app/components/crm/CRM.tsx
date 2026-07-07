@@ -185,7 +185,7 @@ function Dashboard({ setTab }: { setTab: (t: CRMTab) => void }) {
 // ─── Pipeline ─────────────────────────────────────────────────────────────────
 
 export function Pipeline() {
-  const { mountains, updateMountain, addNote } = useData();
+  const { mountains, updateMountain, logActivity } = useData();
   const navigate = useNavigate();
   const [filterStalled, setFilterStalled] = useState(false);
   const [search, setSearch] = useState('');
@@ -205,19 +205,19 @@ export function Pipeline() {
   const changeStage = (id: string, stage: PipelineStage) => {
     const m = mountains.find(m => m.id === id)!;
     updateMountain(id, { pipelineStage: stage });
-    addNote(id, `Pipeline stage changed: ${m.pipelineStage || 'None'} → ${stage}`, 'Updates');
+    logActivity(id, 'stage_changed', `Pipeline stage: ${m.pipelineStage || 'None'} → ${stage}`);
     setEditingId(null);
   };
 
   const markStalled = (id: string) => {
     updateMountain(id, { isStalled: true, stallReason, stalledAt: new Date().toISOString().slice(0, 10) });
-    addNote(id, `Marked as stalled: ${stallReason}`, 'Updates');
+    logActivity(id, 'stalled', `Marked as stalled: ${stallReason}`);
     setStallModal(null);
   };
 
   const clearStall = (id: string) => {
     updateMountain(id, { isStalled: false, stallReason: undefined, stalledAt: undefined });
-    addNote(id, 'Stall cleared — conversation restarted', 'Updates');
+    logActivity(id, 'stall_cleared', 'Stall cleared — conversation restarted');
   };
 
   return (
