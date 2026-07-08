@@ -310,9 +310,10 @@ export interface CRMContact {
   name: string;
   email: string;             // primary email
   emails?: string[];         // additional emails
-  phone: string;             // primary / main phone
-  mobilePhone?: string;
-  workPhone?: string;
+  phone: string;             // primary phone (mirrors phones[0] for display)
+  phones?: { number: string; label: 'Mobile' | 'Work' | 'Home' }[];
+  mobilePhone?: string;      // legacy
+  workPhone?: string;        // legacy
   type: ContactType;
   title?: string;
   organizationId?: string;

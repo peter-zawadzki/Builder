@@ -471,9 +471,12 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           {(contact.emails || []).filter(Boolean).map((em, i) => (
             <a key={i} href={`mailto:${em}`} className="flex items-center gap-2 text-[13px] text-[#1565c0]"><Mail size={14} className="opacity-0" />{em}</a>
           ))}
-          {contact.phone && <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{contact.phone}</a>}
-          {contact.mobilePhone && <a href={`tel:${contact.mobilePhone}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{contact.mobilePhone} <span className="text-[11px] text-[#8992a0]">mobile</span></a>}
-          {contact.workPhone && <a href={`tel:${contact.workPhone}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{contact.workPhone} <span className="text-[11px] text-[#8992a0]">work</span></a>}
+          {(contact.phones && contact.phones.length
+            ? contact.phones
+            : [contact.phone && { number: contact.phone, label: '' }, contact.mobilePhone && { number: contact.mobilePhone, label: 'Mobile' }, contact.workPhone && { number: contact.workPhone, label: 'Work' }].filter(Boolean) as { number: string; label: string }[]
+          ).map((p, i) => (
+            <a key={i} href={`tel:${p.number}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{p.number}{p.label ? <span className="text-[11px] text-[#8992a0]">{p.label.toLowerCase()}</span> : null}</a>
+          ))}
           {mountain && (
             <button onClick={() => navigate(`/mountains/${mountain.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] active:opacity-70">
               <ExternalLink size={14} />{mountain.name} <StageBadge stage={mountain.pipelineStage} />
@@ -680,17 +683,17 @@ function nameTokens(n: string) {
   return n.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean);
 }
 function findDuplicateContacts(
-  form: { name: string; email: string; emails: string[]; phone: string; mobilePhone: string; workPhone: string },
+  form: { name: string; email: string; emails: string[]; phones: { number: string }[] },
   contacts: CRMContact[],
 ): CRMContact[] {
   const emails = [form.email, ...form.emails].map(s => s.trim().toLowerCase()).filter(Boolean);
-  const phones = [form.phone, form.mobilePhone, form.workPhone].map(s => s.replace(/\D/g, '')).filter(p => p.length >= 7);
+  const phones = form.phones.map(p => p.number.replace(/\D/g, '')).filter(p => p.length >= 7);
   const toks = nameTokens(form.name);
   const first = toks[0]; const last = toks[toks.length - 1];
   return contacts.filter(c => {
     const cEmails = [c.email, ...(c.emails || [])].map(s => (s || '').toLowerCase());
     if (emails.some(e => cEmails.includes(e))) return true;
-    const cPhones = [c.phone, c.mobilePhone, c.workPhone].map(s => (s || '').replace(/\D/g, '')).filter(Boolean);
+    const cPhones = [c.phone, c.mobilePhone, c.workPhone, ...(c.phones || []).map(p => p.number)].map(s => (s || '').replace(/\D/g, '')).filter(Boolean);
     if (phones.some(p => cPhones.includes(p))) return true;
     const ct = nameTokens(c.name);
     if (ct.length && first && last && ct[0] === first && ct[ct.length - 1] === last) return true;
@@ -701,20 +704,22 @@ function findDuplicateContacts(
 export function ContactForm({ contact, onClose, defaults }: { contact: CRMContact | null; onClose: () => void; defaults?: Partial<CRMContact> }) {
   const { addContact, updateContact, contacts, mountains, organizations } = useData();
   const [dupCandidates, setDupCandidates] = useState<CRMContact[] | null>(null);
+  type Phone = { number: string; label: 'Mobile' | 'Work' | 'Home' };
   const [form, setForm] = useState({
     name: contact?.name || '',
     email: contact?.email || '',
     emails: contact?.emails || [] as string[],
-    phone: contact?.phone || '',
-    mobilePhone: contact?.mobilePhone || '',
-    workPhone: contact?.workPhone || '',
+    phones: (contact?.phones && contact.phones.length ? contact.phones : [
+      ...(contact?.phone ? [{ number: contact.phone, label: 'Mobile' }] : []),
+      ...(contact?.mobilePhone ? [{ number: contact.mobilePhone, label: 'Mobile' }] : []),
+      ...(contact?.workPhone ? [{ number: contact.workPhone, label: 'Work' }] : []),
+    ]) as Phone[],
     type: contact?.type || 'General' as ContactType,
     title: contact?.title || '',
     organizationId: contact?.organizationId || defaults?.organizationId || '',
     tags: contact?.tags || [] as ContactTag[],
     isPrimary: contact?.isPrimary || false,
     mountainId: contact?.mountainId || defaults?.mountainId || '',
-    affiliation: contact?.affiliation || '',
     notes: contact?.notes || '',
   });
 
@@ -722,13 +727,13 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
   const toggleTag = (t: ContactTag) => set('tags', form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]);
 
   const doSave = () => {
+    const cleanPhones = form.phones.map(p => ({ number: p.number.trim(), label: p.label })).filter(p => p.number);
     const data = {
       ...form,
       mountainId: form.mountainId || undefined,
       organizationId: form.organizationId || undefined,
-      affiliation: (form.affiliation || undefined) as CRMContact['affiliation'],
-      mobilePhone: form.mobilePhone.trim() || undefined,
-      workPhone: form.workPhone.trim() || undefined,
+      phones: cleanPhones,
+      phone: cleanPhones[0]?.number || '',
       emails: form.emails.map(s => s.trim()).filter(Boolean),
     };
     if (contact) updateContact(contact.id, data);
@@ -765,10 +770,6 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
             </div>
             <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Phone</label>
-              <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
-            </div>
-            <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
               <select value={form.type} onChange={e => set('type', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] appearance-none">
                 {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -780,14 +781,25 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Mobile phone</label>
-              <input type="tel" value={form.mobilePhone} onChange={e => set('mobilePhone', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
-            </div>
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Work phone</label>
-              <input type="tel" value={form.workPhone} onChange={e => set('workPhone', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Phone numbers</label>
+            <div className="space-y-2">
+              {form.phones.map((p, i) => (
+                <div key={i} className="flex gap-2">
+                  <input type="tel" value={p.number} placeholder="(000) 000-0000"
+                    onChange={e => setForm(prev => ({ ...prev, phones: prev.phones.map((x, j) => j === i ? { ...x, number: e.target.value } : x) }))}
+                    className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+                  <select value={p.label}
+                    onChange={e => setForm(prev => ({ ...prev, phones: prev.phones.map((x, j) => j === i ? { ...x, label: e.target.value as Phone['label'] } : x) }))}
+                    className="w-24 bg-[#f3f3f5] rounded-[8px] px-2 py-2.5 text-[#0a0a0a] text-[13px] appearance-none">
+                    <option value="Mobile">Mobile</option>
+                    <option value="Work">Work</option>
+                    <option value="Home">Home</option>
+                  </select>
+                  <button type="button" onClick={() => setForm(prev => ({ ...prev, phones: prev.phones.filter((_, j) => j !== i) }))} className="p-2 rounded-[8px] bg-[#fff0ee] active:bg-[#ffe0da]"><X size={14} className="text-[#F95C39]" /></button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setForm(prev => ({ ...prev, phones: [...prev.phones, { number: '', label: 'Mobile' }] }))} className="text-[12px] text-[#307fe2] flex items-center gap-1 active:opacity-70"><Plus size={13} /> Add phone</button>
             </div>
           </div>
 
@@ -820,16 +832,6 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
               <option value="">— None —</option>
               {mountains.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Affiliation (YULLR team)</label>
-            <select value={form.affiliation} onChange={e => set('affiliation', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] appearance-none">
-              <option value="">— None —</option>
-              <option value="Employee">Employee</option>
-              <option value="Ambassador">Ambassador</option>
-            </select>
-            <p className="text-[11px] text-[#8992a0] mt-1">For YULLR people. Employees can view all projects; Ambassadors see only their own.</p>
           </div>
 
           <div>
