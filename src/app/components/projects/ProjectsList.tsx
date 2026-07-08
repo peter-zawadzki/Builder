@@ -4,7 +4,6 @@ import { Search, AlertTriangle, UserCircle2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import type { Project } from '../../context/DataContext';
 import { INSTALL_STAGES } from './ProjectsPane';
-import { AppHeader } from '../AppHeader';
 
 function daysAgo(iso?: string) {
   if (!iso) return null;
@@ -65,7 +64,6 @@ export function ProjectsList() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      <AppHeader />
 
       <div className="p-4 space-y-3">
         {/* Filters */}

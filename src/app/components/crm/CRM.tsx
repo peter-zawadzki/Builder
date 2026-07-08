@@ -14,7 +14,6 @@ import type {
 } from '../../context/DataContext';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
-import { AppHeader } from '../AppHeader';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1053,7 +1052,6 @@ function CRMContent() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
-      <AppHeader />
       <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex gap-1 overflow-x-auto pb-0.5">

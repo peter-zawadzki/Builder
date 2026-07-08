@@ -1,13 +1,11 @@
 import { TrendingUp, Activity as ActivityIcon, Bell } from "lucide-react";
 import { Pipeline, ActivityFeed, FollowUps } from "./crm/CRM";
-import { AppHeader } from "./AppHeader";
 
 // The landing page after login: pipeline, recent activity, and follow-ups at a
 // glance, with the shared header to jump into each section.
 export function HomeDashboard() {
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      <AppHeader />
 
       {/* Dashboard */}
       <div className="max-w-5xl mx-auto p-4 flex flex-col gap-6">

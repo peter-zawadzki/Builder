@@ -8,7 +8,6 @@ import { projectId, publicAnonKey } from '/utils/supabase/info';
 import { useIsSuperAdmin } from '../hooks/useRole';
 import { SalesProcessBar } from './SalesProcessBar';
 import { QuickNotesModal } from './QuickNotesModal';
-import { AppHeader } from './AppHeader';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
 const AUTH_HEADER = { Authorization: `Bearer ${publicAnonKey}` };
@@ -230,7 +229,6 @@ export function MountainsList() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
-      <AppHeader />
 
       {/* Content */}
       <div className="flex-1 p-4">

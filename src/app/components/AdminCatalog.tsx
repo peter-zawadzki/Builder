@@ -9,7 +9,6 @@ import { InventoryTab } from './InventoryTab';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { useIsSuperAdmin } from '../hooks/useRole';
-import { AppHeader } from './AppHeader';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -329,7 +328,6 @@ function PageHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
 export function InventoryPage() {
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      <AppHeader />
       <div className="p-4 pb-16">
         <InventoryTab />
       </div>
