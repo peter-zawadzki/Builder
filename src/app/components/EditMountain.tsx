@@ -217,30 +217,17 @@ export function EditMountain() {
   )];
 
   // Track form changes
+  // Dirty tracking via a one-time baseline snapshot — avoids false positives
+  // from undefined-vs-'' field mismatches on load.
+  const initialSnapshot = useRef<string | null>(null);
   useEffect(() => {
     if (!mountain) return;
-
-    const hasChanges =
-      formData.name !== mountain.name ||
-      formData.address !== mountain.address ||
-      formData.billingAddress !== (mountain.billingAddress || '') ||
-      formData.parentOrganization !== (mountain.parentOrganization || '') ||
-      formData.legalEntity !== (mountain.legalEntity || '') ||
-      formData.phone !== mountain.phone ||
-      formData.website !== mountain.website ||
-      formData.notes !== (mountain.notes || '') ||
-      formData.trailCount !== (mountain.trailCount?.toString() || '') ||
-      formData.acreage !== (mountain.acreage?.toString() || '') ||
-      formData.verticalDrop !== (mountain.verticalDrop?.toString() || '') ||
-      formData.slackEmail !== (mountain.slackEmail || '') ||
-      formData.region !== (mountain.region || '') ||
-      JSON.stringify(formData.adminContact) !== JSON.stringify(mountain.adminContact || emptyContact()) ||
-      JSON.stringify(formData.technicalContact) !== JSON.stringify(mountain.technicalContact || emptyContact()) ||
-      JSON.stringify(formData.additionalContacts) !== JSON.stringify(mountain.additionalContacts || []) ||
-      JSON.stringify(timingSystems) !== JSON.stringify(mountain.timingSystems || []) ||
-      JSON.stringify(techAdmins) !== JSON.stringify(mountain.technicalAdministrators || []);
-
-    setHasUnsavedChanges(hasChanges);
+    const current = JSON.stringify({ formData, timingSystems, techAdmins });
+    if (initialSnapshot.current === null) {
+      initialSnapshot.current = current; // capture baseline once, not dirty yet
+      return;
+    }
+    setHasUnsavedChanges(current !== initialSnapshot.current);
   }, [formData, timingSystems, techAdmins, mountain]);
 
   const handleSubmit = (e?: React.FormEvent) => {
