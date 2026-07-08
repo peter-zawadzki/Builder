@@ -161,7 +161,7 @@ export interface Location {
   trailName?: string;      // legacy / display label
   notes?: string;
   difficulty?: 1 | 2 | 3 | 4 | 5; // Installation difficulty rating
-  locationType?: 'Install Site' | 'Power Location' | 'Start/Finish' | 'Misc.';
+  locationType?: 'Install Site' | 'Power' | 'Start' | 'Finish';
   coordinates?: {
     latitude: number;
     longitude: number;
@@ -176,6 +176,7 @@ export interface Location {
     items: SiteInspectionItem[];
     notes?: string;
     createdAt: string;
+    projectId?: string;   // the project this inspection is for
   };
 }
 

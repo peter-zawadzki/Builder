@@ -25,14 +25,19 @@ const MULTI_COUNT_ITEMS: SiteInspectionItemType[] = [
 export function AddInspection() {
   const { mountainId, locationId } = useParams();
   const navigate = useNavigate();
-  const { getMountainById, getLocationById, updateLocation } = useData();
+  const { getMountainById, getLocationById, updateLocation, getProjectsByMountainId } = useData();
 
   const mountain = getMountainById(mountainId!);
   const location = getLocationById(locationId!);
   const isEditing = !!location?.inspection;
 
+  // Inspections attach to a project. Default to the single active project.
+  const activeProjects = getProjectsByMountainId(mountainId!).filter(p => p.stage !== 'Churned' && p.status !== 'Done');
   const [items, setItems] = useState<SiteInspectionItem[]>(location?.inspection?.items || []);
   const [notes, setNotes] = useState(location?.inspection?.notes || '');
+  const [projectId, setProjectId] = useState(
+    location?.inspection?.projectId || (activeProjects.length === 1 ? activeProjects[0].id : ''),
+  );
   const [saving, setSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -91,6 +96,7 @@ export function AddInspection() {
           items: items,
           notes: notes.trim(),
           createdAt: location?.inspection?.createdAt || new Date().toISOString(),
+          projectId: projectId || undefined,
         },
       });
 
@@ -140,6 +146,25 @@ export function AddInspection() {
       </div>
 
       <div className="px-4 pt-5 space-y-5">
+
+        {/* ── Project ── (inspections attach to a project) */}
+        {activeProjects.length > 0 && (
+          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+            <label className="block text-[#6a7282] font-['Inter:Medium',sans-serif] text-[12px] mb-1.5 uppercase tracking-wider">Project</label>
+            {activeProjects.length === 1 ? (
+              <div className="text-[14px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{activeProjects[0].name}</div>
+            ) : (
+              <select
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+                className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none"
+              >
+                <option value="">Select a project…</option>
+                {activeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
+          </div>
+        )}
 
         {/* Info banner */}
         <div className="bg-[#EBF3FF] border border-[#C5DEFF] rounded-[12px] p-4">

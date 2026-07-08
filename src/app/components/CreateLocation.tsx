@@ -235,6 +235,7 @@ export function CreateLocation() {
   const [notes, setNotes] = useState('');
   const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [locationType, setLocationType] = useState<string>('');
+  const [showInspectPrompt, setShowInspectPrompt] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{ name?: string; locationType?: string }>({});
 
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -417,13 +418,9 @@ export function CreateLocation() {
       });
 
       if (!skipNavigation) {
-        toast.success('Location added');
-        // Navigate back to the trail detail if we came from one, otherwise to mountain
-        if (trailId) {
-          navigate(`/mountains/${mountainId}/trails/${trailId}`);
-        } else {
-          navigate(`/mountains/${mountainId}/locations/${id}`);
-        }
+        toast.success('Location saved');
+        // Two moments: saving just saves, then we prompt to add an inspection.
+        setShowInspectPrompt(true);
       }
 
       return id;
@@ -582,7 +579,7 @@ export function CreateLocation() {
               Location Type <span className="text-[#ff5c39]">*</span>
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {(['Install Site', 'Power Location', 'Start/Finish', 'Misc.'] as const).map((t) => (
+              {(['Install Site', 'Power', 'Start', 'Finish'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -777,28 +774,43 @@ export function CreateLocation() {
           </button>
         </div>
 
-        {/* ── Save or Add Inspection ── */}
+        {/* ── Save ── */}
         <div className="space-y-3">
           <button type="button" onClick={() => handleSave()} disabled={saving}
             className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-4 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[16px] active:opacity-80 disabled:opacity-50">
             {saving && <Loader2 size={20} className="animate-spin" />}
             {saving ? 'Saving…' : 'Save Location'}
           </button>
-
-          <button type="button" onClick={handleAddInspection} disabled={saving}
-            className="w-full bg-white border border-[#ff5c39] text-[#ff5c39] rounded-[8px] px-4 py-4 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[16px] active:bg-[#fff0ee] disabled:opacity-50">
-            <ClipboardList size={20} />
-            Add Inspection Items
-          </button>
-
-          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] text-center">
-            {savedLocationId
-              ? 'Location saved — you can now add inspection items'
-              : 'Clicking "Add Inspection Items" will save this location first'}
-          </p>
         </div>
 
       </div>
+
+      {/* Post-save: prompt to add an inspection */}
+      {showInspectPrompt && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[16px] w-full max-w-sm p-6 space-y-4">
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="w-12 h-12 rounded-full bg-[#eaf5ef] flex items-center justify-center"><ClipboardList size={22} className="text-[#3f7a5c]" /></div>
+              <h2 className="text-[17px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Location saved</h2>
+              <p className="text-[14px] text-[#6a7282]">Add an inspection for this location now?</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate(trailId ? `/mountains/${mountainId}/trails/${trailId}` : `/mountains/${mountainId}/locations/${savedLocationId}`)}
+                className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]"
+              >
+                Not now
+              </button>
+              <button
+                onClick={() => navigate(`/mountains/${mountainId}/locations/${savedLocationId}/inspection`)}
+                className="flex-1 bg-[#ff5c39] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]"
+              >
+                Add inspection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Unsaved changes dialog */}
       <UnsavedChangesDialog

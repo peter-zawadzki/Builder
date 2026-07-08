@@ -507,13 +507,6 @@ export function MountainDetail() {
                   <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({trails.length})</span>
                 )}
               </h2>
-              <button
-                onClick={() => navigate(`/mountains/${mountainId}/trails/new`)}
-                className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
-              >
-                <Plus size={14} />
-                Add
-              </button>
             </div>
 
             <div className="space-y-2">
@@ -521,7 +514,7 @@ export function MountainDetail() {
                 <div className="py-8 text-center">
                   <MapPin className="mx-auto mb-3 text-[#6a7282]" size={32} />
                   <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">
-                    No trails yet
+                    No trails yet — add them from Edit Mountain (pencil above).
                   </p>
                 </div>
               ) : (

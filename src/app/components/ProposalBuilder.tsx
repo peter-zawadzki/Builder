@@ -148,7 +148,8 @@ export function ProposalBuilder() {
   const seedTrails = (): TrailRow[] => {
     if (dbTrails.length > 0) {
       return dbTrails.map(t => {
-        const locCount = allLocations.filter(l => l.trailId === t.id).length;
+        // Proposals count Install Site locations only (camera capture points).
+        const locCount = allLocations.filter(l => l.trailId === t.id && l.locationType === 'Install Site').length;
         return {
           id: uid(),
           trailId: t.id,

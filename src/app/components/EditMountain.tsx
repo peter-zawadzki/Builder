@@ -56,10 +56,21 @@ export function EditMountain() {
     getLocationsByMountainId,
     getAssetsByLocationId,
     organizations,
+    getTrailsByMountainId,
+    addTrail,
+    deleteTrail,
   } = useData();
 
   const mountain = getMountainById(mountainId!);
   const mountainGroups = organizations.filter(o => o.type === 'Mountain Group').sort((a, b) => a.name.localeCompare(b.name));
+  const mountainTrails = getTrailsByMountainId(mountainId!);
+  const [newTrail, setNewTrail] = useState('');
+  const addTrailNow = () => {
+    const name = newTrail.trim();
+    if (!name) return;
+    addTrail({ mountainId: mountainId!, name });
+    setNewTrail('');
+  };
 
   const [formData, setFormData] = useState({
     name: mountain?.name || '',
@@ -603,7 +614,33 @@ export function EditMountain() {
           </div>
         </div>
 
-        {/* Organization & Billing */}
+        {/* Trails */}
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-3">
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+            Trails{mountainTrails.length > 0 && <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({mountainTrails.length})</span>}
+          </h2>
+          {mountainTrails.map(t => (
+            <div key={t.id} className="flex items-center justify-between border border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2.5">
+              <span className="text-[14px] text-[#0a0a0a]">{t.name}</span>
+              <button type="button" onClick={() => deleteTrail(t.id)} className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]"><X size={14} className="text-[#ff5c39]" /></button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newTrail}
+              onChange={e => setNewTrail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTrailNow(); } }}
+              placeholder="Add a trail (e.g. Eggbeater)"
+              className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px] outline-none"
+            />
+            <button type="button" onClick={addTrailNow} className="shrink-0 flex items-center gap-1 bg-[#1D2930] text-white px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif]">
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        </div>
+
+        {/* Organization */}
         <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
           <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Organization</h2>
 
