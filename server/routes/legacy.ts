@@ -164,7 +164,7 @@ legacy.get("/activity", async (c) => {
         [mountainId]
       )
     : await query<{ data: any }>(
-        `SELECT data FROM legacy_records WHERE collection='activity' ORDER BY updated_at DESC LIMIT 50`
+        `SELECT data FROM legacy_records WHERE collection='activity' ORDER BY updated_at DESC LIMIT 200`
       );
   return c.json({ activity: rows.map((r) => r.data) });
 });

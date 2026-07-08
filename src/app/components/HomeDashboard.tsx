@@ -26,7 +26,7 @@ export function HomeDashboard() {
                   onClick={() => setScope(s)}
                   className={`px-4 py-1.5 rounded-full text-[13px] font-['Inter:Medium',sans-serif] transition-colors ${scope === s ? 'bg-[#1D2930] text-white' : 'text-[#6a7282]'}`}
                 >
-                  {s === 'mine' ? 'My stuff' : 'All stuff'}
+                  {s === 'mine' ? 'My Projects' : 'All Projects'}
                 </button>
               ))}
             </div>
@@ -34,7 +34,7 @@ export function HomeDashboard() {
         ) : !me ? (
           <p className="text-center text-[12px] text-[#8992a0]">Showing everything — link your login to a YULLR contact (matching your email) to see just your stuff.</p>
         ) : (
-          <p className="text-center text-[12px] text-[#8992a0]">Showing your stuff.</p>
+          <p className="text-center text-[12px] text-[#8992a0]">Showing your projects.</p>
         )}
 
         <section>
