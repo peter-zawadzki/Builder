@@ -135,6 +135,26 @@ legacy.post("/item-prices", async (c) => {
   return c.json({ ok: true });
 });
 
+// Slack mirror — Builder is the record; Slack is a notification mirror. Only
+// mountain-related status + task updates post, and only when a webhook is set.
+const SLACK_MIRROR_TYPES = new Set([
+  "project_created", "owner_transferred", "stage_changed", "stalled", "stall_cleared",
+  "next_action", "next_action_done", "checked_out", "checked_in",
+]);
+async function mirrorToSlack(rec: { type: string; summary: string; actor: string }) {
+  const url = process.env.SLACK_WEBHOOK_URL;
+  if (!url || !SLACK_MIRROR_TYPES.has(rec.type)) return;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: `:round_pushpin: ${rec.summary} — ${rec.actor}` }),
+    });
+  } catch (e) {
+    console.warn("Slack mirror failed:", e);
+  }
+}
+
 // ── Activity feed (Updates) — the actor is the authenticated user ─────────────
 legacy.get("/activity", async (c) => {
   const mountainId = c.req.query("mountainId");
@@ -161,5 +181,6 @@ legacy.post("/activity", async (c) => {
     timestamp: new Date().toISOString(),
   };
   await upsert("activity", rec.id, rec);
+  void mirrorToSlack(rec); // fire-and-forget
   return c.json({ ok: true, activity: rec });
 });

@@ -221,7 +221,7 @@ function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () 
 // ─── Detail / edit ─────────────────────────────────────────────────────────
 
 function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts } = useData();
+  const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts, logActivity } = useData();
   const project = getProjectById(projectId);
   const [stallOpen, setStallOpen] = useState(false);
   const [stallReason, setStallReason] = useState<StallReason>('No response');
@@ -235,9 +235,19 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
     else updateProject(project.id, { type: t, stage: undefined, status: project.status || 'Open' });
   };
 
+  const changeStage = (stage: PipelineStage) => {
+    updateProject(project.id, { stage });
+    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" stage → ${stage}`);
+  };
+  const changeStatus = (status: ProjectWorkStatus) => {
+    updateProject(project.id, { status });
+    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" → ${status}`);
+  };
+
   const applyStall = () => {
     if (stallReason === 'Other' && !stallNote.trim()) { toast.error('A note is required for "Other".'); return; }
     updateProject(project.id, { isStalled: true, stallReason, stallNote: stallNote.trim() || undefined });
+    logActivity(project.mountainId, 'stalled', `Project "${project.name}" stalled: ${stallReason}${stallNote.trim() ? ` — ${stallNote.trim()}` : ''}`);
     setStallOpen(false);
     toast.success('Marked stalled');
   };
@@ -270,7 +280,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
           {isInstall ? (
             <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
-              <select className={inputCls} value={project.stage || 'Prospect'} onChange={e => updateProject(project.id, { stage: e.target.value as PipelineStage })}>
+              <select className={inputCls} value={project.stage || 'Prospect'} onChange={e => changeStage(e.target.value as PipelineStage)}>
                 {INSTALL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                 <option value="Churned">Churned</option>
               </select>
@@ -280,7 +290,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Status</label>
               <div className="flex gap-2">
                 {WORK_STATUSES.map(s => (
-                  <button key={s} onClick={() => updateProject(project.id, { status: s })} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.status === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{s}</button>
+                  <button key={s} onClick={() => changeStatus(s)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.status === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{s}</button>
                 ))}
               </div>
             </div>
@@ -310,7 +320,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
             {project.isStalled ? (
               <div className="flex items-center justify-between">
                 <span className="text-[13px] text-[#F95C39] flex items-center gap-1.5"><AlertTriangle size={13} /> Stalled — {project.stallReason}{project.stallNote ? `: ${project.stallNote}` : ''}</span>
-                <button onClick={() => updateProject(project.id, { isStalled: false, stallReason: undefined, stallNote: undefined })} className="text-[12px] text-[#307fe2]">Clear</button>
+                <button onClick={() => { updateProject(project.id, { isStalled: false, stallReason: undefined, stallNote: undefined }); logActivity(project.mountainId, 'stall_cleared', `Project "${project.name}" stall cleared`); }} className="text-[12px] text-[#307fe2]">Clear</button>
               </div>
             ) : !stallOpen ? (
               <button onClick={() => setStallOpen(true)} className="text-[13px] text-[#F95C39] flex items-center gap-1.5 active:opacity-70"><AlertTriangle size={13} /> Mark stalled</button>
