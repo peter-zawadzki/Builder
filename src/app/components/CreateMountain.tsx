@@ -19,8 +19,10 @@ const emptyContact = (): Contact => ({
 
 export function CreateMountain() {
   const navigate = useNavigate();
-  const { addMountain, addTrail, organizations } = useData();
+  const { addMountain, addTrail, organizations, contacts } = useData();
   const mountainGroups = organizations.filter(o => o.type === 'Mountain Group').sort((a, b) => a.name.localeCompare(b.name));
+  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
+  const ambassadors = yullrOrg ? contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name)) : [];
 
   const [formData, setFormData] = useState({
     name: '',
@@ -28,6 +30,8 @@ export function CreateMountain() {
     billingAddress: '',
     parentOrganization: '',
     organizationId: '',
+    ambassadorId: '',
+    trailMapUrl: '',
     legalEntity: '',
     phone: '',
     website: '',
@@ -129,7 +133,8 @@ export function CreateMountain() {
       trailCount: formData.trailCount ? parseInt(formData.trailCount) : undefined,
       acreage: formData.acreage ? parseInt(formData.acreage) : undefined,
       verticalDrop: formData.verticalDrop ? parseInt(formData.verticalDrop) : undefined,
-      slackEmail: formData.slackEmail || undefined,
+      trailMapUrl: formData.trailMapUrl.trim() || undefined,
+      affiliateContactIds: formData.ambassadorId ? [formData.ambassadorId] : undefined,
       region: formData.region || undefined,
     });
     // Save any inline-added trails
@@ -322,20 +327,12 @@ export function CreateMountain() {
                 <option value="Northeast">Northeast</option>
                 <option value="Mid-Atlantic">Mid-Atlantic</option>
                 <option value="Midwest">Midwest</option>
+                <option value="Europe">Europe</option>
+                <option value="Canada">Canada</option>
               </select>
             </div>
           </div>
 
-          <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Slack Email</label>
-            <input
-              type="email"
-              value={formData.slackEmail}
-              onChange={e => updateField('slackEmail', e.target.value)}
-              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
-              placeholder="team@slack.com"
-            />
-          </div>
         </div>
 
         {/* Organization & Billing */}
@@ -360,6 +357,34 @@ export function CreateMountain() {
                 No Mountain Group organizations yet — create one in the CRM (Organizations → type “Mountain Group”).
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Ambassador</label>
+            <select
+              value={formData.ambassadorId}
+              onChange={e => updateField('ambassadorId', e.target.value)}
+              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px]"
+            >
+              <option value="">— None —</option>
+              {ambassadors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            {ambassadors.length === 0 && (
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
+                Add people to the YULLR organization in the CRM to pick an ambassador.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Trail Map URL</label>
+            <input
+              type="url"
+              value={formData.trailMapUrl}
+              onChange={e => updateField('trailMapUrl', e.target.value)}
+              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+              placeholder="https://…"
+            />
           </div>
 
         </div>

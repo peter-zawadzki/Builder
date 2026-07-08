@@ -56,6 +56,7 @@ export function EditMountain() {
     getLocationsByMountainId,
     getAssetsByLocationId,
     organizations,
+    contacts,
     getTrailsByMountainId,
     addTrail,
     deleteTrail,
@@ -63,6 +64,8 @@ export function EditMountain() {
 
   const mountain = getMountainById(mountainId!);
   const mountainGroups = organizations.filter(o => o.type === 'Mountain Group').sort((a, b) => a.name.localeCompare(b.name));
+  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
+  const ambassadors = yullrOrg ? contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name)) : [];
   const mountainTrails = getTrailsByMountainId(mountainId!);
   const [newTrail, setNewTrail] = useState('');
   const addTrailNow = () => {
@@ -78,6 +81,8 @@ export function EditMountain() {
     billingAddress: mountain?.billingAddress || '',
     parentOrganization: mountain?.parentOrganization || '',
     organizationId: mountain?.organizationId || '',
+    ambassadorId: mountain?.affiliateContactIds?.[0] || '',
+    trailMapUrl: mountain?.trailMapUrl || '',
     legalEntity: mountain?.legalEntity || '',
     phone: mountain?.phone || '',
     website: mountain?.website || '',
@@ -241,7 +246,8 @@ export function EditMountain() {
       trailCount: formData.trailCount ? parseInt(formData.trailCount) : undefined,
       acreage: formData.acreage ? parseInt(formData.acreage) : undefined,
       verticalDrop: formData.verticalDrop ? parseInt(formData.verticalDrop) : undefined,
-      slackEmail: formData.slackEmail || undefined,
+      trailMapUrl: formData.trailMapUrl.trim() || undefined,
+      affiliateContactIds: formData.ambassadorId ? [formData.ambassadorId] : undefined,
       region: formData.region || undefined,
     });
     toast.success('Mountain updated successfully!');
@@ -539,67 +545,14 @@ export function EditMountain() {
                 <option value="Northeast">Northeast</option>
                 <option value="Mid-Atlantic">Mid-Atlantic</option>
                 <option value="Midwest">Midwest</option>
+                <option value="Europe">Europe</option>
+                <option value="Canada">Canada</option>
               </select>
             </div>
           </div>
 
-          <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Slack Email</label>
-            <input
-              type="email"
-              value={formData.slackEmail}
-              onChange={e => updateField('slackEmail', e.target.value)}
-              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
-              placeholder="team@slack.com"
-            />
-          </div>
         </div>
 
-        {/* Portal */}
-        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
-          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Mountain Portal</h2>
-          <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Mountain / Team Logo</label>
-            <p className="text-[#6a7282] text-[12px] mb-2">Displayed alongside the YULLR logo on the public portal page.</p>
-            {mountain?.mountainLogo && (
-              <div className="mb-3 flex items-center gap-3">
-                <img src={mountain.mountainLogo} alt="Mountain logo" className="h-12 object-contain rounded-[6px] bg-[#f3f3f5] px-2" />
-                <button
-                  type="button"
-                  onClick={() => updateMountain(mountainId!, { mountainLogo: undefined })}
-                  className="text-[12px] text-[#F95C39]"
-                >Remove</button>
-              </div>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = ev => updateMountain(mountainId!, { mountainLogo: ev.target?.result as string });
-                reader.readAsDataURL(file);
-              }}
-              className="w-full text-[14px] text-[#6a7282]"
-            />
-          </div>
-          <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Portal Link</label>
-            <div className="flex gap-2">
-              <input
-                readOnly
-                value={`${window.location.origin}/portal/${mountainId}`}
-                className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#6a7282] text-[13px] font-mono outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${mountainId}`); toast.success('Link copied'); }}
-                className="px-3 py-2.5 bg-[#1D2930] text-white rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80 whitespace-nowrap"
-              >Copy</button>
-            </div>
-          </div>
-        </div>
 
         {/* Trails */}
         <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-3">
@@ -654,6 +607,34 @@ export function EditMountain() {
                 No Mountain Group organizations yet — create one in the CRM (Organizations → type “Mountain Group”).
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Ambassador</label>
+            <select
+              value={formData.ambassadorId}
+              onChange={e => updateField('ambassadorId', e.target.value)}
+              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px]"
+            >
+              <option value="">— None —</option>
+              {ambassadors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            {ambassadors.length === 0 && (
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
+                Add people to the YULLR organization in the CRM to pick an ambassador.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Trail Map URL</label>
+            <input
+              type="url"
+              value={formData.trailMapUrl}
+              onChange={e => updateField('trailMapUrl', e.target.value)}
+              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+              placeholder="https://…"
+            />
           </div>
 
         </div>

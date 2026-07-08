@@ -71,6 +71,7 @@ export interface Mountain {
   proposalCreated?: boolean;
   proposalCreatedAt?: string;  // ISO timestamp when proposal was created
   trailMapType?: 'image' | 'pdf';  // set when a trail map is stored in IndexedDB
+  trailMapUrl?: string;            // external link to the trail map
   trailMapUploadedAt?: string;  // ISO timestamp when trail map was uploaded
   trailMapAnnotations?: Annotation[];  // annotations on the trail map image
   invoice?: Invoice;
@@ -79,7 +80,7 @@ export interface Mountain {
   acreage?: number;
   verticalDrop?: number;
   slackEmail?: string;
-  region?: 'Rocky Mountains' | 'Sierra Nevada' | 'Pacific Northwest' | 'Northeast' | 'Mid-Atlantic' | 'Midwest';
+  region?: 'Rocky Mountains' | 'Sierra Nevada' | 'Pacific Northwest' | 'Northeast' | 'Mid-Atlantic' | 'Midwest' | 'Europe' | 'Canada';
   // Portal fields
   mountainLogo?: string;              // base64 — stored in IndexedDB key mountainLogo:{id}
   proposedInstallDates?: string[];    // up to 3 ISO dates, set by mountain rep on portal
