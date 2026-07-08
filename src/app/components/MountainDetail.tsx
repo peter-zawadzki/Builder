@@ -121,6 +121,7 @@ export function MountainDetail() {
     getAssetsByLocationId,
     assets,
     contacts,
+    organizations,
     updateLocation,
     updateMountain,
   } = useData();
@@ -185,6 +186,12 @@ export function MountainDetail() {
 
   const inventoryTotalCost = inventoryAssets.reduce((sum, a) => sum + (a.cost || 0), 0);
   const fmtCost = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  // At-a-glance summary for the Status pane.
+  const linkedOrg = mountain.organizationId ? organizations.find(o => o.id === mountain.organizationId) : undefined;
+  const crmContactCount = contacts.filter(c => c.mountainId === mountainId).length;
+  const embeddedContactCount = [mountain.adminContact, mountain.technicalContact, ...(mountain.additionalContacts || [])].filter(c => c?.name).length;
+  const contactCount = crmContactCount > 0 ? crmContactCount : embeddedContactCount;
 
   // Resolve / persist a single contact by its slot in the mountain record.
   const contactForSlot = (slot: ContactSlot): Contact | undefined =>
@@ -340,6 +347,18 @@ export function MountainDetail() {
                     : <Circle size={16} className="text-[#d1d5db]" />}
                 </div>
               ))}
+              <div className="flex items-center justify-between pt-2 mt-0.5 border-t border-[rgba(0,0,0,0.06)]">
+                <span className="text-[13px] text-[#6a7282]">Organization</span>
+                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate max-w-[60%] text-right">{linkedOrg?.name || '—'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] text-[#6a7282]">Contacts</span>
+                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{contactCount}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] text-[#6a7282]">Inventory</span>
+                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{inventoryAssets.length} item{inventoryAssets.length === 1 ? '' : 's'}</span>
+              </div>
             </div>
             {mountain.phone && (
               <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
