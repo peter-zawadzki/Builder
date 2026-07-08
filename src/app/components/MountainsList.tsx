@@ -258,9 +258,9 @@ export function MountainsList() {
             </div>
             <button
               onClick={() => navigate('/mountains/new')}
-              className="shrink-0 flex items-center gap-1.5 bg-[#ff5c39] text-white px-3.5 py-2 rounded-[6px] text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
+              className="shrink-0 flex items-center gap-1.5 bg-[#1D2930] text-white px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
             >
-              <Plus size={15} /> Add mountain
+              <Plus size={14} /> Add
             </button>
           </div>
 
