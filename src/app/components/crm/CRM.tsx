@@ -14,6 +14,7 @@ import type {
 } from '../../context/DataContext';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
+import { useMyContact } from '../../hooks/useMyContact';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -305,37 +306,73 @@ export function Pipeline() {
 }
 
 export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; onClose: () => void }) {
-  const { getMountainById, updateMountain, logActivity } = useData();
+  const { getMountainById, updateMountain, logActivity, contacts, organizations } = useData();
   const { user } = useUser();
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const m = getMountainById(mountainId)!;
   const [nextAction, setNextAction] = useState(m.nextAction || '');
   const [nextActionDate, setNextActionDate] = useState(m.nextActionDate || '');
+  const [nextActionType, setNextActionType] = useState<'Email' | 'Call' | 'Visit' | 'Task'>(m.nextActionType || 'Task');
+  const [assigneeId, setAssigneeId] = useState(m.nextActionAssigneeId || '');
+
+  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
+  const assignees = yullrOrg ? contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name)) : [];
+  // Email actions can target any contact linked to this mountain (contact picker).
+  const emailTargets = contacts.filter(c => c.mountainId === mountainId);
+
   const save = () => {
     const action = nextAction.trim() || undefined;
-    const changed = action !== m.nextAction || (nextActionDate || undefined) !== m.nextActionDate;
+    const changed = action !== m.nextAction || (nextActionDate || undefined) !== m.nextActionDate || assigneeId !== (m.nextActionAssigneeId || '');
+    const assignee = assignees.find(c => c.id === assigneeId);
     updateMountain(mountainId, {
       nextAction: action,
       nextActionDate: nextActionDate || undefined,
+      nextActionType: action ? nextActionType : undefined,
       nextActionBy: action ? authorName : undefined,
       nextActionAt: action && changed ? new Date().toISOString() : m.nextActionAt,
+      nextActionAssigneeId: action ? (assigneeId || undefined) : undefined,
+      nextActionAssignee: action ? (assignee?.name || undefined) : undefined,
     });
     if (action && changed) {
-      logActivity(mountainId, 'next_action', `Next action: ${action}${nextActionDate ? ` (due ${nextActionDate})` : ''}`);
+      logActivity(mountainId, 'next_action', `Next action (${nextActionType}): ${action}${nextActionDate ? ` due ${nextActionDate}` : ''}${assignee ? ` → ${assignee.name}` : ''}`);
     }
     onClose(); toast.success('Saved');
   };
+
+  const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white rounded-[16px] w-full max-w-sm p-6 space-y-4">
+      <div className="bg-white rounded-[16px] w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{m.name} — Next Action</h2>
         <div>
+          <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
+          <div className="flex gap-2">
+            {(['Email', 'Call', 'Visit', 'Task'] as const).map(t => (
+              <button key={t} onClick={() => setNextActionType(t)} className={`flex-1 px-2 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] ${nextActionType === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
+            ))}
+          </div>
+        </div>
+        <div>
           <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Next Action</label>
-          <input type="text" value={nextAction} onChange={e => setNextAction(e.target.value)} placeholder="e.g. Send proposal" className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+          <input type="text" value={nextAction} onChange={e => setNextAction(e.target.value)} placeholder="e.g. Send proposal" className={inputCls} />
+          {nextActionType === 'Email' && emailTargets.length > 0 && (
+            <select onChange={e => { const c = emailTargets.find(x => x.id === e.target.value); if (c) setNextAction(`Email ${c.name}${c.email ? ` (${c.email})` : ''}`); }} className={`${inputCls} mt-2`} defaultValue="">
+              <option value="">Pick a contact to email…</option>
+              {emailTargets.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
         </div>
         <div>
           <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Due Date</label>
-          <input type="date" value={nextActionDate} onChange={e => setNextActionDate(e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+          <input type="date" value={nextActionDate} onChange={e => setNextActionDate(e.target.value)} className={inputCls} />
+        </div>
+        <div>
+          <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Assign to</label>
+          <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className={inputCls}>
+            <option value="">Unassigned</option>
+            {assignees.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
         </div>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[8px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Cancel</button>
@@ -1082,21 +1119,28 @@ type FollowItem = {
   date: string;
   text: string;
   author?: string;
+  assigneeId?: string;
+  assignee?: string;
 };
 
 export function FollowUps() {
   const { notes, mountains, updateNote, updateMountain, logActivity } = useData();
   const navigate = useNavigate();
+  const me = useMyContact();
+  const [scope, setScope] = useState<'mine' | 'all'>(me ? 'mine' : 'all');
 
-  const items = useMemo<FollowItem[]>(() => {
+  const allItems = useMemo<FollowItem[]>(() => {
     const noteItems: FollowItem[] = notes
       .filter(n => n.followUpDate)
       .map(n => ({ key: `note:${n.id}`, kind: 'note', refId: n.id, mountainId: n.mountainId, date: n.followUpDate!, text: n.text }));
     const actionItems: FollowItem[] = mountains
       .filter(m => m.nextActionDate && m.nextAction)
-      .map(m => ({ key: `action:${m.id}`, kind: 'action', refId: m.id, mountainId: m.id, date: m.nextActionDate!, text: m.nextAction!, author: m.nextActionBy }));
+      .map(m => ({ key: `action:${m.id}`, kind: 'action', refId: m.id, mountainId: m.id, date: m.nextActionDate!, text: m.nextAction!, author: m.nextActionBy, assigneeId: m.nextActionAssigneeId, assignee: m.nextActionAssignee }));
     return [...noteItems, ...actionItems].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [notes, mountains]);
+
+  const effective = me ? scope : 'all';
+  const items = effective === 'mine' ? allItems.filter(i => i.assigneeId && me && i.assigneeId === me.id) : allItems;
 
   const overdue = items.filter(i => isOverdue(i.date));
   const upcoming = items.filter(i => !isOverdue(i.date));
@@ -1105,7 +1149,7 @@ export function FollowUps() {
     if (i.kind === 'note') {
       updateNote(i.refId, { followUpDate: undefined });
     } else {
-      updateMountain(i.refId, { nextAction: undefined, nextActionDate: undefined, nextActionBy: undefined, nextActionAt: undefined });
+      updateMountain(i.refId, { nextAction: undefined, nextActionDate: undefined, nextActionBy: undefined, nextActionAt: undefined, nextActionType: undefined, nextActionAssigneeId: undefined, nextActionAssignee: undefined });
       logActivity(i.refId, 'next_action_done', `Completed next action: ${i.text}`);
     }
     toast.success('Marked complete');
@@ -1126,6 +1170,7 @@ export function FollowUps() {
               <span className={`text-[11px] flex items-center gap-1 font-['Inter:Medium',sans-serif] ${over ? 'text-[#F95C39]' : 'text-[#6a7282]'}`}><Calendar size={10} /> {i.date}</span>
               {m && <span className="text-[11px] text-[#6a7282]">{m.name}</span>}
               {i.author && <span className="text-[11px] text-[#6a7282]">· by {i.author}</span>}
+              {i.assignee && <span className="text-[11px] bg-[#eef3fb] text-[#307fe2] px-1.5 py-0.5 rounded-full">→ {i.assignee}</span>}
             </div>
           </div>
           <div className="flex gap-1 shrink-0">
@@ -1139,6 +1184,15 @@ export function FollowUps() {
 
   return (
     <div className="p-4 space-y-4">
+      {me && (
+        <div className="flex gap-2">
+          {(['mine', 'all'] as const).map(s => (
+            <button key={s} onClick={() => setScope(s)} className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${scope === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+              {s === 'mine' ? 'Assigned to me' : 'All'}
+            </button>
+          ))}
+        </div>
+      )}
       {overdue.length > 0 && (
         <div>
           <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#F95C39] uppercase tracking-wide mb-2 flex items-center gap-1.5"><AlertTriangle size={12} /> Overdue ({overdue.length})</h3>

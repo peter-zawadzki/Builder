@@ -99,6 +99,9 @@ export interface Mountain {
   nextActionDate?: string;
   nextActionBy?: string;    // name of the user who set the next action
   nextActionAt?: string;    // when it was set (ISO)
+  nextActionType?: 'Email' | 'Call' | 'Visit' | 'Task';
+  nextActionAssigneeId?: string;   // YULLR contact the action is assigned to
+  nextActionAssignee?: string;     // assignee display name
   estimatedDealValue?: number;
   closeProbability?: number;
   corporateGroup?: string;
