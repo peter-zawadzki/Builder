@@ -55,15 +55,18 @@ export function EditMountain() {
     deleteMountain,
     getLocationsByMountainId,
     getAssetsByLocationId,
+    organizations,
   } = useData();
 
   const mountain = getMountainById(mountainId!);
+  const mountainGroups = organizations.filter(o => o.type === 'Mountain Group').sort((a, b) => a.name.localeCompare(b.name));
 
   const [formData, setFormData] = useState({
     name: mountain?.name || '',
     address: mountain?.address || '',
     billingAddress: mountain?.billingAddress || '',
     parentOrganization: mountain?.parentOrganization || '',
+    organizationId: mountain?.organizationId || '',
     legalEntity: mountain?.legalEntity || '',
     phone: mountain?.phone || '',
     website: mountain?.website || '',
@@ -606,14 +609,27 @@ export function EditMountain() {
 
           <div>
             <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Parent Organization</label>
-            <AddableSelect
-              optionKey="mountain:parentOrganizations"
-              value={formData.parentOrganization}
-              onChange={v => updateField('parentOrganization', v)}
-              placeholder="Select organization"
-              defaultOptions={DEFAULT_PARENT_ORGS}
+            <select
+              value={formData.organizationId}
+              onChange={e => {
+                const org = mountainGroups.find(o => o.id === e.target.value);
+                setFormData(prev => ({ ...prev, organizationId: org?.id || '', parentOrganization: org?.name || '' }));
+              }}
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px]"
-            />
+            >
+              <option value="">— None —</option>
+              {mountainGroups.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            {formData.parentOrganization && !formData.organizationId && (
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
+                Currently “{formData.parentOrganization}” (not yet linked to a Mountain Group). Pick one above to link it.
+              </p>
+            )}
+            {mountainGroups.length === 0 && (
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
+                No Mountain Group organizations yet — create one in the CRM (Organizations → type “Mountain Group”).
+              </p>
+            )}
           </div>
 
           <div>
