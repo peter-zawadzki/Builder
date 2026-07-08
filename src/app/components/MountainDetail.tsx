@@ -5,6 +5,7 @@ import { useData } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact } from '../context/DataContext';
 import { ContactDetail, DealDetailsModal, ContactForm } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
+import { CheckInOutModal } from './CheckInOutModal';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
@@ -138,6 +139,7 @@ export function MountainDetail() {
   const [crmContact, setCrmContact] = useState<CRMContact | null>(null);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showNextAction, setShowNextAction] = useState(false);
+  const [showCheckInOut, setShowCheckInOut] = useState(false);
 
   // Updates feed for the Status pane.
   const { getToken } = useAuth();
@@ -683,6 +685,12 @@ export function MountainDetail() {
                 <p className="text-[#6a7282] text-[12px] mt-0.5">{fmtCost(inventoryTotalCost)} total value</p>
               )}
             </div>
+            <button
+              onClick={() => setShowCheckInOut(true)}
+              className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+            >
+              <Truck size={14} /> Check out / in
+            </button>
           </div>
 
           {inventoryAssets.length === 0 ? (
@@ -777,6 +785,7 @@ export function MountainDetail() {
         />
       )}
       {showNextAction && <DealDetailsModal mountainId={mountainId!} onClose={() => setShowNextAction(false)} />}
+      {showCheckInOut && <CheckInOutModal mountainId={mountainId!} onClose={() => setShowCheckInOut(false)} />}
       {showAddContact && (
         <ContactForm
           contact={null}

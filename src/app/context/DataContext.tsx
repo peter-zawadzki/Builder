@@ -201,12 +201,16 @@ export const MOUNTAIN_DEPLOYMENTS = [
 export interface DeploymentLogEntry {
   mountainName: string;
   timestamp: string;
+  by?: string;                              // who checked it out/in
+  action?: 'Checked out' | 'Checked in';
 }
 
 export interface Asset {
   id: string;
   mountainId?: string;   // mountain-level ownership — set when added to inventory
   locationId?: string;   // optional — unset means "in inventory, not yet installed"
+  projectId?: string;    // the project this item is deployed to
+  assetClass?: 'Asset' | 'Expense';  // tracked asset vs. expensed consumable (default Asset)
   type: 'Camera' | 'Network Gear' | 'Miscellaneous' | 'Server';
   isDraft?: boolean;
   trail?: string;
