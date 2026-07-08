@@ -261,6 +261,37 @@ export type PipelineStage =
   | 'Verbal Yes' | 'Contract Sent' | 'Signed' | 'Installing' | 'Live' | 'Churned';
 export type StallReason = 'No response' | 'Waiting on legal' | 'Budget hold' | 'Timing — offseason' | 'Other';
 
+// ─── Projects (the unit of work on a mountain) ───────────────────────────────
+// Install / Repair / Upgrade. An Install always has a proposal ($0 allowed) and
+// runs the full sales stage list; Repair/Upgrade use a lightweight status.
+export type ProjectType = 'Install' | 'Repair' | 'Upgrade';
+export type ProjectWorkStatus = 'Open' | 'In Progress' | 'Done';
+
+export interface Project {
+  id: string;
+  mountainId: string;
+  name: string;
+  type: ProjectType;
+  stage?: PipelineStage;        // Install only — the full pipeline
+  status?: ProjectWorkStatus;   // Repair / Upgrade — lightweight
+  proposalId?: string;          // required for Install, optional for Upgrade
+  ownerUserId?: string;         // exactly one owner (required in UI)
+  ownerName?: string;           // display name of the current owner
+  isStalled?: boolean;
+  stallReason?: StallReason;
+  stallNote?: string;           // required when stallReason === 'Other'
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Does a project of this type require a proposal before it can be "sent"/advanced?
+export const PROJECT_REQUIRES_PROPOSAL: Record<ProjectType, boolean> = {
+  Install: true,
+  Repair: false,
+  Upgrade: false, // optional — allowed but not required
+};
+
 export interface ContactActivity {
   id: string;
   text: string;
@@ -354,6 +385,13 @@ interface DataContextType {
   addTrail: (trail: Omit<Trail, 'id'>) => string;
   updateTrail: (id: string, updates: Partial<Trail>) => void;
   deleteTrail: (id: string) => Promise<void>;
+  projects: Project[];
+  addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateProject: (id: string, updates: Partial<Project>) => void;
+  transferProjectOwner: (id: string, ownerUserId: string, ownerName: string) => void;
+  deleteProject: (id: string) => Promise<void>;
+  getProjectsByMountainId: (mountainId: string) => Project[];
+  getProjectById: (id: string) => Project | undefined;
   getAssetById: (id: string) => Asset | undefined;
   getLocationsByMountainId: (mountainId: string) => Location[];
   getAssetsByLocationId: (locationId: string) => Asset[];
@@ -398,6 +436,7 @@ const STORAGE_KEYS = {
   ASSETS: 'yullrLocal_assets',
   NOTES: 'yullrLocal_notes',
   TRAILS: 'yullrLocal_trails',
+  PROJECTS: 'yullrLocal_projects',
   OPTIONS: 'yullrLocal_options',
   ITEM_PRICES: 'yullrLocal_item_prices',
   PENDING_PHOTOS: 'yullrLocal_pendingPhotoSync',
@@ -588,6 +627,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTES) || '[]'); }
     catch { return []; }
   });
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.PROJECTS) || '[]'); }
+    catch { return []; }
+  });
   const [options, setOptions] = useState<Record<string, string[]>>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.OPTIONS) || '{}'); }
     catch { return {}; }
@@ -628,11 +671,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let localAssets: Asset[] = [];
         let localNotes: MountainNote[] = [];
         let localTrails: Trail[] = [];
+        let localProjects: Project[] = [];
         try { localMountains = JSON.parse(localStorage.getItem(STORAGE_KEYS.MOUNTAINS) || '[]'); } catch {}
         try { localLocations = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATIONS) || '[]'); } catch {}
         try { localAssets = JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSETS) || '[]'); } catch {}
         try { localNotes = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTES) || '[]'); } catch {}
         try { localTrails = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]'); } catch {}
+        try { localProjects = JSON.parse(localStorage.getItem(STORAGE_KEYS.PROJECTS) || '[]'); } catch {}
 
         // Fetch local photos first (IndexedDB — no network cost)
         const photoLookup = await photoDB.getAllPhotos().catch(() => ({}));
@@ -654,9 +699,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
 
         // Batch 2: large collections
-        const [assetsRes, notesRes] = await Promise.all([
+        const [assetsRes, notesRes, projectsRes] = await Promise.all([
           apiCall('/assets').catch(() => silent()),
           apiCall('/notes').catch(() => silent()),
+          apiCall('/projects').catch(() => silent()),
         ]);
 
         // Merge helper: server is authoritative for items it knows about;
@@ -704,6 +750,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           }
         }
         if (notesRes) setNotes(mergeById(notesRes.notes || [], localNotes, 'notes'));
+        if (projectsRes) setProjects(mergeById(projectsRes.projects || [], localProjects, 'projects'));
         if (optionsRes?.options) {
           // Merge server options with any locally-added options
           setOptions(prev => {
@@ -906,6 +953,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       catch (e) { console.error('Error saving trails:', e); }
     }
   }, [trails, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects)); }
+      catch (e) { console.error('Error saving projects:', e); }
+    }
+  }, [projects, isLoading]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -1130,6 +1184,51 @@ export function DataProvider({ children }: { children: ReactNode }) {
     syncOrQueue(`/trails/${id}`, 'DELETE', null)
       .catch(e => console.error('Trail delete sync error:', e));
   };
+
+  // ─── Projects ─────────────────────────────────────────────────────────────
+  // The unit of work on a mountain. Install/Repair/Upgrade; see Project type.
+
+  const addProject = (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const newProject: Project = { ...project, id, createdAt: now, updatedAt: now };
+    setProjects(prev => [...prev, newProject]);
+    syncOrQueue('/projects', 'POST', JSON.stringify(newProject))
+      .catch(e => console.error('Project sync error:', e));
+    logActivity(newProject.mountainId, 'project_created', `Created ${newProject.type} project "${newProject.name}"`);
+    return id;
+  };
+
+  const updateProject = (id: string, updates: Partial<Project>) => {
+    const patch = { ...updates, updatedAt: new Date().toISOString() };
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+    syncOrQueue(`/projects/${id}`, 'PUT', JSON.stringify(patch))
+      .catch(e => console.error('Project update sync error:', e));
+  };
+
+  // Transfer sole ownership; logged with old → new owner.
+  const transferProjectOwner = (id: string, ownerUserId: string, ownerName: string) => {
+    const project = projects.find(p => p.id === id);
+    updateProject(id, { ownerUserId, ownerName });
+    if (project) {
+      logActivity(project.mountainId, 'owner_transferred', `Project "${project.name}" owner: ${project.ownerName || '—'} → ${ownerName}`);
+    }
+  };
+
+  const deleteProject = async (id: string) => {
+    const project = projects.find(p => p.id === id);
+    // Unlink anything pointed at this project (don't delete it).
+    setNotes(prev => prev.map(n => (n as any).projectId === id ? { ...n, projectId: undefined } : n));
+    setAssets(prev => prev.map(a => (a as any).projectId === id ? { ...a, projectId: undefined } : a));
+    setProjects(prev => prev.filter(p => p.id !== id));
+    addTombstone('projects', id);
+    if (project) logActivity(project.mountainId, 'project_deleted', `Deleted project "${project.name}"`);
+    syncOrQueue(`/projects/${id}`, 'DELETE', null)
+      .catch(e => console.error('Project delete sync error:', e));
+  };
+
+  const getProjectsByMountainId = (mountainId: string) => projects.filter(p => p.mountainId === mountainId);
+  const getProjectById = (id: string) => projects.find(p => p.id === id);
 
   // ─── Notes ──────────────────────────────────────────────────────────────────
 
@@ -1420,6 +1519,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         addTrail,
         updateTrail,
         deleteTrail,
+        projects,
+        addProject,
+        updateProject,
+        transferProjectOwner,
+        deleteProject,
+        getProjectsByMountainId,
+        getProjectById,
         getAssetById,
         getLocationsByMountainId,
         getAssetsByLocationId,
