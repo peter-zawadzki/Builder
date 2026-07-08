@@ -5,7 +5,7 @@ import {
   ArrowLeft, Users, Building2, Activity, Bell, LayoutDashboard, Mountain,
   Plus, Search, X, ChevronRight, Pencil, Trash2, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Phone, Mail, Star, Calendar,
-  ExternalLink, Check, MessageSquare, ListTodo, ChevronLeft,
+  ExternalLink, Check, MessageSquare, ListTodo, ChevronLeft, Archive,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import type {
@@ -402,6 +402,17 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
         <button onClick={() => setShowEdit(true)} className="p-1.5 rounded-[8px] bg-[#eef3fb] active:bg-[#dce8f4]" title="Edit contact">
           <Pencil size={15} className="text-[#307fe2]" />
         </button>
+        <button
+          onClick={() => {
+            updateContact(contact.id, { archived: !contact.archived });
+            toast.success(contact.archived ? 'Restored' : 'Archived');
+            if (!contact.archived) onBack();
+          }}
+          className="p-1.5 rounded-[8px] bg-[#f3f3f5] active:bg-[#e8e8ea]"
+          title={contact.archived ? 'Restore' : 'Archive'}
+        >
+          <Archive size={15} className="text-[#6a7282]" />
+        </button>
         <button onClick={() => setShowDelete(true)} className="p-1.5 rounded-[8px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete contact">
           <Trash2 size={15} className="text-[#F95C39]" />
         </button>
@@ -524,6 +535,7 @@ function Contacts() {
   const [editTarget, setEditTarget] = useState<CRMContact | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CRMContact | null>(null);
   const [selectedContact, setSelectedContact] = useState<CRMContact | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem('crm_imported') !== 'true') {
@@ -534,18 +546,21 @@ function Contacts() {
 
   const filtered = useMemo(() => {
     let list = contacts;
+    if (!showArchived) list = list.filter(c => !c.archived);
     if (filterType) list = list.filter(c => c.type === filterType);
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(c =>
         c.name.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
+        (c.emails || []).some(e => e.toLowerCase().includes(q)) ||
         (c.title || '').toLowerCase().includes(q) ||
+        (c.notes || '').toLowerCase().includes(q) ||
         (c.mountainId ? (mountains.find(m => m.id === c.mountainId)?.name || '').toLowerCase().includes(q) : false),
       );
     }
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [contacts, search, filterType, mountains]);
+  }, [contacts, search, filterType, mountains, showArchived]);
 
   // Show detail view if contact selected
   if (selectedContact) {
@@ -571,6 +586,7 @@ function Contacts() {
         {CONTACT_TYPES.map(t => (
           <button key={t} onClick={() => setFilterType(filterType === t ? '' : t)} className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${filterType === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
         ))}
+        <button onClick={() => setShowArchived(v => !v)} className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ml-auto ${showArchived ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>Archived</button>
       </div>
 
       {filtered.length === 0 ? (
@@ -835,13 +851,15 @@ function Organizations() {
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<CRMOrganization | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CRMOrganization | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const filtered = useMemo(() => {
     let list = organizations;
+    if (!showArchived) list = list.filter(o => !o.archived);
     if (filterType) list = list.filter(o => o.type === filterType);
-    if (search) list = list.filter(o => o.name.toLowerCase().includes(search.toLowerCase()));
+    if (search) list = list.filter(o => o.name.toLowerCase().includes(search.toLowerCase()) || (o.notes || '').toLowerCase().includes(search.toLowerCase()));
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [organizations, search, filterType]);
+  }, [organizations, search, filterType, showArchived]);
 
   return (
     <div className="p-4 space-y-3">
@@ -860,6 +878,7 @@ function Organizations() {
         {ORG_TYPES.map(t => (
           <button key={t} onClick={() => setFilterType(filterType === t ? '' : t)} className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${filterType === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
         ))}
+        <button onClick={() => setShowArchived(v => !v)} className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ml-auto ${showArchived ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>Archived</button>
       </div>
 
       {filtered.length === 0 ? (
@@ -974,6 +993,9 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
           </div>
         </div>
         <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
+          {org && (
+            <button onClick={() => { updateOrganization(org.id, { archived: !org.archived }); toast.success(org.archived ? 'Restored' : 'Archived'); onClose(); }} className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title={org.archived ? 'Restore' : 'Archive'}><Archive size={16} className="text-[#6a7282]" /></button>
+          )}
           {org && (
             <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete organization"><Trash2 size={16} className="text-[#F95C39]" /></button>
           )}
