@@ -5,7 +5,7 @@ import { useData } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact } from '../context/DataContext';
 import { ContactDetail, DealDetailsModal, ContactForm } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
-import { CheckInOutModal } from './CheckInOutModal';
+import { AssignInventoryModal } from './CheckInOutModal';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
@@ -700,7 +700,7 @@ export function MountainDetail() {
               onClick={() => setShowCheckInOut(true)}
               className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
             >
-              <Truck size={14} /> Check out / in
+              <Truck size={14} /> Assign
             </button>
           </div>
 
@@ -805,7 +805,7 @@ export function MountainDetail() {
         />
       )}
       {showNextAction && <DealDetailsModal mountainId={mountainId!} onClose={() => setShowNextAction(false)} />}
-      {showCheckInOut && <CheckInOutModal mountainId={mountainId!} onClose={() => setShowCheckInOut(false)} />}
+      {showCheckInOut && <AssignInventoryModal mountainId={mountainId!} onClose={() => setShowCheckInOut(false)} />}
       {showAddContact && (
         <ContactForm
           contact={null}

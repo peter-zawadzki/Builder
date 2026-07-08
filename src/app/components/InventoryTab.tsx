@@ -17,6 +17,7 @@ import {
   INVENTORY_SUBCATEGORIES, MOUNTAIN_DEPLOYMENTS,
 } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { useIsSuperAdmin } from '../hooks/useRole';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -940,11 +941,13 @@ function AssetCard({
   onEdit,
   onDelete,
   componentCount,
+  canManage,
 }: {
   asset: Asset;
   onEdit: () => void;
   onDelete: () => void;
   componentCount?: number;
+  canManage: boolean;
 }) {
   const cat = asset.inventoryCategory;
 
@@ -989,14 +992,16 @@ function AssetCard({
           </div>
         </div>
 
-        <div className="flex gap-1 shrink-0">
-          <button onClick={onEdit} className="p-1.5 rounded-[6px] bg-[#eef3fb] active:bg-[#dce8f4]">
-            <Pencil size={13} className="text-[#307fe2]" />
-          </button>
-          <button onClick={onDelete} className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]">
-            <Trash2 size={14} className="text-[#F95C39]" />
-          </button>
-        </div>
+        {canManage && (
+          <div className="flex gap-1 shrink-0">
+            <button onClick={onEdit} className="p-1.5 rounded-[6px] bg-[#eef3fb] active:bg-[#dce8f4]">
+              <Pencil size={13} className="text-[#307fe2]" />
+            </button>
+            <button onClick={onDelete} className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]">
+              <Trash2 size={14} className="text-[#F95C39]" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Deployment log strip */}
@@ -1155,6 +1160,7 @@ function FilterBar({ filters, onChange, mountainOptions }: { filters: Filters; o
 
 export function InventoryTab() {
   const { assets, deleteAsset, updateAsset, mountains } = useData();
+  const isSuperAdmin = useIsSuperAdmin();
   const mountainOptions = useMemo(
     () => ['Unassigned / Warehouse', ...mountains.map(m => m.name).sort()],
     [mountains],
@@ -1246,22 +1252,24 @@ export function InventoryTab() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setEditTarget(null); setPreloadServer(true); setShowAdd(true); }}
-            className="flex items-center gap-1.5 bg-[#1D2930] text-white px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] active:opacity-80"
-          >
-            <ServerIcon size={13} />
-            Build Server
-          </button>
-          <button
-            onClick={() => { setEditTarget(null); setPreloadServer(false); setShowAdd(true); }}
-            className="flex items-center gap-1.5 bg-[#F95C39] text-white px-3.5 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
-          >
-            <Plus size={14} />
-            Add Item
-          </button>
-        </div>
+        {isSuperAdmin && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setEditTarget(null); setPreloadServer(true); setShowAdd(true); }}
+              className="flex items-center gap-1.5 bg-[#1D2930] text-white px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] active:opacity-80"
+            >
+              <ServerIcon size={13} />
+              Build Server
+            </button>
+            <button
+              onClick={() => { setEditTarget(null); setPreloadServer(false); setShowAdd(true); }}
+              className="flex items-center gap-1.5 bg-[#F95C39] text-white px-3.5 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
+            >
+              <Plus size={14} />
+              Add Item
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter bar */}
@@ -1307,6 +1315,7 @@ export function InventoryTab() {
             <AssetCard
               key={a.id}
               asset={a}
+              canManage={isSuperAdmin}
               componentCount={componentCountFor(a)}
               onEdit={() => { setEditTarget(a); setShowAdd(true); }}
               onDelete={() => setDeleteTarget(a)}
@@ -1361,9 +1370,11 @@ export function InventoryTab() {
                             {a.cost !== undefined && (
                               <span className="text-[11px] text-[#6a7282]">{fmt(a.cost)}</span>
                             )}
-                            <button onClick={() => { setEditTarget(a); setShowAdd(true); }} className="p-1.5 rounded-[6px] bg-[#eef3fb] active:bg-[#dce8f4]">
-                              <Pencil size={12} className="text-[#307fe2]" />
-                            </button>
+                            {isSuperAdmin && (
+                              <button onClick={() => { setEditTarget(a); setShowAdd(true); }} className="p-1.5 rounded-[6px] bg-[#eef3fb] active:bg-[#dce8f4]">
+                                <Pencil size={12} className="text-[#307fe2]" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}

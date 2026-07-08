@@ -582,8 +582,7 @@ function Contacts() {
   }, []);
 
   const filtered = useMemo(() => {
-    let list = contacts;
-    if (!showArchived) list = list.filter(c => !c.archived);
+    let list = contacts.filter(c => showArchived ? c.archived : !c.archived);
     if (filterType) list = list.filter(c => c.type === filterType);
     if (search) {
       const q = search.toLowerCase();
@@ -651,7 +650,11 @@ function Contacts() {
                   {c.title && <p className="text-[12px] text-[#6a7282]">{c.title}</p>}
                   {c.email && <p className="text-[11px] text-[#6a7282] mt-0.5">{c.email}</p>}
                 </button>
-                <button onClick={() => setSelectedContact(c)} className="shrink-0 self-center p-1 active:opacity-70"><ChevronRight size={16} className="text-[#c0c4cc]" /></button>
+                {showArchived ? (
+                  <button onClick={() => { updateContact(c.id, { archived: false }); toast.success('Restored'); }} className="shrink-0 self-center text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] px-2 py-1 active:opacity-70">Restore</button>
+                ) : (
+                  <button onClick={() => setSelectedContact(c)} className="shrink-0 self-center p-1 active:opacity-70"><ChevronRight size={16} className="text-[#c0c4cc]" /></button>
+                )}
               </div>
             );
           })}
@@ -891,8 +894,7 @@ function Organizations() {
   const [showArchived, setShowArchived] = useState(false);
 
   const filtered = useMemo(() => {
-    let list = organizations;
-    if (!showArchived) list = list.filter(o => !o.archived);
+    let list = organizations.filter(o => showArchived ? o.archived : !o.archived);
     if (filterType) list = list.filter(o => o.type === filterType);
     if (search) list = list.filter(o => o.name.toLowerCase().includes(search.toLowerCase()) || (o.notes || '').toLowerCase().includes(search.toLowerCase()));
     return list.sort((a, b) => a.name.localeCompare(b.name));
@@ -931,7 +933,9 @@ function Organizations() {
                   <div className="flex items-center gap-2 mb-1">
                     <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org.name}</p>
                     <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{org.type}</span>
-                    <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />
+                    {org.archived
+                      ? <span onClick={e => { e.stopPropagation(); updateOrganization(org.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0">Restore</span>
+                      : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
                   </div>
                   {linkedContacts.length > 0 && <p className="text-[12px] text-[#6a7282]">{linkedContacts.length} contact{linkedContacts.length !== 1 ? 's' : ''}</p>}
                   {org.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{org.notes}</p>}
