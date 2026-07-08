@@ -28,7 +28,6 @@ export function MountainsList() {
 
   const [mapView, setMapView] = useState<MapViewState | null>(null);
   const [notesModalMountainId, setNotesModalMountainId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'name' | 'activity' | 'owner'>('name');
   const [filterState, setFilterState] = useState<string>('all');
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -208,18 +207,11 @@ export function MountainsList() {
       filtered = filtered.filter(m => getProjectsByMountainId(m.id).some(p => p.ownerName === filterOwner));
     }
 
-    // Sort
-    if (sortBy === 'name') {
-      filtered.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortBy === 'activity') {
-      filtered.sort((a, b) => getMostRecentActivity(b.id).getTime() - getMostRecentActivity(a.id).getTime());
-    } else if (sortBy === 'owner') {
-      const firstOwner = (id: string) => getProjectsByMountainId(id)[0]?.ownerName || '~'; // unowned sort last
-      filtered.sort((a, b) => firstOwner(a.id).localeCompare(firstOwner(b.id)) || a.name.localeCompare(b.name));
-    }
+    // Always alphabetical A–Z.
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     return filtered;
-  }, [mountains, sortBy, filterState, filterOwner, search, projects]);
+  }, [mountains, filterState, filterOwner, search, projects]);
 
   const openMap = async (e: React.MouseEvent, mountainId: string, mountainName: string) => {
     e.preventDefault();
@@ -251,10 +243,10 @@ export function MountainsList() {
       {/* Content */}
       <div className="flex-1 p-4">
         {/* Sort and Filter Controls */}
-        {mountains.length > 0 && (
-          <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-3 mb-3 space-y-3">
-            {/* Search */}
-            <div className="relative">
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-3 mb-3 space-y-3">
+          {/* Search + Add mountain */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
               <input
                 type="text"
@@ -264,29 +256,16 @@ export function MountainsList() {
                 className="w-full bg-[#f3f3f5] rounded-[6px] pl-9 pr-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] border-none outline-none"
               />
             </div>
+            <button
+              onClick={() => navigate('/mountains/new')}
+              className="shrink-0 flex items-center gap-1.5 bg-[#ff5c39] text-white px-3.5 py-2 rounded-[6px] text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
+            >
+              <Plus size={15} /> Add mountain
+            </button>
+          </div>
 
+          {mountains.length > 0 && (
             <div className="flex flex-col sm:flex-row gap-3">
-              {/* Sort By */}
-              <div className="flex-1">
-                <label className="block text-[#6a7282] font-['Inter:Medium',sans-serif] text-[11px] mb-1.5 uppercase tracking-wider">
-                  Sort By
-                </label>
-                <div className="flex gap-2">
-                  {([['name', 'A-Z'], ['activity', 'Recent'], ['owner', 'Owner']] as const).map(([key, label]) => (
-                    <button
-                      key={key}
-                      onClick={() => setSortBy(key)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[6px] text-[13px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${
-                        sortBy === key ? 'bg-[#ff5c39] text-white' : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
-                      }`}
-                    >
-                      <ArrowUpDown size={13} />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Filter by State */}
               <div className="flex-1">
                 <label className="block text-[#6a7282] font-['Inter:Medium',sans-serif] text-[11px] mb-1.5 uppercase tracking-wider">
@@ -327,8 +306,8 @@ export function MountainsList() {
                 </select>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {mountains.length === 0 ? (
           <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-8 text-center">
