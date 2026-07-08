@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router";
 import { UserButton } from "@clerk/clerk-react";
-import { Mountain, Users, Boxes, UserPlus, Wrench, Database, TrendingUp, Activity as ActivityIcon, Bell } from "lucide-react";
+import { Mountain, Users, Boxes, UserPlus, Wrench, Database, TrendingUp, Activity as ActivityIcon, Bell, FolderKanban } from "lucide-react";
 import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
 import { useIsSuperAdmin } from "../hooks/useRole";
 import { Pipeline, ActivityFeed, FollowUps } from "./crm/CRM";
@@ -30,6 +30,9 @@ export function HomeDashboard() {
             </UserButton>
           </div>
           <div className="absolute right-0 top-0 flex items-center gap-2">
+            <Link to="/projects">
+              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Projects"><FolderKanban size={20} className="text-[#6a7282]" /></button>
+            </Link>
             <Link to="/mountains">
               <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Mountains"><Mountain size={20} className="text-[#6a7282]" /></button>
             </Link>
