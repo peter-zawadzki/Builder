@@ -24,20 +24,7 @@ export function AppHeader() {
         <Link to="/"><img src={imgImageYullrLogo} alt="Yullr" className="h-16 mb-3" /></Link>
         <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[24px]">Mountain Builder</h1>
 
-        {/* Left: signed-in user (super-admin gets admin actions) */}
-        <div className="absolute left-0 top-0 flex items-center h-9">
-          <UserButton appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }}>
-            {isSuperAdmin && (
-              <UserButton.MenuItems>
-                <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
-                <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
-                <UserButton.Action label="Local DB check" labelIcon={<Database size={16} />} onClick={() => navigate('/system-check')} />
-              </UserButton.MenuItems>
-            )}
-          </UserButton>
-        </div>
-
-        {/* Right: primary section navigation — active icon highlighted orange */}
+        {/* Right: section navigation (active icon orange), then the signed-in user */}
         <div className="absolute right-0 top-0 flex items-center gap-2">
           {NAV.map(({ to, Icon, label, match }) => {
             const active = match(pathname);
@@ -53,6 +40,17 @@ export function AppHeader() {
               </Link>
             );
           })}
+          <div className="flex items-center h-9 pl-1">
+            <UserButton appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }}>
+              {isSuperAdmin && (
+                <UserButton.MenuItems>
+                  <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
+                  <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
+                  <UserButton.Action label="Local DB check" labelIcon={<Database size={16} />} onClick={() => navigate('/system-check')} />
+                </UserButton.MenuItems>
+              )}
+            </UserButton>
+          </div>
         </div>
       </div>
     </div>

@@ -19,13 +19,15 @@ const emptyContact = (): Contact => ({
 
 export function CreateMountain() {
   const navigate = useNavigate();
-  const { addMountain, addTrail } = useData();
+  const { addMountain, addTrail, organizations } = useData();
+  const mountainGroups = organizations.filter(o => o.type === 'Mountain Group').sort((a, b) => a.name.localeCompare(b.name));
 
   const [formData, setFormData] = useState({
     name: '',
     address: '',
     billingAddress: '',
     parentOrganization: '',
+    organizationId: '',
     legalEntity: '',
     phone: '',
     website: '',
@@ -342,14 +344,22 @@ export function CreateMountain() {
 
           <div>
             <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Parent Organization</label>
-            <AddableSelect
-              optionKey="mountain:parentOrganizations"
-              value={formData.parentOrganization}
-              onChange={v => updateField('parentOrganization', v)}
-              placeholder="Select organization"
-              defaultOptions={DEFAULT_PARENT_ORGS}
+            <select
+              value={formData.organizationId}
+              onChange={e => {
+                const org = mountainGroups.find(o => o.id === e.target.value);
+                setFormData(prev => ({ ...prev, organizationId: org?.id || '', parentOrganization: org?.name || '' }));
+              }}
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px]"
-            />
+            >
+              <option value="">— None —</option>
+              {mountainGroups.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            {mountainGroups.length === 0 && (
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
+                No Mountain Group organizations yet — create one in the CRM (Organizations → type “Mountain Group”).
+              </p>
+            )}
           </div>
 
           <div>

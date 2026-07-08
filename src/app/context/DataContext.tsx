@@ -255,7 +255,7 @@ export interface Asset {
 
 export type ContactType = 'Resort' | 'Partner' | 'Vendor' | 'Investor' | 'Advisor' | 'Coach' | 'Team' | 'General';
 export type ContactTag = 'Decision Maker' | 'Technical' | 'Champion' | 'Billing' | 'Legal';
-export type OrgType = 'Partner' | 'Vendor' | 'Investor Group' | 'Advisory' | 'Corporate Group';
+export type OrgType = 'Mountain Group' | 'Partner' | 'Vendor' | 'Investor Group' | 'Advisory' | 'Corporate Group';
 export type PipelineStage =
   | 'Prospect' | 'Contacted' | 'Demo Scheduled' | 'Positive'
   | 'Verbal Yes' | 'Contract Sent' | 'Signed' | 'Installing' | 'Live' | 'Churned';

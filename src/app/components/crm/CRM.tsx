@@ -38,7 +38,7 @@ const STAGE_COLORS: Record<PipelineStage, string> = {
 
 const CONTACT_TYPES: ContactType[] = ['Resort', 'Partner', 'Vendor', 'Investor', 'Advisor', 'Coach', 'Team', 'General'];
 const CONTACT_TAGS: ContactTag[] = ['Decision Maker', 'Technical', 'Champion', 'Billing', 'Legal'];
-const ORG_TYPES: OrgType[] = ['Partner', 'Vendor', 'Investor Group', 'Advisory', 'Corporate Group'];
+const ORG_TYPES: OrgType[] = ['Mountain Group', 'Partner', 'Vendor', 'Investor Group', 'Advisory', 'Corporate Group'];
 const STALL_REASONS: StallReason[] = ['No response', 'Waiting on legal', 'Budget hold', 'Timing — offseason', 'Other'];
 
 type CRMTab = 'dashboard' | 'pipeline' | 'contacts' | 'organizations' | 'activity' | 'followups' | 'mountains';
