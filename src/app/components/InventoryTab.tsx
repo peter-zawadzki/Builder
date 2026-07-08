@@ -69,6 +69,7 @@ interface AssetFormData {
   dateOfPurchase: string;
   vendor: string;
   cost: string;
+  assetClass: 'Asset' | 'Expense';
   mountainDeployment: string;
   notes: string;
   locationId: string;
@@ -105,6 +106,7 @@ const EMPTY_FORM: AssetFormData = {
   dateOfPurchase: '',
   vendor: '',
   cost: '',
+  assetClass: 'Asset',
   mountainDeployment: 'Unassigned / Warehouse',
   notes: '',
   locationId: '',
@@ -140,6 +142,7 @@ function assetToForm(a: Asset, assets: Asset[]): AssetFormData {
     dateOfPurchase: a.dateOfPurchase || '',
     vendor: a.vendor || '',
     cost: a.cost !== undefined ? String(a.cost) : '',
+    assetClass: a.assetClass || 'Asset',
     mountainDeployment: a.mountainDeployment || 'Unassigned / Warehouse',
     notes: a.notes || '',
     locationId: a.locationId || '',
@@ -455,6 +458,7 @@ function AddEditModal({
       dateOfPurchase: form.dateOfPurchase || undefined,
       vendor: form.vendor || undefined,
       cost: costVal,
+      assetClass: form.assetClass || 'Asset',
       mountainDeployment: form.mountainDeployment,
       notes: form.notes || undefined,
       locationId: form.locationId || undefined,
@@ -669,6 +673,15 @@ function AddEditModal({
                       <input type="number" min="0" step="0.01" value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="0.00" className="w-full bg-[#f3f3f5] rounded-[8px] pl-7 pr-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Class</label>
+                    <div className="flex gap-2">
+                      {(['Asset', 'Expense'] as const).map(c => (
+                        <button key={c} type="button" onClick={() => set('assetClass', c)} className={`flex-1 px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${(form.assetClass || 'Asset') === c ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{c}</button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[#8992a0] mt-1">Assets are tracked &amp; reconciled (cameras, servers). Expenses are consumables (cables, gateways).</p>
+                  </div>
                   <MountainLocationFields />
                   <div>
                     <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
@@ -754,6 +767,15 @@ function AddEditModal({
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282] text-[14px]">$</span>
                       <input type="number" min="0" step="0.01" value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="0.00" className="w-full bg-[#f3f3f5] rounded-[8px] pl-7 pr-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Class</label>
+                    <div className="flex gap-2">
+                      {(['Asset', 'Expense'] as const).map(c => (
+                        <button key={c} type="button" onClick={() => set('assetClass', c)} className={`flex-1 px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${(form.assetClass || 'Asset') === c ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{c}</button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[#8992a0] mt-1">Assets are tracked &amp; reconciled (cameras, servers). Expenses are consumables (cables, gateways).</p>
                   </div>
                   <MountainLocationFields />
                   <div>
@@ -877,6 +899,15 @@ function AddEditModal({
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282] text-[14px]">$</span>
                       <input type="number" min="0" step="0.01" value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="0.00" className="w-full bg-[#f3f3f5] rounded-[8px] pl-7 pr-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Class</label>
+                    <div className="flex gap-2">
+                      {(['Asset', 'Expense'] as const).map(c => (
+                        <button key={c} type="button" onClick={() => set('assetClass', c)} className={`flex-1 px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${(form.assetClass || 'Asset') === c ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{c}</button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[#8992a0] mt-1">Assets are tracked &amp; reconciled (cameras, servers). Expenses are consumables (cables, gateways).</p>
                   </div>
                   <MountainLocationFields />
                   <div>

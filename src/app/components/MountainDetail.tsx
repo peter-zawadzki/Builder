@@ -201,6 +201,14 @@ export function MountainDetail() {
   const affiliates = affiliateIds.map(id => contacts.find(c => c.id === id)).filter(Boolean) as CRMContact[];
   const addableAffiliates = yullrMembers.filter(m => !affiliateIds.includes(m.id));
 
+  // Inventory class subtotals + inspection reconciliation.
+  const mountainAssetsAll = getAssetsByMountainId(mountainId!);
+  const trackedCount = mountainAssetsAll.filter(a => (a.assetClass || 'Asset') === 'Asset').length;
+  const expensedCount = mountainAssetsAll.filter(a => a.assetClass === 'Expense').length;
+  const inspectedCameras = allLocations.reduce((sum, l) => sum + ((l.inspection?.items || []).filter(i => i.type === 'Camera').reduce((s, i) => s + i.count, 0)), 0);
+  const deployedCameras = mountainAssetsAll.filter(a => a.type === 'Camera' && a.inventoryStatus === 'Deployed').length;
+  const cameraMismatch = inspectedCameras > 0 && deployedCameras !== inspectedCameras;
+
   // Resolve / persist a single contact by its slot in the mountain record.
   const contactForSlot = (slot: ContactSlot): Contact | undefined =>
     slot.type === 'admin' ? mountain.adminContact
@@ -684,6 +692,9 @@ export function MountainDetail() {
               {inventoryTotalCost > 0 && (
                 <p className="text-[#6a7282] text-[12px] mt-0.5">{fmtCost(inventoryTotalCost)} total value</p>
               )}
+              {(trackedCount > 0 || expensedCount > 0) && (
+                <p className="text-[#8992a0] text-[11px] mt-0.5">{trackedCount} tracked · {expensedCount} expensed</p>
+              )}
             </div>
             <button
               onClick={() => setShowCheckInOut(true)}
@@ -692,6 +703,15 @@ export function MountainDetail() {
               <Truck size={14} /> Check out / in
             </button>
           </div>
+
+          {cameraMismatch && (
+            <div className="mb-3 flex items-start gap-2 bg-[#fff4f1] border border-[rgba(249,92,57,0.25)] rounded-[10px] px-3 py-2.5">
+              <Info size={14} className="text-[#F95C39] shrink-0 mt-0.5" />
+              <p className="text-[12px] text-[#a23a22]">
+                Install differs from inspection — inspected <b>{inspectedCameras}</b> camera{inspectedCameras === 1 ? '' : 's'}, {deployedCameras} deployed. Reconcile before closing the project.
+              </p>
+            </div>
+          )}
 
           {inventoryAssets.length === 0 ? (
             <div className="py-8 text-center">
