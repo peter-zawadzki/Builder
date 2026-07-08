@@ -605,7 +605,7 @@ export function EditMountain() {
 
         {/* Organization & Billing */}
         <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
-          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Organization & Billing</h2>
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Organization</h2>
 
           <div>
             <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Parent Organization</label>
@@ -632,46 +632,6 @@ export function EditMountain() {
             )}
           </div>
 
-          <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Legal Entity</label>
-            <input
-              type="text"
-              value={formData.legalEntity}
-              onChange={e => updateField('legalEntity', e.target.value)}
-              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
-              placeholder="e.g., Whistler Mountain Resort Ltd."
-            />
-            <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
-              Full legal name used for contracts and agreements
-            </p>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px]">Billing Address</label>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <div
-                  className={`w-10 h-6 rounded-full transition-colors relative ${billingSameAsMain ? 'bg-[#307fe2]' : 'bg-[#d1d5db]'}`}
-                  onClick={() => setBillingSameAsMain(v => !v)}
-                >
-                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${billingSameAsMain ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </div>
-                <span className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">Same as address</span>
-              </label>
-            </div>
-            {!billingSameAsMain && (
-              <AddressAutocomplete
-                value={formData.billingAddress}
-                onChange={v => updateField('billingAddress', v)}
-                placeholder="Search or enter billing address"
-              />
-            )}
-            {billingSameAsMain && (
-              <div className="bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px]">
-                {formData.address || 'Same as mountain address'}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Contacts are managed from the CRM, not here. Existing contact data
