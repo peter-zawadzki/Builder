@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
-import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes, Wrench, Search } from 'lucide-react';
+import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes, Wrench, Search, Building2, Navigation } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -22,7 +22,7 @@ interface MapViewState {
 }
 
 export function MountainsList() {
-  const { mountains, trails, assets, projects, getNotesByMountainId, getLocationsByMountainId, getProjectsByMountainId } = useData();
+  const { mountains, trails, assets, projects, contacts, organizations, getNotesByMountainId, getLocationsByMountainId, getProjectsByMountainId } = useData();
   const navigate = useNavigate();
   const isSuperAdmin = useIsSuperAdmin();
 
@@ -333,9 +333,10 @@ export function MountainsList() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filteredAndSortedMountains.map((mountain) => {
               const trailCount = trails.filter(t => t.mountainId === mountain.id).length;
-              const installedCameras = assets.filter(
-                a => a.mountainId === mountain.id && a.type === 'Camera' && !!a.locationId
-              ).length;
+              const locationCount = getLocationsByMountainId(mountain.id).length;
+              const cameraCount = assets.filter(a => a.mountainId === mountain.id && a.type === 'Camera').length;
+              const contactCount = contacts.filter(c => c.mountainId === mountain.id).length;
+              const org = mountain.organizationId ? organizations.find(o => o.id === mountain.organizationId) : undefined;
               const mountainNotes = getNotesByMountainId(mountain.id);
               const noteCount = mountainNotes.length;
 
@@ -423,22 +424,25 @@ export function MountainsList() {
                     <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-2">
                       {mountain.phone}
                     </p>
-                    {(trailCount > 0 || installedCameras > 0) && (
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {trailCount > 0 && (
-                          <span className="flex items-center gap-1 bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                            <MapPin size={10} />
-                            {trailCount} trail{trailCount !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {installedCameras > 0 && (
-                          <span className="flex items-center gap-1 bg-[#fff3f0] text-[#ff5c39] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                            <Camera size={10} />
-                            {installedCameras}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {org && (
+                        <span className="flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                          <Building2 size={10} /> {org.name}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                        <MapPin size={10} /> {trailCount} trail{trailCount !== 1 ? 's' : ''}
+                      </span>
+                      <span className="flex items-center gap-1 bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                        <Navigation size={10} /> {locationCount} location{locationCount !== 1 ? 's' : ''}
+                      </span>
+                      <span className="flex items-center gap-1 bg-[#fff3f0] text-[#ff5c39] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                        <Camera size={10} /> {cameraCount} camera{cameraCount !== 1 ? 's' : ''}
+                      </span>
+                      <span className="flex items-center gap-1 bg-[#eef3fb] text-[#307fe2] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                        <Users size={10} /> {contactCount} contact{contactCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
                     {/* Project status — one bar per project */}
                     <div className="mt-auto">
                       {(() => {
