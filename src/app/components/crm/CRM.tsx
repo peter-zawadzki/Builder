@@ -618,8 +618,33 @@ function Contacts() {
   );
 }
 
+// Fuzzy duplicate check for new contacts: exact match on any email/phone, or
+// same first+last name token.
+function nameTokens(n: string) {
+  return n.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean);
+}
+function findDuplicateContacts(
+  form: { name: string; email: string; emails: string[]; phone: string; mobilePhone: string; workPhone: string },
+  contacts: CRMContact[],
+): CRMContact[] {
+  const emails = [form.email, ...form.emails].map(s => s.trim().toLowerCase()).filter(Boolean);
+  const phones = [form.phone, form.mobilePhone, form.workPhone].map(s => s.replace(/\D/g, '')).filter(p => p.length >= 7);
+  const toks = nameTokens(form.name);
+  const first = toks[0]; const last = toks[toks.length - 1];
+  return contacts.filter(c => {
+    const cEmails = [c.email, ...(c.emails || [])].map(s => (s || '').toLowerCase());
+    if (emails.some(e => cEmails.includes(e))) return true;
+    const cPhones = [c.phone, c.mobilePhone, c.workPhone].map(s => (s || '').replace(/\D/g, '')).filter(Boolean);
+    if (phones.some(p => cPhones.includes(p))) return true;
+    const ct = nameTokens(c.name);
+    if (ct.length && first && last && ct[0] === first && ct[ct.length - 1] === last) return true;
+    return false;
+  });
+}
+
 function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose: () => void }) {
-  const { addContact, updateContact, mountains, organizations } = useData();
+  const { addContact, updateContact, contacts, mountains, organizations } = useData();
+  const [dupCandidates, setDupCandidates] = useState<CRMContact[] | null>(null);
   const [form, setForm] = useState({
     name: contact?.name || '',
     email: contact?.email || '',
@@ -640,8 +665,7 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
   const toggleTag = (t: ContactTag) => set('tags', form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]);
 
-  const save = () => {
-    if (!form.name.trim()) { toast.error('Name is required'); return; }
+  const doSave = () => {
     const data = {
       ...form,
       mountainId: form.mountainId || undefined,
@@ -655,6 +679,16 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
     else addContact({ ...data, activities: [] });
     toast.success(contact ? 'Contact updated' : 'Contact added');
     onClose();
+  };
+
+  const save = () => {
+    if (!form.name.trim()) { toast.error('Name is required'); return; }
+    // Only warn on new contacts.
+    if (!contact) {
+      const dups = findDuplicateContacts(form, contacts);
+      if (dups.length > 0) { setDupCandidates(dups); return; }
+    }
+    doSave();
   };
 
   return (
@@ -766,6 +800,27 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
           <button onClick={save} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Save</button>
         </div>
       </div>
+
+      {dupCandidates && (
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setDupCandidates(null); }}>
+          <div className="bg-white rounded-[16px] w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-[16px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] mb-1">Possible duplicate</h3>
+            <p className="text-[13px] text-[#6a7282] mb-3">This looks like an existing contact:</p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto mb-4">
+              {dupCandidates.map(c => (
+                <div key={c.id} className="bg-[#f9fafb] rounded-[8px] px-3 py-2">
+                  <div className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{c.name}</div>
+                  <div className="text-[11px] text-[#6a7282]">{[c.email, c.title].filter(Boolean).join(' · ')}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setDupCandidates(null)} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-2.5 text-[14px] font-['Inter:Medium',sans-serif]">Back to editing</button>
+              <button onClick={() => { setDupCandidates(null); doSave(); }} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-2.5 text-[14px] font-['Inter:Medium',sans-serif]">Create anyway</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
