@@ -1,0 +1,89 @@
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
+import { useData } from '../../context/DataContext';
+import { useMyContact, useCanSeeAll } from '../../hooks/useMyContact';
+import { INSTALL_STAGES } from './ProjectsPane';
+
+const TYPE_BADGE: Record<string, string> = {
+  Install: 'bg-[#eef3fb] text-[#307fe2]',
+  Repair: 'bg-[#fef3f0] text-[#F95C39]',
+  Upgrade: 'bg-[#f3edfb] text-[#7c3aed]',
+};
+
+// Dashboard widget — "your pipeline is your projects." Lists active projects
+// across mountains, scoped to Mine (owner) or All (Employees only).
+export function ActiveProjects() {
+  const { projects, mountains } = useData();
+  const navigate = useNavigate();
+  const me = useMyContact();
+  const canSeeAll = useCanSeeAll();
+  const [scope, setScope] = useState<'mine' | 'all'>('mine');
+
+  // No matching contact → can't compute "mine", so show all. Ambassadors are
+  // locked to mine. Employees can toggle.
+  const effective = !me ? 'all' : canSeeAll ? scope : 'mine';
+  const showToggle = !!me && canSeeAll;
+
+  const rows = useMemo(() => {
+    const byId = Object.fromEntries(mountains.map(m => [m.id, m]));
+    let active = projects.filter(p => p.stage !== 'Churned' && p.status !== 'Done');
+    if (effective === 'mine') active = active.filter(p => me && p.ownerContactId === me.id);
+    return active
+      .map(p => ({ p, m: byId[p.mountainId] }))
+      .sort((a, b) => new Date(b.p.updatedAt).getTime() - new Date(a.p.updatedAt).getTime());
+  }, [projects, mountains, effective, me]);
+
+  return (
+    <div className="space-y-2">
+      {showToggle && (
+        <div className="flex gap-2">
+          {(['mine', 'all'] as const).map(s => (
+            <button key={s} onClick={() => setScope(s)}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${scope === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+              {s === 'mine' ? 'My projects' : 'All projects'}
+            </button>
+          ))}
+        </div>
+      )}
+      {!me && (
+        <p className="text-[11px] text-[#8992a0]">Showing all projects — add yourself as a YULLR contact (matching your login email) to see just yours.</p>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
+          {effective === 'mine' ? 'No active projects owned by you.' : 'No active projects.'}
+        </div>
+      ) : (
+        rows.map(({ p, m }) => {
+          const isInstall = p.type === 'Install';
+          const idx = isInstall ? Math.max(0, INSTALL_STAGES.indexOf(p.stage || 'Prospect')) : 0;
+          const pct = isInstall
+            ? Math.round(((idx + 1) / INSTALL_STAGES.length) * 100)
+            : p.status === 'Done' ? 100 : p.status === 'In Progress' ? 50 : 10;
+          const label = isInstall ? (p.stage || 'Prospect') : (p.status || 'Open');
+          return (
+            <button key={p.id} onClick={() => navigate(`/mountains/${p.mountainId}`)}
+              className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-3 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{p.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wide shrink-0 ${TYPE_BADGE[p.type]}`}>{p.type}</span>
+                  {p.isStalled && <span className="text-[10px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"><AlertTriangle size={9} /> Stalled</span>}
+                </div>
+                <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
+              </div>
+              <div className="h-1.5 rounded-full bg-[#f0f1f3] overflow-hidden mb-1.5">
+                <div className="h-full rounded-full bg-[#307fe2]" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#6a7282]">
+                <span className="truncate">{m?.name || 'Unknown mountain'} · {label}</span>
+                {p.ownerName && <span className="flex items-center gap-1 text-[#8992a0] shrink-0"><UserCircle2 size={11} /> {p.ownerName}</span>}
+              </div>
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
+}

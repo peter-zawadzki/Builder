@@ -1,5 +1,7 @@
 import { TrendingUp, Activity as ActivityIcon, Bell } from "lucide-react";
-import { Pipeline, ActivityFeed, FollowUps } from "./crm/CRM";
+import { FollowUps } from "./crm/CRM";
+import { ActiveProjects } from "./projects/ActiveProjects";
+import { RecentActivity } from "./RecentActivity";
 
 // The landing page after login: pipeline, recent activity, and follow-ups at a
 // glance, with the shared header to jump into each section.
@@ -12,9 +14,9 @@ export function HomeDashboard() {
         <section>
           <div className="flex items-center gap-2 mb-2 px-1">
             <TrendingUp size={16} className="text-[#6a7282]" />
-            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Pipeline</h2>
+            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Active projects</h2>
           </div>
-          <Pipeline />
+          <ActiveProjects />
         </section>
 
         <section>
@@ -30,7 +32,7 @@ export function HomeDashboard() {
             <ActivityIcon size={16} className="text-[#6a7282]" />
             <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Recent activity</h2>
           </div>
-          <ActivityFeed />
+          <RecentActivity />
         </section>
       </div>
     </div>

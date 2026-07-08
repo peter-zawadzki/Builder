@@ -306,6 +306,7 @@ export interface CRMContact {
   tags: ContactTag[];
   isPrimary: boolean;
   mountainId?: string;       // single linked mountain
+  affiliation?: 'Employee' | 'Ambassador';  // for YULLR-org people: their role in Builder
   notes?: string;
   activities?: ContactActivity[];
   createdAt: string;

@@ -625,6 +625,7 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
     tags: contact?.tags || [] as ContactTag[],
     isPrimary: contact?.isPrimary || false,
     mountainId: contact?.mountainId || '',
+    affiliation: contact?.affiliation || '',
     notes: contact?.notes || '',
   });
 
@@ -633,7 +634,7 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
 
   const save = () => {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
-    const data = { ...form, mountainId: form.mountainId || undefined, organizationId: form.organizationId || undefined };
+    const data = { ...form, mountainId: form.mountainId || undefined, organizationId: form.organizationId || undefined, affiliation: (form.affiliation || undefined) as CRMContact['affiliation'] };
     if (contact) updateContact(contact.id, data);
     else addContact({ ...data, activities: [] });
     toast.success(contact ? 'Contact updated' : 'Contact added');
@@ -687,6 +688,16 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
               <option value="">— None —</option>
               {mountains.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Affiliation (YULLR team)</label>
+            <select value={form.affiliation} onChange={e => set('affiliation', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] appearance-none">
+              <option value="">— None —</option>
+              <option value="Employee">Employee</option>
+              <option value="Ambassador">Ambassador</option>
+            </select>
+            <p className="text-[11px] text-[#8992a0] mt-1">For YULLR people. Employees can view all projects; Ambassadors see only their own.</p>
           </div>
 
           <div>
