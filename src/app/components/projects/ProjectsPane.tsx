@@ -104,6 +104,34 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
   );
 }
 
+// Compact, read-only progress bar for a single project — used on the mountains
+// list so each mountain card can show a bar per project.
+export function ProjectMiniBar({ project }: { project: Project }) {
+  const isInstall = project.type === 'Install';
+  const idx = isInstall ? Math.max(0, INSTALL_STAGES.indexOf(project.stage || 'Prospect')) : 0;
+  const churned = project.stage === 'Churned';
+  const pct = churned ? 100
+    : isInstall ? Math.round(((idx + 1) / INSTALL_STAGES.length) * 100)
+      : project.status === 'Done' ? 100 : project.status === 'In Progress' ? 50 : 10;
+  const label = churned ? 'Churned' : isInstall ? (project.stage || 'Prospect') : (project.status || 'Open');
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{project.name}</span>
+          <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide shrink-0 ${TYPE_BADGE[project.type]}`}>{project.type}</span>
+          {project.isStalled && <span className="text-[9px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full shrink-0">Stalled</span>}
+        </div>
+        {project.ownerName && <span className="text-[10px] text-[#8992a0] shrink-0 truncate max-w-[40%]">{project.ownerName}</span>}
+      </div>
+      <div className="h-1.5 rounded-full bg-[#f0f1f3] overflow-hidden">
+        <div className={`h-full rounded-full ${churned ? 'bg-[#c0c4cc]' : 'bg-[#307fe2]'}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="text-[10px] text-[#6a7282] mt-0.5">{label}</div>
+    </div>
+  );
+}
+
 // ─── YULLR contact owner picker ──────────────────────────────────────────────
 
 // Owner is a member of the YULLR organization (our employees).

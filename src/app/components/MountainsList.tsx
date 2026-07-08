@@ -1,13 +1,14 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
-import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes, Wrench } from 'lucide-react';
+import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes, Wrench, Search } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 import { useIsSuperAdmin } from '../hooks/useRole';
 import { SalesProcessBar } from './SalesProcessBar';
 import { QuickNotesModal } from './QuickNotesModal';
+import { ProjectMiniBar } from './projects/ProjectsPane';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
 const AUTH_HEADER = { Authorization: `Bearer ${publicAnonKey}` };
@@ -21,14 +22,16 @@ interface MapViewState {
 }
 
 export function MountainsList() {
-  const { mountains, trails, assets, getNotesByMountainId, getLocationsByMountainId } = useData();
+  const { mountains, trails, assets, projects, getNotesByMountainId, getLocationsByMountainId, getProjectsByMountainId } = useData();
   const navigate = useNavigate();
   const isSuperAdmin = useIsSuperAdmin();
 
   const [mapView, setMapView] = useState<MapViewState | null>(null);
   const [notesModalMountainId, setNotesModalMountainId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'name' | 'activity'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'activity' | 'owner'>('name');
   const [filterState, setFilterState] = useState<string>('all');
+  const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [search, setSearch] = useState('');
 
   // State abbreviation to full name mapping
   const STATE_NAMES: Record<string, string> = {
@@ -180,28 +183,43 @@ export function MountainsList() {
     });
   }, [mountains]);
 
+  // Unique project owners across all mountains (for the owner filter).
+  const allOwners = useMemo(
+    () => Array.from(new Set(projects.map(p => p.ownerName).filter(Boolean))).sort() as string[],
+    [projects],
+  );
+
   // Filter and sort mountains
   const filteredAndSortedMountains = useMemo(() => {
     let filtered = [...mountains];
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(m => m.name.toLowerCase().includes(q) || (m.address || '').toLowerCase().includes(q));
+    }
 
     // Filter by state
     if (filterState !== 'all') {
       filtered = filtered.filter(m => extractState(m.address) === filterState);
     }
 
+    // Filter by project owner
+    if (filterOwner !== 'all') {
+      filtered = filtered.filter(m => getProjectsByMountainId(m.id).some(p => p.ownerName === filterOwner));
+    }
+
     // Sort
     if (sortBy === 'name') {
       filtered.sort((a, b) => a.name.localeCompare(b.name));
     } else if (sortBy === 'activity') {
-      filtered.sort((a, b) => {
-        const dateA = getMostRecentActivity(a.id);
-        const dateB = getMostRecentActivity(b.id);
-        return dateB.getTime() - dateA.getTime(); // Most recent first
-      });
+      filtered.sort((a, b) => getMostRecentActivity(b.id).getTime() - getMostRecentActivity(a.id).getTime());
+    } else if (sortBy === 'owner') {
+      const firstOwner = (id: string) => getProjectsByMountainId(id)[0]?.ownerName || '~'; // unowned sort last
+      filtered.sort((a, b) => firstOwner(a.id).localeCompare(firstOwner(b.id)) || a.name.localeCompare(b.name));
     }
 
     return filtered;
-  }, [mountains, sortBy, filterState]);
+  }, [mountains, sortBy, filterState, filterOwner, search, projects]);
 
   const openMap = async (e: React.MouseEvent, mountainId: string, mountainName: string) => {
     e.preventDefault();
@@ -234,7 +252,19 @@ export function MountainsList() {
       <div className="flex-1 p-4">
         {/* Sort and Filter Controls */}
         {mountains.length > 0 && (
-          <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-3 mb-3">
+          <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-3 mb-3 space-y-3">
+            {/* Search */}
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search mountains…"
+                className="w-full bg-[#f3f3f5] rounded-[6px] pl-9 pr-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] border-none outline-none"
+              />
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-3">
               {/* Sort By */}
               <div className="flex-1">
@@ -242,28 +272,18 @@ export function MountainsList() {
                   Sort By
                 </label>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setSortBy('name')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[6px] text-[13px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${
-                      sortBy === 'name'
-                        ? 'bg-[#ff5c39] text-white'
-                        : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
-                    }`}
-                  >
-                    <ArrowUpDown size={13} />
-                    A-Z
-                  </button>
-                  <button
-                    onClick={() => setSortBy('activity')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[6px] text-[13px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${
-                      sortBy === 'activity'
-                        ? 'bg-[#ff5c39] text-white'
-                        : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
-                    }`}
-                  >
-                    <ArrowUpDown size={13} />
-                    Recent
-                  </button>
+                  {([['name', 'A-Z'], ['activity', 'Recent'], ['owner', 'Owner']] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setSortBy(key)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[6px] text-[13px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${
+                        sortBy === key ? 'bg-[#ff5c39] text-white' : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
+                      }`}
+                    >
+                      <ArrowUpDown size={13} />
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -287,6 +307,23 @@ export function MountainsList() {
                       </option>
                     );
                   })}
+                </select>
+              </div>
+
+              {/* Filter by Owner */}
+              <div className="flex-1">
+                <label className="block text-[#6a7282] font-['Inter:Medium',sans-serif] text-[11px] mb-1.5 uppercase tracking-wider">
+                  Filter by Owner
+                </label>
+                <select
+                  value={filterOwner}
+                  onChange={e => setFilterOwner(e.target.value)}
+                  className="w-full bg-[#f3f3f5] rounded-[6px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] border-none outline-none"
+                >
+                  <option value="all">All Owners</option>
+                  {allOwners.map(owner => (
+                    <option key={owner} value={owner}>{owner}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -423,14 +460,19 @@ export function MountainsList() {
                         )}
                       </div>
                     )}
-                    {/* Sales Process Bar */}
+                    {/* Project status — one bar per project */}
                     <div className="mt-auto">
-                      <SalesProcessBar
-                        notes={getNotesByMountainId(mountain.id)}
-                        onStageClick={(topic) => {
-                          navigate(`/mountains/${mountain.id}`, { state: { scrollToTopic: topic } });
-                        }}
-                      />
+                      {(() => {
+                        const projs = getProjectsByMountainId(mountain.id);
+                        if (projs.length === 0) {
+                          return <div className="text-[11px] text-[#8992a0]">No projects yet</div>;
+                        }
+                        return (
+                          <div className="space-y-2.5">
+                            {projs.map(p => <ProjectMiniBar key={p.id} project={p} />)}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </Link>
