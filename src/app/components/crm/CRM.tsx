@@ -349,11 +349,12 @@ export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; 
 // ─── Contact Detail ───────────────────────────────────────────────────────────
 
 export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
-  const { updateContact, getMountainById } = useData();
+  const { updateContact, deleteContact, getMountainById } = useData();
   const navigate = useNavigate();
   const [newText, setNewText] = useState('');
   const [newType, setNewType] = useState<'note' | 'action'>('note');
   const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const mountain = contact.mountainId ? getMountainById(contact.mountainId) : undefined;
 
   const activities = [...(contact.activities || [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -398,11 +399,22 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{contact.name}</p>
           <p className="text-[11px] text-[#6a7282]">{contact.type}{contact.title ? ` · ${contact.title}` : ''}</p>
         </div>
-        <button onClick={() => setShowEdit(true)} className="p-1.5 rounded-[8px] bg-[#eef3fb] active:bg-[#dce8f4]">
+        <button onClick={() => setShowEdit(true)} className="p-1.5 rounded-[8px] bg-[#eef3fb] active:bg-[#dce8f4]" title="Edit contact">
           <Pencil size={15} className="text-[#307fe2]" />
+        </button>
+        <button onClick={() => setShowDelete(true)} className="p-1.5 rounded-[8px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete contact">
+          <Trash2 size={15} className="text-[#F95C39]" />
         </button>
       </div>
       {showEdit && <ContactForm contact={contact} onClose={() => setShowEdit(false)} />}
+      {showDelete && (
+        <DeleteConfirmModal
+          title="Delete contact"
+          description={`Remove ${contact.name} from the CRM?`}
+          onConfirm={() => { deleteContact(contact.id); toast.success('Contact deleted'); onBack(); }}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
 
       <div className="overflow-y-auto flex-1 p-4 space-y-4">
         {/* Contact info */}
@@ -580,10 +592,7 @@ function Contacts() {
                   {c.email && <p className="text-[11px] text-[#6a7282] mt-0.5">{c.email}</p>}
                   {linkedMountain && <p className="text-[11px] text-[#6a7282]">{linkedMountain.name}</p>}
                 </button>
-                <div className="flex gap-1 shrink-0">
-                  <button onClick={() => { setEditTarget(c); setShowForm(true); }} className="p-1.5 rounded-[6px] bg-[#eef3fb]"><Pencil size={13} className="text-[#307fe2]" /></button>
-                  <button onClick={() => setDeleteTarget(c)} className="p-1.5 rounded-[6px] bg-[#fff0ee]"><Trash2 size={13} className="text-[#F95C39]" /></button>
-                </div>
+                <button onClick={() => setSelectedContact(c)} className="shrink-0 self-center p-1 active:opacity-70"><ChevronRight size={16} className="text-[#c0c4cc]" /></button>
               </div>
             );
           })}
@@ -753,27 +762,22 @@ function Organizations() {
             const linkedContacts = contacts.filter(c => org.contactIds.includes(c.id));
             return (
               <div key={org.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org.name}</p>
-                      <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{org.type}</span>
-                    </div>
-                    {linkedContacts.length > 0 && <p className="text-[12px] text-[#6a7282]">{linkedContacts.length} contact{linkedContacts.length !== 1 ? 's' : ''}</p>}
-                    {linkedMountains.length > 0 && (
-                      <div className="flex gap-1 flex-wrap mt-1">
-                        {linkedMountains.map(m => (
-                          <button key={m.id} onClick={() => navigate(`/mountains/${m.id}`)} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full">{m.name}</button>
-                        ))}
-                      </div>
-                    )}
-                    {org.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{org.notes}</p>}
+                <button onClick={() => { setEditTarget(org); setShowForm(true); }} className="w-full text-left active:opacity-70">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org.name}</p>
+                    <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{org.type}</span>
+                    <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />
                   </div>
-                  <div className="flex gap-1 shrink-0 ml-2">
-                    <button onClick={() => { setEditTarget(org); setShowForm(true); }} className="p-1.5 rounded-[6px] bg-[#eef3fb]"><Pencil size={13} className="text-[#307fe2]" /></button>
-                    <button onClick={() => setDeleteTarget(org)} className="p-1.5 rounded-[6px] bg-[#fff0ee]"><Trash2 size={13} className="text-[#F95C39]" /></button>
+                  {linkedContacts.length > 0 && <p className="text-[12px] text-[#6a7282]">{linkedContacts.length} contact{linkedContacts.length !== 1 ? 's' : ''}</p>}
+                  {org.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{org.notes}</p>}
+                </button>
+                {linkedMountains.length > 0 && (
+                  <div className="flex gap-1 flex-wrap mt-1.5">
+                    {linkedMountains.map(m => (
+                      <button key={m.id} onClick={() => navigate(`/mountains/${m.id}`)} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full">{m.name}</button>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
@@ -794,7 +798,8 @@ function Organizations() {
 }
 
 function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () => void }) {
-  const { addOrganization, updateOrganization, mountains, updateMountain } = useData();
+  const { addOrganization, updateOrganization, deleteOrganization, mountains, updateMountain } = useData();
+  const [showDelete, setShowDelete] = useState(false);
   const [form, setForm] = useState({
     name: org?.name || '',
     type: org?.type || 'Partner' as OrgType,
@@ -859,11 +864,22 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none resize-none" />
           </div>
         </div>
-        <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3">
+        <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
+          {org && (
+            <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete organization"><Trash2 size={16} className="text-[#F95C39]" /></button>
+          )}
           <button onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Cancel</button>
           <button onClick={save} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Save</button>
         </div>
       </div>
+      {showDelete && org && (
+        <DeleteConfirmModal
+          title="Delete organization"
+          description={`Remove ${org.name}?`}
+          onConfirm={() => { deleteOrganization(org.id); toast.success('Deleted'); onClose(); }}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1020,22 +1036,42 @@ export function CRMSection() {
 function MountainsTab() {
   const { mountains } = useData();
   const navigate = useNavigate();
-  const sorted = [...mountains].sort((a, b) => a.name.localeCompare(b.name));
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() => {
+    let list = [...mountains].sort((a, b) => a.name.localeCompare(b.name));
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(m => m.name.toLowerCase().includes(q) || (m.address || '').toLowerCase().includes(q));
+    }
+    return list;
+  }, [mountains, search]);
+
   return (
-    <div className="p-4">
-      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] divide-y divide-[rgba(0,0,0,0.06)]">
-        {sorted.map(m => (
-          <button key={m.id} onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between p-3 text-left active:bg-[#f9fafb]">
-            <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
-            <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-              {m.proposalCreated ? 'Customer' : 'Prospect'}
-            </span>
-          </button>
-        ))}
-        {sorted.length === 0 && (
-          <div className="p-4 text-[13px] text-[#6a7282]">No mountains yet. Use “+ Mountain” above to add one.</div>
-        )}
+    <div className="p-4 space-y-3">
+      <div className="flex gap-2">
+        <div className="flex-1 relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search mountains…" className="w-full bg-[#f3f3f5] rounded-[8px] pl-9 pr-3 py-2.5 text-[#0a0a0a] text-[13px] outline-none" />
+        </div>
+        <button onClick={() => navigate('/mountains/new')} className="shrink-0 flex items-center gap-1.5 bg-[#1D2930] text-white px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif]">
+          <Plus size={14} /> Add
+        </button>
       </div>
+
+      {filtered.length === 0 ? (
+        <div className="text-center py-12 text-[#6a7282] text-[14px]">No mountains found</div>
+      ) : (
+        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] divide-y divide-[rgba(0,0,0,0.06)]">
+          {filtered.map(m => (
+            <button key={m.id} onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between p-3 text-left active:bg-[#f9fafb]">
+              <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+                {m.proposalCreated ? 'Customer' : 'Prospect'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1053,23 +1089,14 @@ function CRMContent() {
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
       <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex gap-1 overflow-x-auto pb-0.5">
-            {TABS.map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-[#1D2930] text-white' : 'text-[#6a7282] hover:bg-[#f3f3f5]'}`}>
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => navigate('/mountains/new')}
-            className="shrink-0 flex items-center gap-1 bg-[#ff5c39] text-white px-3 py-1.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
-            title="Add a mountain"
-          >
-            <Plus size={14} /> Mountain
-          </button>
+        <div className="flex gap-1 overflow-x-auto pb-0.5">
+          {TABS.map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-[#1D2930] text-white' : 'text-[#6a7282] hover:bg-[#f3f3f5]'}`}>
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
