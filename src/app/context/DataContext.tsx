@@ -103,6 +103,7 @@ export interface Mountain {
   closeProbability?: number;
   corporateGroup?: string;
   organizationId?: string;
+  affiliateContactIds?: string[];  // YULLR people who sell/represent this mountain
 }
 
 // ─── Inspection item types (shared between Location inspection + AddInspection) ─

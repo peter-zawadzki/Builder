@@ -28,7 +28,12 @@ export function ActiveProjects() {
   const rows = useMemo(() => {
     const byId = Object.fromEntries(mountains.map(m => [m.id, m]));
     let active = projects.filter(p => p.stage !== 'Churned' && p.status !== 'Done');
-    if (effective === 'mine') active = active.filter(p => me && p.ownerContactId === me.id);
+    // "Mine" = projects I own OR projects on a mountain where I'm an affiliate.
+    if (effective === 'mine') {
+      active = active.filter(p =>
+        me && (p.ownerContactId === me.id || (byId[p.mountainId] as any)?.affiliateContactIds?.includes(me.id)),
+      );
+    }
     return active
       .map(p => ({ p, m: byId[p.mountainId] }))
       .sort((a, b) => new Date(b.p.updatedAt).getTime() - new Date(a.p.updatedAt).getTime());

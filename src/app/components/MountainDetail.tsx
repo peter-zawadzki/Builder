@@ -192,6 +192,13 @@ export function MountainDetail() {
   const linkedOrg = mountain.organizationId ? organizations.find(o => o.id === mountain.organizationId) : undefined;
   const contactCount = contacts.filter(c => c.mountainId === mountainId).length;
 
+  // Affiliates: YULLR people who sell/represent this mountain.
+  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
+  const yullrMembers = yullrOrg ? contacts.filter(c => c.organizationId === yullrOrg.id) : [];
+  const affiliateIds = mountain.affiliateContactIds || [];
+  const affiliates = affiliateIds.map(id => contacts.find(c => c.id === id)).filter(Boolean) as CRMContact[];
+  const addableAffiliates = yullrMembers.filter(m => !affiliateIds.includes(m.id));
+
   // Resolve / persist a single contact by its slot in the mountain record.
   const contactForSlot = (slot: ContactSlot): Contact | undefined =>
     slot.type === 'admin' ? mountain.adminContact
@@ -381,6 +388,33 @@ export function MountainDetail() {
               ) : (
                 <div className="text-[12px] text-[#8992a0]">None set.</div>
               )}
+            </div>
+
+            {/* Affiliates */}
+            <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
+              <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-2">Affiliates</div>
+              {affiliates.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {affiliates.map(a => (
+                    <span key={a.id} className="text-[12px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1">
+                      {a.name}
+                      <button onClick={() => updateMountain(mountainId!, { affiliateContactIds: affiliateIds.filter(id => id !== a.id) })} className="active:opacity-60"><X size={11} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {addableAffiliates.length > 0 ? (
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) updateMountain(mountainId!, { affiliateContactIds: [...affiliateIds, e.target.value] }); }}
+                  className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+                >
+                  <option value="">+ Add affiliate…</option>
+                  {addableAffiliates.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              ) : affiliates.length === 0 ? (
+                <div className="text-[12px] text-[#8992a0]">No affiliates. Add YULLR people under the YULLR organization to assign them.</div>
+              ) : null}
             </div>
 
             {/* Updates */}
