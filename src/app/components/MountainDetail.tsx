@@ -4,6 +4,7 @@ import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact } from '../context/DataContext';
 import { ContactDetail, DealDetailsModal } from './crm/CRM';
+import { ProjectsPane } from './projects/ProjectsPane';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
@@ -473,6 +474,9 @@ export function MountainDetail() {
             })()}
           </ExpandablePane>
         </div>
+
+        {/* Projects — the unit of work; one progress bar per project */}
+        <ProjectsPane mountainId={mountainId!} />
 
         {/* Top Row: Trails + Notes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
