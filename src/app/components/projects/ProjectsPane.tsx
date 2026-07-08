@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useUser, useOrganization } from '@clerk/clerk-react';
+import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
 import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2 } from 'lucide-react';
-import { useData, PROJECT_REQUIRES_PROPOSAL } from '../../context/DataContext';
+import { useData } from '../../context/DataContext';
 import type { Project, ProjectType, ProjectWorkStatus, PipelineStage, StallReason } from '../../context/DataContext';
 
 // Install runs the full sales stage list (Churned is handled via stall/cancel,
@@ -11,8 +11,6 @@ export const INSTALL_STAGES: PipelineStage[] = [
   'Prospect', 'Contacted', 'Demo Scheduled', 'Positive',
   'Verbal Yes', 'Contract Sent', 'Signed', 'Installing', 'Live',
 ];
-// An Install can't advance to these stages without a proposal on the project.
-const PROPOSAL_GATED_FROM = 'Contract Sent';
 const WORK_STATUSES: ProjectWorkStatus[] = ['Open', 'In Progress', 'Done'];
 const STALL_REASONS: StallReason[] = ['No response', 'Waiting on legal', 'Budget hold', 'Timing — offseason', 'Other'];
 const TYPE_BADGE: Record<ProjectType, string> = {
@@ -23,10 +21,7 @@ const TYPE_BADGE: Record<ProjectType, string> = {
 
 function useAuthor() {
   const { user } = useUser();
-  return {
-    userId: user?.id || '',
-    name: user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You',
-  };
+  return user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
 }
 
 // ─── Pane ────────────────────────────────────────────────────────────────────
@@ -109,31 +104,52 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
   );
 }
 
+// ─── YULLR contact owner picker ──────────────────────────────────────────────
+
+// Owner is a member of the YULLR organization (our employees).
+function OwnerSelect({ value, onChange, className }: { value: string; onChange: (id: string) => void; className: string }) {
+  const { contacts, organizations } = useData();
+  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
+  const members = yullrOrg
+    ? contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+  return (
+    <>
+      <select className={className} value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">— Unassigned —</option>
+        {members.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      {!yullrOrg && (
+        <p className="text-[11px] text-[#8992a0] mt-1.5">No “YULLR” organization found — create it in the CRM and add your team as contacts under it.</p>
+      )}
+      {yullrOrg && members.length === 0 && (
+        <p className="text-[11px] text-[#8992a0] mt-1.5">No contacts under the YULLR organization yet — add your team in the CRM.</p>
+      )}
+    </>
+  );
+}
+
 // ─── Create form ─────────────────────────────────────────────────────────────
 
 function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () => void }) {
-  const { addProject } = useData();
-  const author = useAuthor();
+  const { addProject, contacts } = useData();
+  const createdBy = useAuthor();
   const [name, setName] = useState('');
-  const [type, setType] = useState<ProjectType>('Install');
-  const [proposalRef, setProposalRef] = useState('');
-  const [zeroDollar, setZeroDollar] = useState(false);
-
-  const showProposal = type === 'Install' || type === 'Upgrade';
+  const [notes, setNotes] = useState('');
+  const [ownerContactId, setOwnerContactId] = useState('');
 
   const save = () => {
     if (!name.trim()) { toast.error('Project name is required'); return; }
-    const proposalId = zeroDollar ? '$0' : (proposalRef.trim() || undefined);
+    const owner = contacts.find(c => c.id === ownerContactId);
     addProject({
       mountainId,
       name: name.trim(),
-      type,
-      stage: type === 'Install' ? 'Prospect' : undefined,
-      status: type === 'Install' ? undefined : 'Open',
-      proposalId,
-      ownerUserId: author.userId,
-      ownerName: author.name,
-      createdBy: author.name,
+      notes: notes.trim() || undefined,
+      type: 'Install',      // sensible default; change in the project detail
+      stage: 'Prospect',
+      ownerContactId: owner?.id,
+      ownerName: owner?.name,
+      createdBy,
     });
     toast.success('Project created');
     onClose();
@@ -150,39 +166,19 @@ function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () 
         </div>
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
           <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
-            <div className="flex gap-2">
-              {(['Install', 'Repair', 'Upgrade'] as ProjectType[]).map(t => (
-                <button key={t} onClick={() => setType(t)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
-              ))}
-            </div>
-            <p className="text-[11px] text-[#8992a0] mt-1.5">
-              {type === 'Install' ? 'Runs the full stage pipeline; a proposal is required to advance ($0 allowed).'
-                : type === 'Repair' ? 'Simple status: Open → In Progress → Done. No proposal needed.'
-                : 'Simple status: Open → In Progress → Done. Proposal optional.'}
-            </p>
-          </div>
-
-          <div>
             <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
-            <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Eggbeater + Links" />
+            <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Eggbeater + Links" autoFocus />
           </div>
-
-          {showProposal && (
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">
-                Proposal {type === 'Install' ? '(required to advance)' : '(optional)'}
-              </label>
-              <input className={inputCls} value={proposalRef} onChange={e => setProposalRef(e.target.value)} placeholder="Proposal # / reference" disabled={zeroDollar} />
-              <label className="flex items-center gap-2 mt-2 text-[13px] text-[#0a0a0a]">
-                <input type="checkbox" checked={zeroDollar} onChange={e => setZeroDollar(e.target.checked)} className="w-4 h-4" />
-                $0 proposal (no charge — e.g. demo/airbag)
-              </label>
-            </div>
-          )}
-
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
+            <textarea className={`${inputCls} resize-none`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything worth capturing up front…" />
+          </div>
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Owner</label>
+            <OwnerSelect value={ownerContactId} onChange={setOwnerContactId} className={inputCls} />
+          </div>
           <div className="text-[12px] text-[#6a7282] flex items-center gap-1.5">
-            <UserCircle2 size={13} /> Owner: <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{author.name}</span>
+            <UserCircle2 size={13} /> Created by <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{createdBy}</span>
           </div>
         </div>
         <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3">
@@ -197,27 +193,18 @@ function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () 
 // ─── Detail / edit ─────────────────────────────────────────────────────────
 
 function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const { getProjectById, updateProject, deleteProject, transferProjectOwner } = useData();
-  const author = useAuthor();
-  const { memberships } = useOrganization({ memberships: true });
+  const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts } = useData();
   const project = getProjectById(projectId);
   const [stallOpen, setStallOpen] = useState(false);
   const [stallReason, setStallReason] = useState<StallReason>('No response');
   const [stallNote, setStallNote] = useState('');
-  const [transferOpen, setTransferOpen] = useState(false);
 
   if (!project) { onClose(); return null; }
   const isInstall = project.type === 'Install';
-  const hasProposal = !!project.proposalId;
 
-  const setStage = (stage: PipelineStage) => {
-    // Proposal gate: Install can't reach Contract Sent+ without a proposal.
-    const gatedIdx = INSTALL_STAGES.indexOf(PROPOSAL_GATED_FROM);
-    if (isInstall && INSTALL_STAGES.indexOf(stage) >= gatedIdx && !hasProposal) {
-      toast.error('Add a proposal before advancing to Contract Sent ($0 allowed).');
-      return;
-    }
-    updateProject(project.id, { stage });
+  const setType = (t: ProjectType) => {
+    if (t === 'Install') updateProject(project.id, { type: t, status: undefined, stage: project.stage || 'Prospect' });
+    else updateProject(project.id, { type: t, stage: undefined, status: project.status || 'Open' });
   };
 
   const applyStall = () => {
@@ -227,11 +214,6 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
     toast.success('Marked stalled');
   };
 
-  const members = (memberships?.data ?? []).map((m: any) => ({
-    userId: m.publicUserData?.userId as string,
-    name: [m.publicUserData?.firstName, m.publicUserData?.lastName].filter(Boolean).join(' ') || m.publicUserData?.identifier || 'Member',
-  })).filter((m: any) => m.userId);
-
   const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
 
   return (
@@ -240,21 +222,30 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
         <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
           <div className="min-w-0 pr-3">
             <p className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{project.name}</p>
-            <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wide ${TYPE_BADGE[project.type]}`}>{project.type}</span>
+            {project.createdBy && <p className="text-[11px] text-[#8992a0] mt-0.5">Created by {project.createdBy}</p>}
           </div>
           <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5] shrink-0"><X size={16} className="text-[#6a7282]" /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {/* Type */}
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
+            <div className="flex gap-2">
+              {(['Install', 'Repair', 'Upgrade'] as ProjectType[]).map(t => (
+                <button key={t} onClick={() => setType(t)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
+              ))}
+            </div>
+          </div>
+
           {/* Stage / status */}
           {isInstall ? (
             <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
-              <select className={inputCls} value={project.stage || 'Prospect'} onChange={e => setStage(e.target.value as PipelineStage)}>
+              <select className={inputCls} value={project.stage || 'Prospect'} onChange={e => updateProject(project.id, { stage: e.target.value as PipelineStage })}>
                 {INSTALL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                 <option value="Churned">Churned</option>
               </select>
-              {!hasProposal && <p className="text-[11px] text-[#F95C39] mt-1.5">No proposal linked — required to advance to Contract Sent.</p>}
             </div>
           ) : (
             <div>
@@ -267,31 +258,24 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
             </div>
           )}
 
-          {/* Proposal */}
-          {(isInstall || project.type === 'Upgrade') && (
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Proposal</label>
-              <input className={inputCls} value={project.proposalId || ''} onChange={e => updateProject(project.id, { proposalId: e.target.value || undefined })} placeholder="Proposal # / reference — enter $0 for no-charge" />
-            </div>
-          )}
-
           {/* Owner */}
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] text-[#6a7282] flex items-center gap-1.5"><UserCircle2 size={14} /> Owner: <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{project.ownerName || '—'}</span></span>
-            <button onClick={() => setTransferOpen(v => !v)} className="text-[12px] text-[#307fe2] flex items-center gap-1 active:opacity-70"><Repeat2 size={12} /> Transfer</button>
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide flex items-center gap-1.5"><UserCircle2 size={13} /> Owner</label>
+            <OwnerSelect
+              value={project.ownerContactId || ''}
+              onChange={(id) => {
+                const c = contacts.find(x => x.id === id);
+                transferProjectOwner(project.id, id, c?.name || '');
+              }}
+              className={inputCls}
+            />
           </div>
-          {transferOpen && (
-            <div className="border border-[rgba(0,0,0,0.08)] rounded-[10px] p-3 space-y-1.5">
-              <p className="text-[11px] text-[#6a7282] uppercase tracking-wide">Transfer ownership to</p>
-              {members.length === 0 && <p className="text-[12px] text-[#8992a0]">No other team members found.</p>}
-              {members.map((m: any) => (
-                <button key={m.userId} onClick={() => { transferProjectOwner(project.id, m.userId, m.name); setTransferOpen(false); toast.success(`Owner → ${m.name}`); }}
-                  className="w-full text-left text-[13px] text-[#0a0a0a] px-2 py-1.5 rounded-[8px] hover:bg-[#f3f3f5] active:bg-[#eef0f2]">
-                  {m.name}{m.userId === project.ownerUserId ? ' (current)' : ''}
-                </button>
-              ))}
-            </div>
-          )}
+
+          {/* Notes */}
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
+            <textarea className={`${inputCls} resize-none`} rows={3} value={project.notes || ''} onChange={e => updateProject(project.id, { notes: e.target.value || undefined })} placeholder="Project notes…" />
+          </div>
 
           {/* Stall */}
           <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">

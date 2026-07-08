@@ -271,26 +271,20 @@ export interface Project {
   id: string;
   mountainId: string;
   name: string;
+  notes?: string;               // free-text project notes
   type: ProjectType;
   stage?: PipelineStage;        // Install only — the full pipeline
   status?: ProjectWorkStatus;   // Repair / Upgrade — lightweight
-  proposalId?: string;          // required for Install, optional for Upgrade
-  ownerUserId?: string;         // exactly one owner (required in UI)
+  ownerContactId?: string;      // the owning YULLR contact (employee)
   ownerName?: string;           // display name of the current owner
+  ownerUserId?: string;         // legacy: Clerk user id, if owner was a login
   isStalled?: boolean;
   stallReason?: StallReason;
   stallNote?: string;           // required when stallReason === 'Other'
-  createdBy?: string;
+  createdBy?: string;           // name of the user who created the project
   createdAt: string;
   updatedAt: string;
 }
-
-// Does a project of this type require a proposal before it can be "sent"/advanced?
-export const PROJECT_REQUIRES_PROPOSAL: Record<ProjectType, boolean> = {
-  Install: true,
-  Repair: false,
-  Upgrade: false, // optional — allowed but not required
-};
 
 export interface ContactActivity {
   id: string;
@@ -388,7 +382,7 @@ interface DataContextType {
   projects: Project[];
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  transferProjectOwner: (id: string, ownerUserId: string, ownerName: string) => void;
+  transferProjectOwner: (id: string, ownerContactId: string, ownerName: string) => void;
   deleteProject: (id: string) => Promise<void>;
   getProjectsByMountainId: (mountainId: string) => Project[];
   getProjectById: (id: string) => Project | undefined;
@@ -1206,10 +1200,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Project update sync error:', e));
   };
 
-  // Transfer sole ownership; logged with old → new owner.
-  const transferProjectOwner = (id: string, ownerUserId: string, ownerName: string) => {
+  // Assign / transfer sole ownership to a YULLR contact; logged with old → new.
+  const transferProjectOwner = (id: string, ownerContactId: string, ownerName: string) => {
     const project = projects.find(p => p.id === id);
-    updateProject(id, { ownerUserId, ownerName });
+    updateProject(id, { ownerContactId, ownerName });
     if (project) {
       logActivity(project.mountainId, 'owner_transferred', `Project "${project.name}" owner: ${project.ownerName || '—'} → ${ownerName}`);
     }
