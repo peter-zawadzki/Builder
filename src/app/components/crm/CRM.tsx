@@ -14,6 +14,7 @@ import type {
 } from '../../context/DataContext';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
+import { AppHeader } from '../AppHeader';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1052,12 +1053,17 @@ function CRMContent() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
-      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="p-1 active:opacity-60"><ArrowLeft size={24} className="text-[#0a0a0a]" /></button>
-          <div className="flex items-center gap-2 flex-1">
-            <div className="w-7 h-7 rounded-[7px] bg-[#1D2930] flex items-center justify-center"><Users size={14} className="text-white" /></div>
-            <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px]">CRM</h1>
+      <AppHeader />
+      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex gap-1 overflow-x-auto pb-0.5">
+            {TABS.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-[#1D2930] text-white' : 'text-[#6a7282] hover:bg-[#f3f3f5]'}`}>
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
           </div>
           <button
             onClick={() => navigate('/mountains/new')}
@@ -1066,15 +1072,6 @@ function CRMContent() {
           >
             <Plus size={14} /> Mountain
           </button>
-        </div>
-        <div className="flex gap-1 mt-3 overflow-x-auto pb-0.5">
-          {TABS.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-[#1D2930] text-white' : 'text-[#6a7282] hover:bg-[#f3f3f5]'}`}>
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
         </div>
       </div>
 

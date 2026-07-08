@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Search, AlertTriangle, UserCircle2, Home, Users, Package } from 'lucide-react';
-import { UserButton } from '@clerk/clerk-react';
+import { Search, AlertTriangle, UserCircle2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import type { Project } from '../../context/DataContext';
 import { INSTALL_STAGES } from './ProjectsPane';
+import { AppHeader } from '../AppHeader';
 
 function daysAgo(iso?: string) {
   if (!iso) return null;
@@ -65,19 +65,7 @@ export function ProjectsList() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      {/* Header */}
-      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-3 sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigate('/')} className="p-1.5 active:opacity-60"><ArrowLeft size={22} className="text-[#0a0a0a]" /></button>
-          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px] flex-1">Projects</h1>
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => navigate('/mountains')} className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Mountains"><Home size={18} className="text-[#1e3a5f]" /></button>
-            <button onClick={() => navigate('/crm')} className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="People"><Users size={18} className="text-[#1e3a5f]" /></button>
-            <button onClick={() => navigate('/inventory')} className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Inventory"><Package size={18} className="text-[#1e3a5f]" /></button>
-            <UserButton afterSignOutUrl="/" />
-          </div>
-        </div>
-      </div>
+      <AppHeader />
 
       <div className="p-4 space-y-3">
         {/* Filters */}

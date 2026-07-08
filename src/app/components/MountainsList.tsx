@@ -8,6 +8,7 @@ import { projectId, publicAnonKey } from '/utils/supabase/info';
 import { useIsSuperAdmin } from '../hooks/useRole';
 import { SalesProcessBar } from './SalesProcessBar';
 import { QuickNotesModal } from './QuickNotesModal';
+import { AppHeader } from './AppHeader';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
 const AUTH_HEADER = { Authorization: `Bearer ${publicAnonKey}` };
@@ -229,57 +230,7 @@ export function MountainsList() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4">
-        <div className="flex flex-col items-center justify-center relative">
-          <Link to="/"><img src={imgImageYullrLogo} alt="Yullr" className="h-16 mb-3" /></Link>
-          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[24px]">
-            Mountain Builder
-          </h1>
-          {/* Left: signed-in user — identity, sign out, and (super-admin) admin actions */}
-          <div className="absolute left-0 top-0 flex items-center h-9">
-            <UserButton appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }}>
-              {isSuperAdmin && (
-                <UserButton.MenuItems>
-                  <UserButton.Action
-                    label="Team &amp; invites"
-                    labelIcon={<UserPlus size={16} />}
-                    onClick={() => navigate('/team')}
-                  />
-                  <UserButton.Action
-                    label="Inspection items"
-                    labelIcon={<Wrench size={16} />}
-                    onClick={() => navigate('/inspection-items')}
-                  />
-                  <UserButton.Action
-                    label="Local DB check"
-                    labelIcon={<Database size={16} />}
-                    onClick={() => navigate('/system-check')}
-                  />
-                </UserButton.MenuItems>
-              )}
-            </UserButton>
-          </div>
-          {/* Right: primary navigation — Mountains · People · Inventory */}
-          <div className="absolute right-0 top-0 flex items-center gap-2">
-            <Link to="/mountains">
-              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Mountains">
-                <Mountain size={20} className="text-[#6a7282]" />
-              </button>
-            </Link>
-            <Link to="/crm">
-              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="People &amp; contacts">
-                <Users size={20} className="text-[#6a7282]" />
-              </button>
-            </Link>
-            <Link to="/inventory">
-              <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" title="Inventory">
-                <Boxes size={20} className="text-[#6a7282]" />
-              </button>
-            </Link>
-          </div>
-        </div>
-      </div>
+      <AppHeader />
 
       {/* Content */}
       <div className="flex-1 p-4">
