@@ -367,56 +367,46 @@ export function MountainsList() {
                         {mountain.name}
                       </h3>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className={`text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full ${mountain.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-                          {mountain.proposalCreated ? 'Customer' : 'Prospect'}
+                        {org && (
+                          <span className="flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                            <Building2 size={10} /> {org.name}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                          <MapPin size={10} /> {trailCount} trail{trailCount !== 1 ? 's' : ''}
                         </span>
-                        {mountain.trailMapType && (
-                          <button
-                            onClick={e => openMap(e, mountain.id, mountain.name)}
-                            className="flex items-center gap-1 bg-[#f0fdf4] text-[#22c55e] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full active:bg-[#dcfce7] transition-colors"
-                            title={formatTimestamp(mountain.trailMapUploadedAt)}
-                          >
-                            <Map size={9} />
-                            Map
-                          </button>
-                        )}
-                        {mountain.proposalCreated && (
-                          <button
-                            onClick={e => openProposal(e, mountain.id)}
-                            className="flex items-center gap-1 bg-[#fff3f0] text-[#ff5c39] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full active:bg-[#ffe0d9] transition-colors"
-                            title={formatTimestamp(mountain.proposalCreatedAt)}
-                          >
-                            <FileText size={9} />
-                            Proposal
-                          </button>
-                        )}
-                        {mountain.invoice && (
-                          <button
-                            onClick={e => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              navigate(`/mountains/${mountain.id}/invoice`);
-                            }}
-                            className="flex items-center gap-1 bg-[#fef3c7] text-[#d97706] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full active:bg-[#fde68a] transition-colors"
-                            title={`Invoice created ${mountain.invoice.date}`}
-                          >
-                            <Receipt size={9} />
-                            Invoice
-                          </button>
-                        )}
-                        <button
-                          onClick={e => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setNotesModalMountainId(mountain.id);
-                          }}
-                          className="flex items-center gap-1 bg-[#EBF3FF] text-[#307FE2] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full active:bg-[#C5DEFF] transition-colors"
-                          title={formatTimestamp(mostRecentNoteUpdate)}
-                        >
-                          <StickyNote size={9} />
-                          {noteCount > 0 ? noteCount : 'Notes'}
-                        </button>
+                        <span className="flex items-center gap-1 bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                          <Navigation size={10} /> {locationCount} location{locationCount !== 1 ? 's' : ''}
+                        </span>
+                        <span className="flex items-center gap-1 bg-[#fff3f0] text-[#ff5c39] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                          <Camera size={10} /> {cameraCount} camera{cameraCount !== 1 ? 's' : ''}
+                        </span>
+                        <span className="flex items-center gap-1 bg-[#eef3fb] text-[#307fe2] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                          <Users size={10} /> {contactCount} contact{contactCount !== 1 ? 's' : ''}
+                        </span>
                       </div>
+                      {(mountain.trailMapType || mountain.invoice) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {mountain.trailMapType && (
+                            <button
+                              onClick={e => openMap(e, mountain.id, mountain.name)}
+                              className="flex items-center gap-1 bg-[#f0fdf4] text-[#22c55e] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full active:bg-[#dcfce7] transition-colors"
+                              title={formatTimestamp(mountain.trailMapUploadedAt)}
+                            >
+                              <Map size={9} /> Map
+                            </button>
+                          )}
+                          {mountain.invoice && (
+                            <button
+                              onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/mountains/${mountain.id}/invoice`); }}
+                              className="flex items-center gap-1 bg-[#fef3c7] text-[#d97706] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-1 rounded-full active:bg-[#fde68a] transition-colors"
+                              title={`Invoice created ${mountain.invoice.date}`}
+                            >
+                              <Receipt size={9} /> Invoice
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1 line-clamp-2">
                       {mountain.address}
@@ -424,25 +414,6 @@ export function MountainsList() {
                     <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-2">
                       {mountain.phone}
                     </p>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {org && (
-                        <span className="flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                          <Building2 size={10} /> {org.name}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1 bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                        <MapPin size={10} /> {trailCount} trail{trailCount !== 1 ? 's' : ''}
-                      </span>
-                      <span className="flex items-center gap-1 bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                        <Navigation size={10} /> {locationCount} location{locationCount !== 1 ? 's' : ''}
-                      </span>
-                      <span className="flex items-center gap-1 bg-[#fff3f0] text-[#ff5c39] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                        <Camera size={10} /> {cameraCount} camera{cameraCount !== 1 ? 's' : ''}
-                      </span>
-                      <span className="flex items-center gap-1 bg-[#eef3fb] text-[#307fe2] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                        <Users size={10} /> {contactCount} contact{contactCount !== 1 ? 's' : ''}
-                      </span>
-                    </div>
                     {/* Project status — one bar per project */}
                     <div className="mt-auto">
                       {(() => {
