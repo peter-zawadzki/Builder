@@ -21,7 +21,6 @@ import { CustomerAgreementSignPage } from "./components/CustomerAgreementSignPag
 import { CRMSection } from "./components/crm/CRM";
 import { MountainPortal } from "./components/MountainPortal";
 import { HomeDashboard } from "./components/HomeDashboard";
-import { ProjectsList } from "./components/projects/ProjectsList";
 import { ClerkRoot } from "./components/ClerkRoot";
 import { SignInPage } from "./components/SignInPage";
 import { SignUpPage } from "./components/SignUpPage";
@@ -64,7 +63,6 @@ export const router = createBrowserRouter([
         children: [
           { path: "/", Component: HomeDashboard },
           { path: "/mountains", Component: MountainsList },
-          { path: "/projects", Component: ProjectsList },
           { path: "/inventory", Component: InventoryPage },
           { path: "/inspection-items", Component: InspectionItemsPage },
           { path: "/crm", Component: CRMSection },

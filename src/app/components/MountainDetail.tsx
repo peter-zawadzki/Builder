@@ -189,9 +189,7 @@ export function MountainDetail() {
 
   // At-a-glance summary for the Status pane.
   const linkedOrg = mountain.organizationId ? organizations.find(o => o.id === mountain.organizationId) : undefined;
-  const crmContactCount = contacts.filter(c => c.mountainId === mountainId).length;
-  const embeddedContactCount = [mountain.adminContact, mountain.technicalContact, ...(mountain.additionalContacts || [])].filter(c => c?.name).length;
-  const contactCount = crmContactCount > 0 ? crmContactCount : embeddedContactCount;
+  const contactCount = contacts.filter(c => c.mountainId === mountainId).length;
 
   // Resolve / persist a single contact by its slot in the mountain record.
   const contactForSlot = (slot: ContactSlot): Contact | undefined =>
@@ -412,14 +410,7 @@ export function MountainDetail() {
           >
             {(() => {
               const crmContacts = contacts.filter((c) => c.mountainId === mountainId);
-              const embedded: Array<{ c: Contact; _role: string; slot: ContactSlot }> = [
-                mountain.adminContact?.name ? { c: mountain.adminContact, _role: 'Admin', slot: { type: 'admin' as const } } : null,
-                mountain.technicalContact?.name ? { c: mountain.technicalContact, _role: 'Technical', slot: { type: 'technical' as const } } : null,
-                ...(mountain.additionalContacts || []).map((c, index) =>
-                  c.name ? { c, _role: c.role || 'Contact', slot: { type: 'additional' as const, index } } : null),
-              ].filter(Boolean) as any[];
-
-              if (crmContacts.length === 0 && embedded.length === 0) {
+              if (crmContacts.length === 0) {
                 return (
                   <div className="text-[13px] text-[#6a7282]">
                     No contacts yet.{' '}
@@ -429,7 +420,6 @@ export function MountainDetail() {
               }
               return (
                 <div className="space-y-2">
-                  {/* CRM-linked contacts */}
                   {crmContacts.map((c) => {
                     const noteCount = c.activities?.filter((a) => a.type === 'note').length || 0;
                     const openActions = c.activities?.filter((a) => a.type === 'action' && !a.completed).length || 0;
@@ -449,34 +439,6 @@ export function MountainDetail() {
                               <span className="text-[11px] bg-[#eff6ff] text-[#307fe2] px-2 py-0.5 rounded-full">{noteCount} note{noteCount === 1 ? '' : 's'}</span>
                             )}
                             {c.isPrimary && <span className="text-[11px] bg-[#eaf5ef] text-[#3f7a5c] px-2 py-0.5 rounded-full">Primary</span>}
-                            <ChevronRight size={14} className="text-[#c0c4cc]" />
-                          </div>
-                        </div>
-                        {c.title && <div className="text-[12px] text-[#6a7282]">{c.title}</div>}
-                        <div className="flex flex-col gap-0.5 mt-1">
-                          {c.email && <span className="flex items-center gap-1.5 text-[12px] text-[#307fe2] truncate"><Mail size={12} className="shrink-0" /> {c.email}</span>}
-                          {c.phone && <span className="flex items-center gap-1.5 text-[12px] text-[#6a7282]"><Phone size={12} className="shrink-0" /> {c.phone}</span>}
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  {/* Legacy embedded contacts — shown only until migrated into the CRM */}
-                  {crmContacts.length === 0 && embedded.map(({ c, _role, slot }, i) => {
-                    const noteCount = c.contactNotes?.length || 0;
-                    return (
-                      <button
-                        key={`emb-${i}`}
-                        onClick={() => setContactSlot(slot)}
-                        className="w-full text-left border border-dashed border-[rgba(0,0,0,0.1)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.18)]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{c.name}</span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {noteCount > 0 && (
-                              <span className="text-[11px] bg-[#eff6ff] text-[#307fe2] px-2 py-0.5 rounded-full">{noteCount} note{noteCount === 1 ? '' : 's'}</span>
-                            )}
-                            <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{_role}</span>
                             <ChevronRight size={14} className="text-[#c0c4cc]" />
                           </div>
                         </div>
