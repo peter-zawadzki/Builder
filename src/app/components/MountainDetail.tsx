@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact } from '../context/DataContext';
-import { ContactDetail, DealDetailsModal } from './crm/CRM';
+import { ContactDetail, DealDetailsModal, ContactForm } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
@@ -136,6 +136,7 @@ export function MountainDetail() {
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<Asset | null>(null);
   const [contactSlot, setContactSlot] = useState<ContactSlot | null>(null);
   const [crmContact, setCrmContact] = useState<CRMContact | null>(null);
+  const [showAddContact, setShowAddContact] = useState(false);
   const [showNextAction, setShowNextAction] = useState(false);
 
   // Updates feed for the Status pane.
@@ -405,7 +406,7 @@ export function MountainDetail() {
             title="Contacts"
             icon={<Users size={16} className="text-[#6a7282]" />}
             headerRight={
-              <button onClick={() => navigate('/crm')} className="text-[12px] text-[#307fe2] active:opacity-60">Add in CRM</button>
+              <button onClick={() => setShowAddContact(true)} className="text-[12px] text-[#307fe2] active:opacity-60 flex items-center gap-1"><Plus size={12} /> Add</button>
             }
           >
             {(() => {
@@ -414,7 +415,7 @@ export function MountainDetail() {
                 return (
                   <div className="text-[13px] text-[#6a7282]">
                     No contacts yet.{' '}
-                    <button onClick={() => navigate('/crm')} className="text-[#307fe2]">Add in CRM</button>
+                    <button onClick={() => setShowAddContact(true)} className="text-[#307fe2]">Add a contact</button>
                   </div>
                 );
               }
@@ -749,6 +750,13 @@ export function MountainDetail() {
         />
       )}
       {showNextAction && <DealDetailsModal mountainId={mountainId!} onClose={() => setShowNextAction(false)} />}
+      {showAddContact && (
+        <ContactForm
+          contact={null}
+          defaults={{ mountainId: mountainId!, organizationId: mountain.organizationId }}
+          onClose={() => setShowAddContact(false)}
+        />
+      )}
       {crmContact && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"

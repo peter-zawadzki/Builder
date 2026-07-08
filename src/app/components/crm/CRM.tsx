@@ -642,7 +642,7 @@ function findDuplicateContacts(
   });
 }
 
-function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose: () => void }) {
+export function ContactForm({ contact, onClose, defaults }: { contact: CRMContact | null; onClose: () => void; defaults?: Partial<CRMContact> }) {
   const { addContact, updateContact, contacts, mountains, organizations } = useData();
   const [dupCandidates, setDupCandidates] = useState<CRMContact[] | null>(null);
   const [form, setForm] = useState({
@@ -654,10 +654,10 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
     workPhone: contact?.workPhone || '',
     type: contact?.type || 'General' as ContactType,
     title: contact?.title || '',
-    organizationId: contact?.organizationId || '',
+    organizationId: contact?.organizationId || defaults?.organizationId || '',
     tags: contact?.tags || [] as ContactTag[],
     isPrimary: contact?.isPrimary || false,
-    mountainId: contact?.mountainId || '',
+    mountainId: contact?.mountainId || defaults?.mountainId || '',
     affiliation: contact?.affiliation || '',
     notes: contact?.notes || '',
   });
