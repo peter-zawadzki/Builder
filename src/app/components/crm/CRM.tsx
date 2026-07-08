@@ -1127,11 +1127,10 @@ type FollowItem = {
   assignee?: string;
 };
 
-export function FollowUps() {
+export function FollowUps({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
   const { notes, mountains, updateNote, updateMountain, logActivity } = useData();
   const navigate = useNavigate();
   const me = useMyContact();
-  const [scope, setScope] = useState<'mine' | 'all'>(me ? 'mine' : 'all');
 
   const allItems = useMemo<FollowItem[]>(() => {
     const noteItems: FollowItem[] = notes
@@ -1188,15 +1187,6 @@ export function FollowUps() {
 
   return (
     <div className="p-4 space-y-4">
-      {me && (
-        <div className="flex gap-2">
-          {(['mine', 'all'] as const).map(s => (
-            <button key={s} onClick={() => setScope(s)} className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${scope === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-              {s === 'mine' ? 'Assigned to me' : 'All'}
-            </button>
-          ))}
-        </div>
-      )}
       {overdue.length > 0 && (
         <div>
           <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#F95C39] uppercase tracking-wide mb-2 flex items-center gap-1.5"><AlertTriangle size={12} /> Overdue ({overdue.length})</h3>

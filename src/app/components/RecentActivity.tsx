@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData } from '../context/DataContext';
 
 type Act = { id: string; mountainId: string; type: string; summary: string; actor: string; timestamp: string };
 
-// Recent actor-stamped activity across all mountains, filterable by person
-// ("let's see what RJ has done lately").
-export function RecentActivity() {
+// Recent actor-stamped activity across all mountains. Master scope decides
+// "my activity" (things I did) vs. everyone; in "all" you can drill to a person.
+export function RecentActivity({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
   const { getToken } = useAuth();
+  const { user } = useUser();
   const { mountains } = useData();
   const navigate = useNavigate();
   const [items, setItems] = useState<Act[]>([]);
@@ -28,23 +29,27 @@ export function RecentActivity() {
     return () => { alive = false; };
   }, [getToken]);
 
+  const myNames = [user?.fullName, user?.primaryEmailAddress?.emailAddress].filter(Boolean).map(s => s!.toLowerCase());
   const people = useMemo(
     () => Array.from(new Set(items.map(i => i.actor).filter(Boolean))).sort() as string[],
     [items],
   );
-  const filtered = person === 'all' ? items : items.filter(i => i.actor === person);
+  const base = scope === 'mine' ? items.filter(i => myNames.includes((i.actor || '').toLowerCase())) : items;
+  const filtered = scope === 'mine' || person === 'all' ? base : base.filter(i => i.actor === person);
   const mName = (id: string) => mountains.find(m => m.id === id)?.name;
 
   return (
     <div className="space-y-2">
-      <select
-        value={person}
-        onChange={e => setPerson(e.target.value)}
-        className="bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
-      >
-        <option value="all">Everyone</option>
-        {people.map(p => <option key={p} value={p}>{p}</option>)}
-      </select>
+      {scope === 'all' && (
+        <select
+          value={person}
+          onChange={e => setPerson(e.target.value)}
+          className="bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+        >
+          <option value="all">Everyone</option>
+          {people.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      )}
 
       {filtered.length === 0 ? (
         <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">No activity yet.</div>

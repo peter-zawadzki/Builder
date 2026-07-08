@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -13,17 +13,14 @@ const TYPE_BADGE: Record<string, string> = {
 
 // Dashboard widget — "your pipeline is your projects." Lists active projects
 // across mountains, scoped to Mine (owner) or All (Employees only).
-export function ActiveProjects() {
+export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
   const { projects, mountains } = useData();
   const navigate = useNavigate();
   const me = useMyContact();
-  const canSeeAll = useCanSeeAll();
-  const [scope, setScope] = useState<'mine' | 'all'>('mine');
 
-  // No matching contact → can't compute "mine", so show all. Ambassadors are
-  // locked to mine. Employees can toggle.
-  const effective = !me ? 'all' : canSeeAll ? scope : 'mine';
-  const showToggle = !!me && canSeeAll;
+  // Ambassadors are always locked to their own; no contact → can't compute mine.
+  const canSeeAll = useCanSeeAll();
+  const effective = !me ? 'all' : (scope === 'all' && canSeeAll) ? 'all' : 'mine';
 
   const rows = useMemo(() => {
     const byId = Object.fromEntries(mountains.map(m => [m.id, m]));
@@ -41,20 +38,6 @@ export function ActiveProjects() {
 
   return (
     <div className="space-y-2">
-      {showToggle && (
-        <div className="flex gap-2">
-          {(['mine', 'all'] as const).map(s => (
-            <button key={s} onClick={() => setScope(s)}
-              className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${scope === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-              {s === 'mine' ? 'My projects' : 'All projects'}
-            </button>
-          ))}
-        </div>
-      )}
-      {!me && (
-        <p className="text-[11px] text-[#8992a0]">Showing all projects — add yourself as a YULLR contact (matching your login email) to see just yours.</p>
-      )}
-
       {rows.length === 0 ? (
         <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
           {effective === 'mine' ? 'No active projects owned by you.' : 'No active projects.'}
