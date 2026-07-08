@@ -97,6 +97,8 @@ export interface Mountain {
   stalledAt?: string;
   nextAction?: string;
   nextActionDate?: string;
+  nextActionBy?: string;    // name of the user who set the next action
+  nextActionAt?: string;    // when it was set (ISO)
   estimatedDealValue?: number;
   closeProbability?: number;
   corporateGroup?: string;

@@ -442,43 +442,7 @@ export function CreateMountain() {
           </div>
         </div>
 
-        {/* Contacts */}
-        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Contacts</h2>
-            <button type="button" onClick={addContact}
-              className="flex items-center gap-2 text-[#ff5c39] font-['Inter:Medium',sans-serif] text-[14px] active:opacity-70">
-              <Plus size={16} />
-              Add Contact
-            </button>
-          </div>
-
-          {formData.additionalContacts.map((contact, index) => (
-            <div key={index} className="border border-[rgba(0,0,0,0.1)] rounded-[8px] p-3 space-y-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px]">
-                  Contact {index + 1}{contact.name ? ` — ${contact.name}` : ''}
-                </p>
-                <button type="button" onClick={() => removeContact(index)}
-                  className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]">
-                  <X size={14} className="text-[#ff5c39]" />
-                </button>
-              </div>
-              <ContactForm
-                contact={contact}
-                onChange={(field, value) => updateContact(index, field, value)}
-                knownTeamNames={knownTeamNames}
-                compact
-              />
-            </div>
-          ))}
-
-          {formData.additionalContacts.length === 0 && (
-            <p className="text-[#6a7282] text-[14px] text-center py-4 font-['Inter:Regular',sans-serif]">
-              No contacts yet. Tap "Add Contact" to add one.
-            </p>
-          )}
-        </div>
+        {/* Contacts are added from the CRM and linked to the mountain. */}
 
         <button type="submit"
           className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 font-['Inter:Medium',sans-serif] font-medium active:opacity-80">

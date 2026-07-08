@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData } from '../context/DataContext';
-import type { Asset, Contact, ContactNote } from '../context/DataContext';
+import type { Asset, Contact, ContactNote, CRMContact } from '../context/DataContext';
+import { ContactDetail, DealDetailsModal } from './crm/CRM';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
@@ -118,6 +119,7 @@ export function MountainDetail() {
     getAssetsByMountainId,
     getAssetsByLocationId,
     assets,
+    contacts,
     updateLocation,
     updateMountain,
   } = useData();
@@ -131,6 +133,8 @@ export function MountainDetail() {
   const [assigningLocationId, setAssigningLocationId] = useState<string | null>(null);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<Asset | null>(null);
   const [contactSlot, setContactSlot] = useState<ContactSlot | null>(null);
+  const [crmContact, setCrmContact] = useState<CRMContact | null>(null);
+  const [showNextAction, setShowNextAction] = useState(false);
 
   // Updates feed for the Status pane.
   const { getToken } = useAuth();
@@ -342,6 +346,24 @@ export function MountainDetail() {
               </div>
             )}
 
+            {/* Next action */}
+            <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide">Next action</div>
+                <button onClick={() => setShowNextAction(true)} className="text-[12px] text-[#307fe2] active:opacity-60">{mountain.nextAction ? 'Edit' : 'Set'}</button>
+              </div>
+              {mountain.nextAction ? (
+                <div className="text-[13px]">
+                  <div className="text-[#0a0a0a]">{mountain.nextAction}</div>
+                  <div className="text-[#8992a0] text-[12px]">
+                    {mountain.nextActionDate ? `Due ${mountain.nextActionDate}` : 'No date'}{mountain.nextActionBy ? ` · by ${mountain.nextActionBy}` : ''}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[12px] text-[#8992a0]">None set.</div>
+              )}
+            </div>
+
             {/* Updates */}
             <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
               <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-2">Updates</div>
@@ -369,13 +391,15 @@ export function MountainDetail() {
             }
           >
             {(() => {
-              const list: Array<{ c: Contact; _role: string; slot: ContactSlot }> = [
+              const crmContacts = contacts.filter((c) => c.mountainId === mountainId);
+              const embedded: Array<{ c: Contact; _role: string; slot: ContactSlot }> = [
                 mountain.adminContact?.name ? { c: mountain.adminContact, _role: 'Admin', slot: { type: 'admin' as const } } : null,
                 mountain.technicalContact?.name ? { c: mountain.technicalContact, _role: 'Technical', slot: { type: 'technical' as const } } : null,
                 ...(mountain.additionalContacts || []).map((c, index) =>
                   c.name ? { c, _role: c.role || 'Contact', slot: { type: 'additional' as const, index } } : null),
               ].filter(Boolean) as any[];
-              if (list.length === 0) {
+
+              if (crmContacts.length === 0 && embedded.length === 0) {
                 return (
                   <div className="text-[13px] text-[#6a7282]">
                     No contacts yet.{' '}
@@ -385,13 +409,46 @@ export function MountainDetail() {
               }
               return (
                 <div className="space-y-2">
-                  {list.map(({ c, _role, slot }, i) => {
+                  {/* CRM-linked contacts */}
+                  {crmContacts.map((c) => {
+                    const noteCount = c.activities?.filter((a) => a.type === 'note').length || 0;
+                    const openActions = c.activities?.filter((a) => a.type === 'action' && !a.completed).length || 0;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => setCrmContact(c)}
+                        className="w-full text-left border border-[rgba(0,0,0,0.06)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)]"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{c.name}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {openActions > 0 && (
+                              <span className="text-[11px] bg-[#fff4f1] text-[#F95C39] px-2 py-0.5 rounded-full">{openActions} open</span>
+                            )}
+                            {noteCount > 0 && (
+                              <span className="text-[11px] bg-[#eff6ff] text-[#307fe2] px-2 py-0.5 rounded-full">{noteCount} note{noteCount === 1 ? '' : 's'}</span>
+                            )}
+                            {c.isPrimary && <span className="text-[11px] bg-[#eaf5ef] text-[#3f7a5c] px-2 py-0.5 rounded-full">Primary</span>}
+                            <ChevronRight size={14} className="text-[#c0c4cc]" />
+                          </div>
+                        </div>
+                        {c.title && <div className="text-[12px] text-[#6a7282]">{c.title}</div>}
+                        <div className="flex flex-col gap-0.5 mt-1">
+                          {c.email && <span className="flex items-center gap-1.5 text-[12px] text-[#307fe2] truncate"><Mail size={12} className="shrink-0" /> {c.email}</span>}
+                          {c.phone && <span className="flex items-center gap-1.5 text-[12px] text-[#6a7282]"><Phone size={12} className="shrink-0" /> {c.phone}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {/* Legacy embedded contacts — shown only until migrated into the CRM */}
+                  {crmContacts.length === 0 && embedded.map(({ c, _role, slot }, i) => {
                     const noteCount = c.contactNotes?.length || 0;
                     return (
                       <button
-                        key={i}
+                        key={`emb-${i}`}
                         onClick={() => setContactSlot(slot)}
-                        className="w-full text-left border border-[rgba(0,0,0,0.06)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)]"
+                        className="w-full text-left border border-dashed border-[rgba(0,0,0,0.1)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.18)]"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{c.name}</span>
@@ -705,6 +762,17 @@ export function MountainDetail() {
           allAssets={assets}
           onClose={() => setSelectedInventoryItem(null)}
         />
+      )}
+      {showNextAction && <DealDetailsModal mountainId={mountainId!} onClose={() => setShowNextAction(false)} />}
+      {crmContact && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setCrmContact(null); }}
+        >
+          <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-lg h-[88vh] sm:h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <ContactDetail contact={contacts.find((c) => c.id === crmContact.id) || crmContact} onBack={() => setCrmContact(null)} />
+          </div>
+        </div>
       )}
       {contactSlot && contactForSlot(contactSlot) && (
         <ContactDetailModal

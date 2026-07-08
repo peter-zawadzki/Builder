@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
+import { useUser } from '@clerk/clerk-react';
 import {
   ArrowLeft, Users, Building2, Activity, Bell, LayoutDashboard, Mountain,
   Plus, Search, X, ChevronRight, Pencil, Trash2, AlertTriangle,
@@ -303,13 +304,25 @@ export function Pipeline() {
   );
 }
 
-function DealDetailsModal({ mountainId, onClose }: { mountainId: string; onClose: () => void }) {
-  const { getMountainById, updateMountain } = useData();
+export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; onClose: () => void }) {
+  const { getMountainById, updateMountain, logActivity } = useData();
+  const { user } = useUser();
+  const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const m = getMountainById(mountainId)!;
   const [nextAction, setNextAction] = useState(m.nextAction || '');
   const [nextActionDate, setNextActionDate] = useState(m.nextActionDate || '');
   const save = () => {
-    updateMountain(mountainId, { nextAction: nextAction || undefined, nextActionDate: nextActionDate || undefined });
+    const action = nextAction.trim() || undefined;
+    const changed = action !== m.nextAction || (nextActionDate || undefined) !== m.nextActionDate;
+    updateMountain(mountainId, {
+      nextAction: action,
+      nextActionDate: nextActionDate || undefined,
+      nextActionBy: action ? authorName : undefined,
+      nextActionAt: action && changed ? new Date().toISOString() : m.nextActionAt,
+    });
+    if (action && changed) {
+      logActivity(mountainId, 'next_action', `Next action: ${action}${nextActionDate ? ` (due ${nextActionDate})` : ''}`);
+    }
     onClose(); toast.success('Saved');
   };
   return (
@@ -335,7 +348,7 @@ function DealDetailsModal({ mountainId, onClose }: { mountainId: string; onClose
 
 // ─── Contact Detail ───────────────────────────────────────────────────────────
 
-function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
+export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
   const { updateContact, getMountainById } = useData();
   const navigate = useNavigate();
   const [newText, setNewText] = useState('');
@@ -914,34 +927,63 @@ export function ActivityFeed() {
 
 // ─── Follow-ups ───────────────────────────────────────────────────────────────
 
+type FollowItem = {
+  key: string;
+  kind: 'note' | 'action';
+  refId: string;
+  mountainId: string;
+  date: string;
+  text: string;
+  author?: string;
+};
+
 export function FollowUps() {
-  const { notes, mountains, updateNote } = useData();
+  const { notes, mountains, updateNote, updateMountain, logActivity } = useData();
   const navigate = useNavigate();
 
-  const followUps = useMemo(() =>
-    notes.filter(n => n.followUpDate).sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime()),
-    [notes],
-  );
+  const items = useMemo<FollowItem[]>(() => {
+    const noteItems: FollowItem[] = notes
+      .filter(n => n.followUpDate)
+      .map(n => ({ key: `note:${n.id}`, kind: 'note', refId: n.id, mountainId: n.mountainId, date: n.followUpDate!, text: n.text }));
+    const actionItems: FollowItem[] = mountains
+      .filter(m => m.nextActionDate && m.nextAction)
+      .map(m => ({ key: `action:${m.id}`, kind: 'action', refId: m.id, mountainId: m.id, date: m.nextActionDate!, text: m.nextAction!, author: m.nextActionBy }));
+    return [...noteItems, ...actionItems].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [notes, mountains]);
 
-  const overdue = followUps.filter(n => isOverdue(n.followUpDate!));
-  const upcoming = followUps.filter(n => !isOverdue(n.followUpDate!));
+  const overdue = items.filter(i => isOverdue(i.date));
+  const upcoming = items.filter(i => !isOverdue(i.date));
 
-  const NoteCard = ({ n }: { n: MountainNote }) => {
-    const m = mountains.find(mt => mt.id === n.mountainId);
-    const over = isOverdue(n.followUpDate!);
+  const complete = (i: FollowItem) => {
+    if (i.kind === 'note') {
+      updateNote(i.refId, { followUpDate: undefined });
+    } else {
+      updateMountain(i.refId, { nextAction: undefined, nextActionDate: undefined, nextActionBy: undefined, nextActionAt: undefined });
+      logActivity(i.refId, 'next_action_done', `Completed next action: ${i.text}`);
+    }
+    toast.success('Marked complete');
+  };
+
+  const Card = ({ i }: { i: FollowItem }) => {
+    const m = mountains.find(mt => mt.id === i.mountainId);
+    const over = isOverdue(i.date);
     return (
       <div className={`bg-white rounded-[12px] border px-4 py-3 ${over ? 'border-[rgba(249,92,57,0.3)]' : 'border-[rgba(0,0,0,0.08)]'}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] text-[#0a0a0a]">{n.text.slice(0, 80)}{n.text.length > 80 ? '…' : ''}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`text-[11px] flex items-center gap-1 font-['Inter:Medium',sans-serif] ${over ? 'text-[#F95C39]' : 'text-[#6a7282]'}`}><Calendar size={10} /> {n.followUpDate}</span>
-              <span className="text-[11px] text-[#6a7282]">{m?.name}</span>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              {i.kind === 'action' && <span className="text-[10px] font-['Inter:Medium',sans-serif] bg-[#eef3fb] text-[#307fe2] px-1.5 py-0.5 rounded-full uppercase tracking-wide">Next action</span>}
+              <p className="text-[13px] text-[#0a0a0a] truncate">{i.text.slice(0, 80)}{i.text.length > 80 ? '…' : ''}</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap mt-1">
+              <span className={`text-[11px] flex items-center gap-1 font-['Inter:Medium',sans-serif] ${over ? 'text-[#F95C39]' : 'text-[#6a7282]'}`}><Calendar size={10} /> {i.date}</span>
+              {m && <span className="text-[11px] text-[#6a7282]">{m.name}</span>}
+              {i.author && <span className="text-[11px] text-[#6a7282]">· by {i.author}</span>}
             </div>
           </div>
           <div className="flex gap-1 shrink-0">
-            <button onClick={() => navigate(`/mountains/${n.mountainId}`)} className="p-1.5 rounded-[6px] bg-[#f3f3f5]"><ExternalLink size={12} className="text-[#6a7282]" /></button>
-            <button onClick={() => updateNote(n.id, { followUpDate: undefined })} className="p-1.5 rounded-[6px] bg-[#e8f5e9]" title="Mark complete"><Check size={12} className="text-[#2e7d32]" /></button>
+            <button onClick={() => navigate(`/mountains/${i.mountainId}`)} className="p-1.5 rounded-[6px] bg-[#f3f3f5]"><ExternalLink size={12} className="text-[#6a7282]" /></button>
+            <button onClick={() => complete(i)} className="p-1.5 rounded-[6px] bg-[#e8f5e9]" title="Mark complete"><Check size={12} className="text-[#2e7d32]" /></button>
           </div>
         </div>
       </div>
@@ -953,16 +995,16 @@ export function FollowUps() {
       {overdue.length > 0 && (
         <div>
           <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#F95C39] uppercase tracking-wide mb-2 flex items-center gap-1.5"><AlertTriangle size={12} /> Overdue ({overdue.length})</h3>
-          <div className="space-y-2">{overdue.map(n => <NoteCard key={n.id} n={n} />)}</div>
+          <div className="space-y-2">{overdue.map(i => <Card key={i.key} i={i} />)}</div>
         </div>
       )}
       {upcoming.length > 0 && (
         <div>
           <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2">Upcoming ({upcoming.length})</h3>
-          <div className="space-y-2">{upcoming.map(n => <NoteCard key={n.id} n={n} />)}</div>
+          <div className="space-y-2">{upcoming.map(i => <Card key={i.key} i={i} />)}</div>
         </div>
       )}
-      {followUps.length === 0 && <div className="text-center py-12 text-[#6a7282] text-[14px]">No follow-ups scheduled</div>}
+      {items.length === 0 && <div className="text-center py-12 text-[#6a7282] text-[14px]">No follow-ups scheduled</div>}
     </div>
   );
 }
