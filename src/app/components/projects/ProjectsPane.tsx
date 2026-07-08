@@ -221,14 +221,21 @@ function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () 
 // ─── Detail / edit ─────────────────────────────────────────────────────────
 
 function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts, logActivity } = useData();
+  const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts, logActivity, assets, getLocationsByMountainId, getMountainById, updateMountain } = useData();
   const project = getProjectById(projectId);
   const [stallOpen, setStallOpen] = useState(false);
   const [stallReason, setStallReason] = useState<StallReason>('No response');
   const [stallNote, setStallNote] = useState('');
+  const [reconcile, setReconcile] = useState<{ stage?: PipelineStage; status?: ProjectWorkStatus } | null>(null);
 
   if (!project) { onClose(); return null; }
   const isInstall = project.type === 'Install';
+
+  // Reconciliation: deployed cameras vs inspected cameras for the mountain.
+  const mLocations = getLocationsByMountainId(project.mountainId);
+  const inspectedCameras = mLocations.reduce((s, l) => s + ((l.inspection?.items || []).filter(i => i.type === 'Camera').reduce((n, i) => n + i.count, 0)), 0);
+  const deployedCameras = assets.filter(a => a.mountainId === project.mountainId && a.type === 'Camera' && a.inventoryStatus === 'Deployed').length;
+  const cameraMismatch = inspectedCameras > 0 && deployedCameras !== inspectedCameras;
 
   const setType = (t: ProjectType) => {
     if (t === 'Install') updateProject(project.id, { type: t, status: undefined, stage: project.stage || 'Prospect' });
@@ -236,12 +243,38 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   };
 
   const changeStage = (stage: PipelineStage) => {
+    if (stage === 'Live' && cameraMismatch && !project.reconcileConfirmed) { setReconcile({ stage }); return; }
     updateProject(project.id, { stage });
     logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" stage → ${stage}`);
   };
   const changeStatus = (status: ProjectWorkStatus) => {
+    if (status === 'Done' && cameraMismatch && !project.reconcileConfirmed) { setReconcile({ status }); return; }
     updateProject(project.id, { status });
     logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" → ${status}`);
+  };
+
+  // Assign a fix-it task to a mountain affiliate (ambassador) and close the prompt.
+  const assignReconcileTask = () => {
+    const mtn = getMountainById(project.mountainId);
+    const affId = mtn?.affiliateContactIds?.[0];
+    const aff = affId ? contacts.find(c => c.id === affId) : undefined;
+    updateMountain(project.mountainId, {
+      nextAction: 'Install differs from inspection — update Builder',
+      nextActionDate: new Date().toISOString().slice(0, 10),
+      nextActionType: 'Task',
+      nextActionAssigneeId: aff?.id,
+      nextActionAssignee: aff?.name,
+      nextActionAt: new Date().toISOString(),
+    });
+    logActivity(project.mountainId, 'next_action', `Reconciliation task assigned${aff ? ` → ${aff.name}` : ''}`);
+    setReconcile(null);
+    toast.success(aff ? `Assigned to ${aff.name}` : 'Reconciliation task created');
+  };
+
+  const confirmReconcile = () => {
+    updateProject(project.id, { reconcileConfirmed: true, ...(reconcile?.stage ? { stage: reconcile.stage } : {}), ...(reconcile?.status ? { status: reconcile.status } : {}) });
+    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" ${reconcile?.stage || reconcile?.status} (reconciliation confirmed)`);
+    setReconcile(null);
   };
 
   const applyStall = () => {
@@ -346,6 +379,23 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
             className="text-[12px] text-[#6a7282] active:opacity-70">Delete project</button>
         </div>
       </div>
+
+      {reconcile && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setReconcile(null); }}>
+          <div className="bg-white rounded-[16px] w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="w-12 h-12 rounded-full bg-[#fff4f1] flex items-center justify-center"><AlertTriangle size={22} className="text-[#F95C39]" /></div>
+              <h2 className="text-[17px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Install differs from inspection</h2>
+              <p className="text-[13px] text-[#6a7282]">Inspection specified <b>{inspectedCameras}</b> camera{inspectedCameras === 1 ? '' : 's'}, but <b>{deployedCameras}</b> {deployedCameras === 1 ? 'is' : 'are'} deployed. Resolve before closing this project.</p>
+            </div>
+            <div className="space-y-2">
+              <button onClick={assignReconcileTask} className="w-full bg-[#f3f3f5] text-[#0a0a0a] rounded-[10px] py-2.5 text-[14px] font-['Inter:Medium',sans-serif]">Assign fix-it task to ambassador</button>
+              <button onClick={confirmReconcile} className="w-full bg-[#ff5c39] text-white rounded-[10px] py-2.5 text-[14px] font-['Inter:Medium',sans-serif]">It's reconciled — continue</button>
+              <button onClick={() => setReconcile(null)} className="w-full text-[#6a7282] rounded-[10px] py-2 text-[13px] font-['Inter:Medium',sans-serif]">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

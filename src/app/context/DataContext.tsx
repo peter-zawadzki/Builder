@@ -290,6 +290,7 @@ export interface Project {
   isStalled?: boolean;
   stallReason?: StallReason;
   stallNote?: string;           // required when stallReason === 'Other'
+  reconcileConfirmed?: boolean; // install-vs-inspection reconciliation acknowledged
   createdBy?: string;           // name of the user who created the project
   createdAt: string;
   updatedAt: string;
