@@ -21,7 +21,13 @@ export function AppHeader() {
   return (
     <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-2.5">
       <div className="flex items-center justify-between gap-2">
-        {/* Left: section navigation (active icon orange), then the signed-in user */}
+        {/* Left: brand */}
+        <Link to="/" className="flex items-center gap-2 active:opacity-70 shrink-0">
+          <img src={imgImageYullrLogo} alt="Yullr" className="h-7" />
+          <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px] tracking-[0.06em]">BUILDER</span>
+        </Link>
+
+        {/* Right: section navigation (active icon orange), then the signed-in user */}
         <div className="flex items-center gap-2">
           {NAV.map(({ to, Icon, label, match }) => {
             const active = match(pathname);
@@ -49,12 +55,6 @@ export function AppHeader() {
             </UserButton>
           </div>
         </div>
-
-        {/* Right: brand */}
-        <Link to="/" className="flex items-center gap-2 active:opacity-70 shrink-0">
-          <img src={imgImageYullrLogo} alt="Yullr" className="h-7" />
-          <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px] tracking-[0.06em]">BUILDER</span>
-        </Link>
       </div>
     </div>
   );
