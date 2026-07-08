@@ -90,7 +90,7 @@ export function LocationDetail() {
   const { mountainId, locationId } = useParams();
   const navigate = useNavigate();
   const {
-    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation,
+    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById,
   } = useData();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -214,9 +214,10 @@ export function LocationDetail() {
 
   const inspection = location.inspection;
   const totalInspItems = inspection?.items.reduce((s, i) => s + i.count, 0) || 0;
-  const inspDate = inspection?.createdAt
-    ? new Date(inspection.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : null;
+  const inspections = (location.inspections && location.inspections.length)
+    ? [...location.inspections].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    : (location.inspection ? [location.inspection] : []);
+  const fmtInspDate = (iso?: string) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 
   return (
     <div className="min-h-screen bg-[#f9fafb] pb-20">
@@ -439,71 +440,55 @@ export function LocationDetail() {
           </div>
         )}
 
-        {/* ── Inspection section ── */}
+        {/* ── Inspections section ── */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Inspection</h2>
+            <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
+              Inspections{inspections.length > 0 && <span className="ml-2 text-[#6a7282] text-[14px] font-normal">({inspections.length})</span>}
+            </h2>
+            <Link to={`/mountains/${mountainId}/locations/${locationId}/inspection`}>
+              <button className="bg-[#0a0a0a] text-white rounded-[8px] px-3 py-2 flex items-center gap-1.5 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80">
+                <Plus size={15} /> Add
+              </button>
+            </Link>
           </div>
 
-          {!inspection ? (
-            <>
-              <Link to={`/mountains/${mountainId}/locations/${locationId}/inspection`}>
-                <button className="w-full bg-[#0a0a0a] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium active:opacity-80">
-                  <Plus size={20} />
-                  Add Inspection
-                </button>
-              </Link>
-              <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-6 text-center mt-3">
-                <ClipboardList className="mx-auto mb-3 text-[#6a7282]" size={36} />
-                <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px]">
-                  No inspection yet. Document what equipment is at this site.
-                </p>
-              </div>
-            </>
+          {inspections.length === 0 ? (
+            <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-6 text-center">
+              <ClipboardList className="mx-auto mb-3 text-[#6a7282]" size={36} />
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px]">
+                No inspections yet. Document what equipment is at this site.
+              </p>
+            </div>
           ) : (
-            <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
-              {/* Header row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ClipboardList size={18} className="text-[#0a0a0a]" />
-                  <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px]">
-                    Inspection
-                  </span>
-                  <span className="bg-[#f3f3f5] text-[#0a0a0a] text-[12px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
-                    {totalInspItems} item{totalInspItems !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                <Link to={`/mountains/${mountainId}/locations/${locationId}/inspection`}>
-                  <button className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
-                    aria-label="Edit inspection">
-                    <Pencil size={16} className="text-[#0a0a0a]" />
-                  </button>
-                </Link>
-              </div>
-
-              {/* Date */}
-              {inspDate && (
-                <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">
-                  Inspected {inspDate}
-                </p>
-              )}
-
-              {/* Equipment chips */}
-              <div className="flex flex-wrap gap-2">
-                {inspection.items.map((item, i) => (
-                  <ItemChip key={i} item={item} />
-                ))}
-              </div>
-
-              {/* Notes */}
-              {inspection.notes && (
-                <div className="border-t border-[rgba(0,0,0,0.06)] pt-3">
-                  <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">Notes</p>
-                  <p className="text-[#3d3d3d] font-['Inter:Regular',sans-serif] text-[14px] leading-relaxed whitespace-pre-wrap">
-                    {inspection.notes}
-                  </p>
-                </div>
-              )}
+            <div className="space-y-3">
+              {inspections.map((insp, idx) => {
+                const count = insp.items.reduce((s, i) => s + i.count, 0);
+                return (
+                  <div key={insp.id || idx} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <ClipboardList size={16} className="text-[#0a0a0a]" />
+                        <span className="bg-[#f3f3f5] text-[#0a0a0a] text-[12px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">{count} item{count !== 1 ? 's' : ''}</span>
+                        {insp.difficulty && <span className="bg-[#fff3f0] text-[#ff5c39] text-[12px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">Difficulty {insp.difficulty}</span>}
+                        {insp.projectId && (() => { const p = getProjectById(insp.projectId!); return p ? <span className="bg-[#eef3fb] text-[#307fe2] text-[12px] px-2 py-0.5 rounded-full">{p.name}</span> : null; })()}
+                      </div>
+                      {fmtInspDate(insp.createdAt) && <span className="text-[#6a7282] text-[12px]">{fmtInspDate(insp.createdAt)}</span>}
+                    </div>
+                    {insp.items.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {insp.items.map((item, i) => <ItemChip key={i} item={item} />)}
+                      </div>
+                    )}
+                    {insp.notes && (
+                      <div className="border-t border-[rgba(0,0,0,0.06)] pt-3">
+                        <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">Notes</p>
+                        <p className="text-[#3d3d3d] font-['Inter:Regular',sans-serif] text-[14px] leading-relaxed whitespace-pre-wrap">{insp.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

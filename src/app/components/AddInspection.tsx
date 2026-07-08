@@ -29,24 +29,21 @@ export function AddInspection() {
 
   const mountain = getMountainById(mountainId!);
   const location = getLocationById(locationId!);
-  const isEditing = !!location?.inspection;
+  const existingCount = (location?.inspections?.length) || (location?.inspection ? 1 : 0);
 
-  // Inspections attach to a project. Default to the single active project.
+  // Each visit adds a NEW inspection. Attach to a project (default the single active).
   const activeProjects = getProjectsByMountainId(mountainId!).filter(p => p.stage !== 'Churned' && p.status !== 'Done');
-  const [items, setItems] = useState<SiteInspectionItem[]>(location?.inspection?.items || []);
-  const [notes, setNotes] = useState(location?.inspection?.notes || '');
-  const [projectId, setProjectId] = useState(
-    location?.inspection?.projectId || (activeProjects.length === 1 ? activeProjects[0].id : ''),
-  );
+  const [items, setItems] = useState<SiteInspectionItem[]>([]);
+  const [notes, setNotes] = useState('');
+  const [difficulty, setDifficulty] = useState<number>(0);
+  const [projectId, setProjectId] = useState(activeProjects.length === 1 ? activeProjects[0].id : '');
   const [saving, setSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Track changes
   useEffect(() => {
-    const itemsChanged = JSON.stringify(items) !== JSON.stringify(location?.inspection?.items || []);
-    const notesChanged = notes.trim() !== (location?.inspection?.notes || '');
-    setHasUnsavedChanges(itemsChanged || notesChanged);
-  }, [items, notes, location?.inspection?.items, location?.inspection?.notes]);
+    setHasUnsavedChanges(items.length > 0 || notes.trim() !== '' || difficulty > 0);
+  }, [items, notes, difficulty]);
 
   const toggleItem = (type: SiteInspectionItemType) => {
     setItems(prev => {
@@ -91,16 +88,19 @@ export function AddInspection() {
     }
     setSaving(true);
     try {
-      updateLocation(locationId!, {
-        inspection: {
-          items: items,
-          notes: notes.trim(),
-          createdAt: location?.inspection?.createdAt || new Date().toISOString(),
-          projectId: projectId || undefined,
-        },
-      });
+      const newInsp = {
+        id: crypto.randomUUID(),
+        items,
+        notes: notes.trim(),
+        createdAt: new Date().toISOString(),
+        projectId: projectId || undefined,
+        difficulty: (difficulty || undefined) as (1 | 2 | 3 | 4 | 5 | undefined),
+      };
+      const prior = location?.inspections || (location?.inspection ? [location.inspection] : []);
+      const inspections = [...prior, newInsp];
+      updateLocation(locationId!, { inspections, inspection: newInsp });
 
-      toast.success(isEditing ? 'Inspection updated' : 'Inspection added');
+      toast.success('Inspection added');
       setHasUnsavedChanges(false);
       navigate(`/mountains/${mountainId}/locations/${locationId}`);
     } catch (err) {
@@ -164,6 +164,24 @@ export function AddInspection() {
               </select>
             )}
           </div>
+        )}
+
+        {/* ── Difficulty (per inspection) ── */}
+        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+          <label className="block text-[#6a7282] font-['Inter:Medium',sans-serif] text-[12px] mb-2 uppercase tracking-wider">Install Difficulty</label>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} type="button" onClick={() => setDifficulty(difficulty === n ? 0 : n)}
+                className={`flex-1 py-2 rounded-[8px] text-[14px] font-['Inter:Medium',sans-serif] ${difficulty === n ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-[#8992a0] mt-1.5">1 = easy · 5 = hard</p>
+        </div>
+
+        {existingCount > 0 && (
+          <p className="text-[12px] text-[#6a7282] -mt-2">This location already has {existingCount} inspection{existingCount === 1 ? '' : 's'}. This adds another.</p>
         )}
 
         {/* Info banner */}

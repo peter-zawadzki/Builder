@@ -157,6 +157,15 @@ export interface Trail {
 
 // ─── Unified Location (replaces InstallLocation + SiteInspectionLocation) ─────
 
+export interface Inspection {
+  id: string;
+  items: SiteInspectionItem[];
+  notes?: string;
+  createdAt: string;
+  projectId?: string;              // the project this inspection is for
+  difficulty?: 1 | 2 | 3 | 4 | 5;  // install difficulty (per inspection, not the location)
+}
+
 export interface Location {
   id: string;
   mountainId: string;
@@ -164,7 +173,7 @@ export interface Location {
   name: string;
   trailName?: string;      // legacy / display label
   notes?: string;
-  difficulty?: 1 | 2 | 3 | 4 | 5; // Installation difficulty rating
+  difficulty?: 1 | 2 | 3 | 4 | 5; // legacy — difficulty now lives on the inspection
   locationType?: 'Install Site' | 'Power' | 'Start' | 'Finish';
   coordinates?: {
     latitude: number;
@@ -175,13 +184,10 @@ export interface Location {
     longitude: number;
     recordedAt: string;    // timestamp when original coordinates were captured
   };
-  /** One inspection per location — optional, added separately after creation. */
-  inspection?: {
-    items: SiteInspectionItem[];
-    notes?: string;
-    createdAt: string;
-    projectId?: string;   // the project this inspection is for
-  };
+  /** Full inspection history; multiple inspections per location. */
+  inspections?: Inspection[];
+  /** Mirror of the most-recent inspection — kept for existing read sites. */
+  inspection?: Inspection;
 }
 
 // ─── Asset ───────────────────────────────────────────────────────────────────

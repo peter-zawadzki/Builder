@@ -597,39 +597,6 @@ export function CreateLocation() {
             )}
           </div>
 
-          <div>
-            <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-2">
-              Installation Difficulty
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {([1, 2, 3, 4, 5] as const).map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setDifficulty(level)}
-                  className={`h-12 rounded-[8px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                    difficulty === level
-                      ? 'bg-[#ff5c39] text-white'
-                      : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
-                  }`}
-                >
-                  <span className="font-['Inter:Bold',sans-serif] font-bold text-[18px]">{level}</span>
-                  <span className="font-['Inter:Regular',sans-serif] text-[9px]">
-                    {level === 1 ? 'Easy' : level === 5 ? 'Hard' : ''}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {difficulty && (
-              <button
-                type="button"
-                onClick={() => setDifficulty(null)}
-                className="mt-2 text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] active:opacity-60"
-              >
-                Clear rating
-              </button>
-            )}
-          </div>
         </div>
 
         {/* ── GPS ── */}
