@@ -420,7 +420,12 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
         {/* Contact info */}
         <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 space-y-2">
           {contact.email && <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-[13px] text-[#1565c0]"><Mail size={14} />{contact.email}</a>}
+          {(contact.emails || []).filter(Boolean).map((em, i) => (
+            <a key={i} href={`mailto:${em}`} className="flex items-center gap-2 text-[13px] text-[#1565c0]"><Mail size={14} className="opacity-0" />{em}</a>
+          ))}
           {contact.phone && <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{contact.phone}</a>}
+          {contact.mobilePhone && <a href={`tel:${contact.mobilePhone}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{contact.mobilePhone} <span className="text-[11px] text-[#8992a0]">mobile</span></a>}
+          {contact.workPhone && <a href={`tel:${contact.workPhone}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{contact.workPhone} <span className="text-[11px] text-[#8992a0]">work</span></a>}
           {mountain && (
             <button onClick={() => navigate(`/mountains/${mountain.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] active:opacity-70">
               <ExternalLink size={14} />{mountain.name} <StageBadge stage={mountain.pipelineStage} />
@@ -618,7 +623,10 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
   const [form, setForm] = useState({
     name: contact?.name || '',
     email: contact?.email || '',
+    emails: contact?.emails || [] as string[],
     phone: contact?.phone || '',
+    mobilePhone: contact?.mobilePhone || '',
+    workPhone: contact?.workPhone || '',
     type: contact?.type || 'General' as ContactType,
     title: contact?.title || '',
     organizationId: contact?.organizationId || '',
@@ -634,7 +642,15 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
 
   const save = () => {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
-    const data = { ...form, mountainId: form.mountainId || undefined, organizationId: form.organizationId || undefined, affiliation: (form.affiliation || undefined) as CRMContact['affiliation'] };
+    const data = {
+      ...form,
+      mountainId: form.mountainId || undefined,
+      organizationId: form.organizationId || undefined,
+      affiliation: (form.affiliation || undefined) as CRMContact['affiliation'],
+      mobilePhone: form.mobilePhone.trim() || undefined,
+      workPhone: form.workPhone.trim() || undefined,
+      emails: form.emails.map(s => s.trim()).filter(Boolean),
+    };
     if (contact) updateContact(contact.id, data);
     else addContact({ ...data, activities: [] });
     toast.success(contact ? 'Contact updated' : 'Contact added');
@@ -671,6 +687,32 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
             <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Title</label>
               <input type="text" value={form.title} onChange={e => set('title', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Mobile phone</label>
+              <input type="tel" value={form.mobilePhone} onChange={e => set('mobilePhone', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+            </div>
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Work phone</label>
+              <input type="tel" value={form.workPhone} onChange={e => set('workPhone', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Additional emails</label>
+            <div className="space-y-2">
+              {form.emails.map((em, i) => (
+                <div key={i} className="flex gap-2">
+                  <input type="email" value={em} placeholder="name@company.com"
+                    onChange={e => setForm(prev => ({ ...prev, emails: prev.emails.map((x, j) => j === i ? e.target.value : x) }))}
+                    className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+                  <button type="button" onClick={() => setForm(prev => ({ ...prev, emails: prev.emails.filter((_, j) => j !== i) }))} className="p-2 rounded-[8px] bg-[#fff0ee] active:bg-[#ffe0da]"><X size={14} className="text-[#F95C39]" /></button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setForm(prev => ({ ...prev, emails: [...prev.emails, ''] }))} className="text-[12px] text-[#307fe2] flex items-center gap-1 active:opacity-70"><Plus size={13} /> Add email</button>
             </div>
           </div>
 

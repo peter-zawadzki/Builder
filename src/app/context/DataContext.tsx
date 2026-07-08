@@ -298,8 +298,11 @@ export interface ContactActivity {
 export interface CRMContact {
   id: string;
   name: string;
-  email: string;
-  phone: string;
+  email: string;             // primary email
+  emails?: string[];         // additional emails
+  phone: string;             // primary / main phone
+  mobilePhone?: string;
+  workPhone?: string;
   type: ContactType;
   title?: string;
   organizationId?: string;
@@ -307,6 +310,7 @@ export interface CRMContact {
   isPrimary: boolean;
   mountainId?: string;       // single linked mountain
   affiliation?: 'Employee' | 'Ambassador';  // for YULLR-org people: their role in Builder
+  archived?: boolean;        // archived contacts drop out of default lists/search
   notes?: string;
   activities?: ContactActivity[];
   createdAt: string;
@@ -321,6 +325,7 @@ export interface CRMOrganization {
   mountainIds: string[];
   agreementDetails?: string;
   keyDates: { label: string; date: string }[];
+  archived?: boolean;
   notes?: string;
   createdAt: string;
   updatedAt: string;
