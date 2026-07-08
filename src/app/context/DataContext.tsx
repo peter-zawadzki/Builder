@@ -253,7 +253,7 @@ export interface Asset {
 
 // ─── CRM ─────────────────────────────────────────────────────────────────────
 
-export type ContactType = 'Resort' | 'Partner' | 'Vendor' | 'Investor' | 'Advisor' | 'Coach' | 'Team' | 'General';
+export type ContactType = 'Staff' | 'Partner' | 'Vendor' | 'Investor' | 'Advisor' | 'Coach' | 'Team' | 'General';
 export type ContactTag = 'Decision Maker' | 'Technical' | 'Champion' | 'Billing' | 'Legal';
 export type OrgType = 'Mountain Group' | 'Partner' | 'Vendor' | 'Investor Group' | 'Advisory' | 'Corporate Group';
 export type PipelineStage =

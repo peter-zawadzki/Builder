@@ -35,7 +35,7 @@ const STAGE_COLORS: Record<PipelineStage, string> = {
   'Churned':        'bg-[#f5f5f5] text-[#9e9e9e]',
 };
 
-const CONTACT_TYPES: ContactType[] = ['Resort', 'Partner', 'Vendor', 'Investor', 'Advisor', 'Coach', 'Team', 'General'];
+const CONTACT_TYPES: ContactType[] = ['Staff', 'Partner', 'Vendor', 'Investor', 'Advisor', 'Coach', 'Team', 'General'];
 const CONTACT_TAGS: ContactTag[] = ['Decision Maker', 'Technical', 'Champion', 'Billing', 'Legal'];
 const ORG_TYPES: OrgType[] = ['Mountain Group', 'Partner', 'Vendor', 'Investor Group', 'Advisory', 'Corporate Group'];
 const STALL_REASONS: StallReason[] = ['No response', 'Waiting on legal', 'Budget hold', 'Timing — offseason', 'Other'];
@@ -586,11 +586,12 @@ function Contacts() {
                     <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{c.name}</p>
                     {c.isPrimary && <Star size={12} className="text-[#e65100]" />}
                     <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{c.type}</span>
+                    {linkedMountain && <span className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full flex items-center gap-1"><Mountain size={10} /> {linkedMountain.name}</span>}
+                    {org && <span className="text-[11px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1"><Building2 size={10} /> {org.name}</span>}
                     {openActions > 0 && <span className="text-[11px] bg-[#fff3e0] text-[#e65100] px-2 py-0.5 rounded-full">{openActions} action{openActions !== 1 ? 's' : ''}</span>}
                   </div>
-                  {c.title && <p className="text-[12px] text-[#6a7282]">{c.title}{org ? ` · ${org.name}` : ''}</p>}
+                  {c.title && <p className="text-[12px] text-[#6a7282]">{c.title}</p>}
                   {c.email && <p className="text-[11px] text-[#6a7282] mt-0.5">{c.email}</p>}
-                  {linkedMountain && <p className="text-[11px] text-[#6a7282]">{linkedMountain.name}</p>}
                 </button>
                 <button onClick={() => setSelectedContact(c)} className="shrink-0 self-center p-1 active:opacity-70"><ChevronRight size={16} className="text-[#c0c4cc]" /></button>
               </div>
@@ -618,7 +619,7 @@ function ContactForm({ contact, onClose }: { contact: CRMContact | null; onClose
     name: contact?.name || '',
     email: contact?.email || '',
     phone: contact?.phone || '',
-    type: contact?.type || 'Resort' as ContactType,
+    type: contact?.type || 'General' as ContactType,
     title: contact?.title || '',
     organizationId: contact?.organizationId || '',
     tags: contact?.tags || [] as ContactTag[],
