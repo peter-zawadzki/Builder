@@ -288,20 +288,42 @@ export const MOUNTAIN_PIPELINE_STAGES: MountainPipelineStage[] = [
   'Signed Agreement', 'Onboarding', 'Active', 'Declined', 'Dead',
 ];
 
-// ─── Projects (the unit of work on a mountain) ───────────────────────────────
-// Install / Repair / Upgrade. An Install always has a proposal ($0 allowed) and
-// runs the full sales stage list; Repair/Upgrade use a lightweight status.
-export type ProjectType = 'Install' | 'Repair' | 'Upgrade';
-export type ProjectWorkStatus = 'Open' | 'In Progress' | 'Done';
+// ─── Projects (the unit of work on a mountain OR a team) ─────────────────────
+// Install / Repair / Upgrade live on mountains; Initial Onboarding / Followup
+// Training / Special Event live on teams (Special Event is also available on
+// mountains). Every type moves through its own fixed stage sequence.
+export type ProjectType = 'Install' | 'Repair' | 'Upgrade' | 'Initial Onboarding' | 'Followup Training' | 'Special Event';
+
+export type ProjectStage =
+  | 'Site Inspection' | 'Proposal Sent' | 'Proposal Signed' | 'Install Scheduled' | 'Install In-Progress' | 'Commissioning'
+  | 'Prospect' | 'Kickoff Scheduled' | 'Training Scheduled' | 'Training In-Progress'
+  | 'Training Requested'
+  | 'Event Requested' | 'Event Scheduled' | 'Event In-Progress'
+  | 'Completed';
+
+const INSTALL_LIKE_STAGES: ProjectStage[] = ['Site Inspection', 'Proposal Sent', 'Proposal Signed', 'Install Scheduled', 'Install In-Progress', 'Commissioning', 'Completed'];
+
+export const PROJECT_STAGES_BY_TYPE: Record<ProjectType, ProjectStage[]> = {
+  Install: INSTALL_LIKE_STAGES,
+  Repair: INSTALL_LIKE_STAGES,
+  Upgrade: INSTALL_LIKE_STAGES,
+  'Initial Onboarding': ['Prospect', 'Kickoff Scheduled', 'Training Scheduled', 'Training In-Progress', 'Completed'],
+  'Followup Training': ['Training Requested', 'Training Scheduled', 'Training In-Progress', 'Completed'],
+  'Special Event': ['Event Requested', 'Proposal Sent', 'Proposal Signed', 'Event Scheduled', 'Event In-Progress', 'Completed'],
+};
+
+export const DEFAULT_STAGE_BY_TYPE: Record<ProjectType, ProjectStage> = Object.fromEntries(
+  (Object.entries(PROJECT_STAGES_BY_TYPE) as [ProjectType, ProjectStage[]][]).map(([t, stages]) => [t, stages[0]])
+) as Record<ProjectType, ProjectStage>;
 
 export interface Project {
   id: string;
-  mountainId: string;
+  mountainId?: string;           // set for mountain-owned projects (Install/Repair/Upgrade/Special Event)
+  teamId?: string;                // set for team-owned projects (Onboarding/Training/Special Event)
   name: string;
   notes?: string;               // free-text project notes
   type: ProjectType;
-  stage?: PipelineStage;        // Install only — the full pipeline
-  status?: ProjectWorkStatus;   // Repair / Upgrade — lightweight
+  stage?: ProjectStage;
   ownerContactId?: string;      // the owning YULLR contact (employee)
   ownerName?: string;           // display name of the current owner
   ownerUserId?: string;         // legacy: Clerk user id, if owner was a login
@@ -380,6 +402,20 @@ export interface CRMOrganization {
   updatedAt: string;
 }
 
+// A Team — a distinct CRM entity from Organizations. Behaves the same
+// (contacts, notes/action items, archive/delete) but tracks its own projects
+// (Initial Onboarding / Followup Training / Special Event) instead of mountains.
+export interface CRMTeam {
+  id: string;
+  name: string;
+  contactIds: string[];
+  archived?: boolean;
+  notes?: string;
+  activities?: ContactActivity[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // People in the YULLR organization — the pool notes/action items can be
 // assigned to, across contacts, organizations, mountains, and projects.
 export function getYullrMembers(contacts: CRMContact[], organizations: CRMOrganization[]): CRMContact[] {
@@ -431,6 +467,7 @@ interface DataContextType {
   notes: MountainNote[];
   contacts: CRMContact[];
   organizations: CRMOrganization[];
+  teams: CRMTeam[];
   options: Record<string, string[]>;
   itemPrices: Record<string, number>;
   addMountain: (mountain: Omit<Mountain, 'id'>) => string;
@@ -451,6 +488,7 @@ interface DataContextType {
   transferProjectOwner: (id: string, ownerContactId: string, ownerName: string) => void;
   deleteProject: (id: string) => Promise<void>;
   getProjectsByMountainId: (mountainId: string) => Project[];
+  getProjectsByTeamId: (teamId: string) => Project[];
   getProjectById: (id: string) => Project | undefined;
   proposals: Proposal[];
   addProposal: (proposal: Omit<Proposal, 'id' | 'createdAt' | 'updatedAt'>) => string;
@@ -481,6 +519,9 @@ interface DataContextType {
   addOrganization: (org: Omit<CRMOrganization, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateOrganization: (id: string, updates: Partial<CRMOrganization>) => void;
   deleteOrganization: (id: string) => void;
+  addTeam: (team: Omit<CRMTeam, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateTeam: (id: string, updates: Partial<CRMTeam>) => void;
+  deleteTeam: (id: string) => void;
   importContactsFromMountains: () => void;
   logActivity: (mountainId: string, type: string, summary: string) => void;
 }
@@ -509,6 +550,7 @@ const STORAGE_KEYS = {
   PENDING_PHOTOS: 'yullrLocal_pendingPhotoSync',
   CONTACTS: 'yullrLocal_crm_contacts',
   ORGANIZATIONS: 'yullrLocal_crm_organizations',
+  TEAMS: 'yullrLocal_crm_teams',
 };
 
 // Remove the old Supabase-era caches entirely (housekeeping). The prefix change
@@ -716,6 +758,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   });
   const [organizations, setOrganizations] = useState<CRMOrganization[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ORGANIZATIONS) || '[]'); }
+    catch { return []; }
+  });
+  const [teams, setTeams] = useState<CRMTeam[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.TEAMS) || '[]'); }
     catch { return []; }
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -1067,6 +1113,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     catch (e) { console.warn('Error saving organizations:', e); }
   }, [organizations]);
 
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(teams)); }
+    catch (e) { console.warn('Error saving teams:', e); }
+  }, [teams]);
+
   // ─── Mountains ──────────────────────────────────────────────────────────────
 
   const addMountain = (mountain: Omit<Mountain, 'id'>) => {
@@ -1310,6 +1361,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const getProjectsByMountainId = (mountainId: string) => projects.filter(p => p.mountainId === mountainId);
+  const getProjectsByTeamId = (teamId: string) => projects.filter(p => p.teamId === teamId);
   const getProjectById = (id: string) => projects.find(p => p.id === id);
 
   // ─── Proposals ──────────────────────────────────────────────────────────────
@@ -1580,6 +1632,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setOrganizations(prev => prev.filter(o => o.id !== id));
   };
 
+  const addTeam = (team: Omit<CRMTeam, 'id' | 'createdAt' | 'updatedAt'>): string => {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const newTeam: CRMTeam = { ...team, id, createdAt: now, updatedAt: now };
+    setTeams(prev => [...prev, newTeam]);
+    return id;
+  };
+
+  const updateTeam = (id: string, updates: Partial<CRMTeam>) => {
+    setTeams(prev => prev.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t));
+  };
+
+  const deleteTeam = (id: string) => {
+    setTeams(prev => prev.filter(t => t.id !== id));
+    setProjects(prev => prev.filter(p => p.teamId !== id));
+  };
+
   // Auto-import contacts from all mountains (called on first CRM visit)
   const importContactsFromMountains = () => {
     const existingEmails = new Set(contacts.map(c => c.email.toLowerCase()).filter(Boolean));
@@ -1618,6 +1687,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         notes,
         contacts,
         organizations,
+        teams,
         options,
         itemPrices,
         addMountain,
@@ -1638,6 +1708,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         transferProjectOwner,
         deleteProject,
         getProjectsByMountainId,
+        getProjectsByTeamId,
         getProjectById,
         proposals,
         addProposal,
@@ -1667,6 +1738,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         addOrganization,
         updateOrganization,
         deleteOrganization,
+        addTeam,
+        updateTeam,
+        deleteTeam,
         importContactsFromMountains,
         logActivity,
       }}

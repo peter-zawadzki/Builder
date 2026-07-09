@@ -1,14 +1,16 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useData, PROJECT_STAGES_BY_TYPE } from '../../context/DataContext';
 import { useMyContact, useCanSeeAll } from '../../hooks/useMyContact';
-import { INSTALL_STAGES } from './ProjectsPane';
 
 const TYPE_BADGE: Record<string, string> = {
   Install: 'bg-[#eef3fb] text-[#307fe2]',
   Repair: 'bg-[#fef3f0] text-[#F95C39]',
   Upgrade: 'bg-[#f3edfb] text-[#7c3aed]',
+  'Initial Onboarding': 'bg-[#e8f5e9] text-[#2e7d32]',
+  'Followup Training': 'bg-[#fff3e0] text-[#bf360c]',
+  'Special Event': 'bg-[#fce4ec] text-[#880e4f]',
 };
 
 // Dashboard widget — "your pipeline is your projects." Lists active projects
@@ -24,15 +26,17 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
 
   const rows = useMemo(() => {
     const byId = Object.fromEntries(mountains.map(m => [m.id, m]));
-    let active = projects.filter(p => p.stage !== 'Churned' && p.status !== 'Done');
+    // This widget is scoped to mountain projects — team projects don't have a
+    // mountain to navigate to.
+    let active = projects.filter(p => !!p.mountainId && p.stage !== 'Completed');
     // "Mine" = projects I own OR projects on a mountain where I'm an affiliate.
     if (effective === 'mine') {
       active = active.filter(p =>
-        me && (p.ownerContactId === me.id || (byId[p.mountainId] as any)?.affiliateContactIds?.includes(me.id)),
+        me && (p.ownerContactId === me.id || (byId[p.mountainId!] as any)?.affiliateContactIds?.includes(me.id)),
       );
     }
     return active
-      .map(p => ({ p, m: byId[p.mountainId] }))
+      .map(p => ({ p, m: byId[p.mountainId!] }))
       .sort((a, b) => new Date(b.p.updatedAt).getTime() - new Date(a.p.updatedAt).getTime());
   }, [projects, mountains, effective, me]);
 
@@ -44,12 +48,10 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
         </div>
       ) : (
         rows.map(({ p, m }) => {
-          const isInstall = p.type === 'Install';
-          const idx = isInstall ? Math.max(0, INSTALL_STAGES.indexOf(p.stage || 'Prospect')) : 0;
-          const pct = isInstall
-            ? Math.round(((idx + 1) / INSTALL_STAGES.length) * 100)
-            : p.status === 'Done' ? 100 : p.status === 'In Progress' ? 50 : 10;
-          const label = isInstall ? (p.stage || 'Prospect') : (p.status || 'Open');
+          const stages = PROJECT_STAGES_BY_TYPE[p.type];
+          const label = p.stage || stages[0];
+          const idx = Math.max(0, stages.indexOf(label));
+          const pct = Math.round(((idx + 1) / stages.length) * 100);
           return (
             <button key={p.id} onClick={() => navigate(`/mountains/${p.mountainId}`)}
               className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-3 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]">

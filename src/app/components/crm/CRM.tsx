@@ -2,14 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import {
-  ArrowLeft, Users, Building2, Activity, Bell, LayoutDashboard, Mountain,
+  ArrowLeft, Users, Users2, Building2, Activity, Bell, LayoutDashboard, Mountain,
   Plus, Search, X, ChevronRight, Pencil, Trash2, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Phone, Mail, Star, Calendar,
   ExternalLink, Check, MessageSquare, ListTodo, ChevronLeft, Archive,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import type {
-  CRMContact, CRMOrganization, ContactType, ContactTag, ContactActivity,
+  CRMContact, CRMOrganization, CRMTeam, ContactType, ContactTag, ContactActivity,
   OrgType, MountainPipelineStage, StallReason, MountainNote,
 } from '../../context/DataContext';
 import { MOUNTAIN_PIPELINE_STAGES } from '../../context/DataContext';
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
 import { useMyContact } from '../../hooks/useMyContact';
 import { ActivitySection } from '../ActivitySection';
+import { ProjectsPane } from '../projects/ProjectsPane';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ const CONTACT_TAGS: ContactTag[] = ['Decision Maker', 'Technical', 'Champion', '
 const ORG_TYPES: OrgType[] = ['Mountain Group', 'Partner', 'Vendor', 'Investor Group', 'Advisory', 'Corporate Group'];
 const STALL_REASONS: StallReason[] = ['No response', 'Waiting on legal', 'Budget hold', 'Timing — offseason', 'Other'];
 
-type CRMTab = 'dashboard' | 'pipeline' | 'contacts' | 'organizations' | 'activity' | 'followups' | 'mountains';
+type CRMTab = 'dashboard' | 'pipeline' | 'contacts' | 'organizations' | 'teams' | 'activity' | 'followups' | 'mountains';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -988,6 +989,157 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
   );
 }
 
+// ─── Teams ───────────────────────────────────────────────────────────────────
+// A Team behaves like an Organization (contacts, notes/action items,
+// archive/delete in edit mode) but tracks its own projects instead of
+// mountains.
+
+function Teams() {
+  const { teams, contacts, updateTeam } = useData();
+  const [search, setSearch] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editTarget, setEditTarget] = useState<CRMTeam | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const filtered = useMemo(() => {
+    let list = teams.filter(t => showArchived ? t.archived : !t.archived);
+    if (search) list = list.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || (t.notes || '').toLowerCase().includes(search.toLowerCase()));
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [teams, search, showArchived]);
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="flex gap-2">
+        <div className="flex-1 relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search teams…" className="w-full bg-[#f3f3f5] rounded-[8px] pl-9 pr-3 py-2.5 text-[#0a0a0a] text-[13px] outline-none" />
+        </div>
+        <button onClick={() => { setEditTarget(null); setShowForm(true); }} className="shrink-0 flex items-center gap-1.5 bg-[#1D2930] text-white px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif]">
+          <Plus size={14} /> Add
+        </button>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        <button onClick={() => setShowArchived(v => !v)} className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ml-auto ${showArchived ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>Archived</button>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="text-center py-12 text-[#6a7282] text-[14px]">No teams found</div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(team => {
+            const linkedContacts = contacts.filter(c => team.contactIds.includes(c.id));
+            return (
+              <button key={team.id} onClick={() => { setEditTarget(team); setShowForm(true); }} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:opacity-70">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{team.name}</p>
+                  {team.archived
+                    ? <span onClick={e => { e.stopPropagation(); updateTeam(team.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0">Restore</span>
+                    : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
+                </div>
+                {linkedContacts.length > 0 && <p className="text-[12px] text-[#6a7282]">{linkedContacts.length} contact{linkedContacts.length !== 1 ? 's' : ''}</p>}
+                {team.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{team.notes}</p>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {showForm && <TeamForm team={editTarget} onClose={() => { setShowForm(false); setEditTarget(null); }} />}
+    </div>
+  );
+}
+
+function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void }) {
+  const { contacts, addTeam, updateTeam, deleteTeam } = useData();
+  const [showDelete, setShowDelete] = useState(false);
+  const [form, setForm] = useState({
+    name: team?.name || '',
+    contactIds: team?.contactIds || [] as string[],
+    notes: team?.notes || '',
+  });
+
+  const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const toggleContact = (id: string) => set('contactIds', form.contactIds.includes(id) ? form.contactIds.filter(x => x !== id) : [...form.contactIds, id]);
+
+  const save = () => {
+    if (!form.name.trim()) { toast.error('Name is required'); return; }
+    if (team) updateTeam(team.id, form);
+    else addTeam(form);
+    toast.success(team ? 'Updated' : 'Created');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
+          <h2 className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{team ? 'Edit Team' : 'New Team'}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
+            <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+          </div>
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Contacts</label>
+            <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-32 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
+              {contacts.map(c => (
+                <button key={c.id} type="button" onClick={() => toggleContact(c.id)} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] ${form.contactIds.includes(c.id) ? 'bg-[#f0fdf4] text-[#1b5e20]' : 'text-[#0a0a0a]'}`}>
+                  {form.contactIds.includes(c.id) && <Check size={12} className="text-[#2e7d32]" />}
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none resize-none" />
+          </div>
+
+          {team && (
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
+              <ActivitySection
+                activities={team.activities || []}
+                onAdd={(entry) => updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] })}
+                onToggle={(id) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
+                onDelete={(id) => updateTeam(team.id, { activities: (team.activities || []).filter(a => a.id !== id) })}
+              />
+            </div>
+          )}
+
+          {team && (
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Projects</label>
+              <ProjectsPane teamId={team.id} />
+            </div>
+          )}
+        </div>
+        <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
+          {team && (
+            <button onClick={() => { updateTeam(team.id, { archived: !team.archived }); toast.success(team.archived ? 'Restored' : 'Archived'); onClose(); }} className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title={team.archived ? 'Restore' : 'Archive'}><Archive size={16} className="text-[#6a7282]" /></button>
+          )}
+          {team && (
+            <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete team"><Trash2 size={16} className="text-[#F95C39]" /></button>
+          )}
+          <button onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Cancel</button>
+          <button onClick={save} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Save</button>
+        </div>
+      </div>
+      {showDelete && team && (
+        <DeleteConfirmModal
+          title="Delete team"
+          description={`Remove ${team.name}?`}
+          onConfirm={() => { deleteTeam(team.id); toast.success('Deleted'); onClose(); }}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Activity Feed ────────────────────────────────────────────────────────────
 
 export function ActivityFeed() {
@@ -1194,6 +1346,7 @@ function CRMContent() {
   const TABS: { id: CRMTab; icon: React.ReactNode; label: string }[] = [
     { id: 'contacts',      icon: <Users size={14} />,     label: 'Contacts' },
     { id: 'organizations', icon: <Building2 size={14} />, label: 'Organizations' },
+    { id: 'teams',         icon: <Users2 size={14} />,    label: 'Teams' },
     { id: 'mountains',     icon: <Mountain size={14} />,  label: 'Mountains' },
   ];
 
@@ -1214,6 +1367,7 @@ function CRMContent() {
       <div className="flex-1 overflow-y-auto pb-8">
         {activeTab === 'contacts'      && <Contacts />}
         {activeTab === 'organizations' && <Organizations />}
+        {activeTab === 'teams'         && <Teams />}
         {activeTab === 'mountains'     && <MountainsTab />}
       </div>
     </div>

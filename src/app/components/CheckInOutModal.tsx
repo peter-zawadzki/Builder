@@ -19,7 +19,7 @@ export function AssignInventoryModal({ mountainId, onClose }: { mountainId: stri
   const { user } = useUser();
   const actor = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const mountain = getMountainById(mountainId);
-  const activeProjects = getProjectsByMountainId(mountainId).filter(p => p.stage !== 'Churned' && p.status !== 'Done');
+  const activeProjects = getProjectsByMountainId(mountainId).filter(p => p.stage !== 'Completed');
 
   const [projectId, setProjectId] = useState(activeProjects.length === 1 ? activeProjects[0].id : '');
   const [serial, setSerial] = useState('');

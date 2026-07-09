@@ -2,23 +2,23 @@ import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
 import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
-import type { Project, ProjectType, ProjectWorkStatus, PipelineStage, StallReason, ContactActivity } from '../../context/DataContext';
+import { useData, PROJECT_STAGES_BY_TYPE, DEFAULT_STAGE_BY_TYPE } from '../../context/DataContext';
+import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
 
-// Install runs the full sales stage list (Churned is handled via stall/cancel,
-// so it's not part of the forward progress bar).
-export const INSTALL_STAGES: PipelineStage[] = [
-  'Prospect', 'Contacted', 'Demo Scheduled', 'Positive',
-  'Verbal Yes', 'Contract Sent', 'Signed', 'Installing', 'Live',
-];
-const WORK_STATUSES: ProjectWorkStatus[] = ['Open', 'In Progress', 'Done'];
+// Project types available when creating a project under a Mountain vs. a Team.
+export const MOUNTAIN_PROJECT_TYPES: ProjectType[] = ['Install', 'Repair', 'Upgrade', 'Special Event'];
+export const TEAM_PROJECT_TYPES: ProjectType[] = ['Initial Onboarding', 'Followup Training', 'Special Event'];
+
 const STALL_REASONS: StallReason[] = ['No response', 'Waiting on legal', 'Budget hold', 'Timing — offseason', 'Other'];
 const TYPE_BADGE: Record<ProjectType, string> = {
   Install: 'bg-[#eef3fb] text-[#307fe2]',
   Repair: 'bg-[#fef3f0] text-[#F95C39]',
   Upgrade: 'bg-[#f3edfb] text-[#7c3aed]',
+  'Initial Onboarding': 'bg-[#e8f5e9] text-[#2e7d32]',
+  'Followup Training': 'bg-[#fff3e0] text-[#bf360c]',
+  'Special Event': 'bg-[#fce4ec] text-[#880e4f]',
 };
 
 function useAuthor() {
@@ -28,16 +28,17 @@ function useAuthor() {
 
 // ─── Pane ────────────────────────────────────────────────────────────────────
 
-export function ProjectsPane({ mountainId }: { mountainId: string }) {
-  const { getProjectsByMountainId } = useData();
-  const allProjects = getProjectsByMountainId(mountainId);
+export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; teamId?: string }) {
+  const { getProjectsByMountainId, getProjectsByTeamId } = useData();
+  const allProjects = mountainId ? getProjectsByMountainId(mountainId) : getProjectsByTeamId(teamId!);
+  const availableTypes = mountainId ? MOUNTAIN_PROJECT_TYPES : TEAM_PROJECT_TYPES;
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   const projects = allProjects.filter(p => showArchived ? p.archived : !p.archived);
-  const active = projects.filter(p => p.stage !== 'Churned' && p.status !== 'Done');
-  const closed = projects.filter(p => p.stage === 'Churned' || p.status === 'Done');
+  const active = projects.filter(p => p.stage !== 'Completed');
+  const closed = projects.filter(p => p.stage === 'Completed');
   const archivedCount = allProjects.filter(p => p.archived).length;
 
   return (
@@ -72,7 +73,7 @@ export function ProjectsPane({ mountainId }: { mountainId: string }) {
         </div>
       )}
 
-      {showForm && <ProjectForm mountainId={mountainId} onClose={() => setShowForm(false)} />}
+      {showForm && <ProjectForm mountainId={mountainId} teamId={teamId} availableTypes={availableTypes} onClose={() => setShowForm(false)} />}
       {editId && <ProjectDetailModal projectId={editId} onClose={() => setEditId(null)} />}
     </div>
   );
@@ -81,12 +82,10 @@ export function ProjectsPane({ mountainId }: { mountainId: string }) {
 // ─── Card (progress bar) ───────────────────────────────────────────────────
 
 function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
-  const isInstall = project.type === 'Install';
-  const stageIndex = isInstall ? Math.max(0, INSTALL_STAGES.indexOf(project.stage || 'Prospect')) : 0;
-  const pct = isInstall
-    ? Math.round(((stageIndex + 1) / INSTALL_STAGES.length) * 100)
-    : project.status === 'Done' ? 100 : project.status === 'In Progress' ? 50 : 10;
-  const churned = project.stage === 'Churned';
+  const stages = PROJECT_STAGES_BY_TYPE[project.type];
+  const currentStage = project.stage || stages[0];
+  const stageIndex = Math.max(0, stages.indexOf(currentStage));
+  const pct = Math.round(((stageIndex + 1) / stages.length) * 100);
 
   return (
     <button onClick={onOpen} className="w-full text-left border border-[rgba(0,0,0,0.08)] rounded-[10px] p-3 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]">
@@ -101,12 +100,10 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         </div>
       </div>
       <div className="h-1.5 rounded-full bg-[#f0f1f3] overflow-hidden">
-        <div className={`h-full rounded-full ${churned ? 'bg-[#c0c4cc]' : 'bg-[#307fe2]'}`} style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-[#307fe2]" style={{ width: `${pct}%` }} />
       </div>
       <div className="flex items-center justify-between mt-1.5">
-        <span className="text-[11px] text-[#6a7282]">
-          {churned ? 'Churned' : isInstall ? project.stage || 'Prospect' : project.status || 'Open'}
-        </span>
+        <span className="text-[11px] text-[#6a7282]">{currentStage}</span>
         {project.ownerName && <span className="text-[11px] text-[#8992a0] flex items-center gap-1"><UserCircle2 size={11} /> {project.ownerName}</span>}
       </div>
     </button>
@@ -116,13 +113,11 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
 // Compact, read-only progress bar for a single project — used on the mountains
 // list so each mountain card can show a bar per project.
 export function ProjectMiniBar({ project }: { project: Project }) {
-  const isInstall = project.type === 'Install';
-  const idx = isInstall ? Math.max(0, INSTALL_STAGES.indexOf(project.stage || 'Prospect')) : 0;
-  const churned = project.stage === 'Churned';
-  const pct = churned ? 100
-    : isInstall ? Math.round(((idx + 1) / INSTALL_STAGES.length) * 100)
-      : project.status === 'Done' ? 100 : project.status === 'In Progress' ? 50 : 10;
-  const label = churned ? 'Churned' : isInstall ? (project.stage || 'Prospect') : (project.status || 'Open');
+  const stages = PROJECT_STAGES_BY_TYPE[project.type];
+  const currentStage = project.stage || stages[0];
+  const idx = Math.max(0, stages.indexOf(currentStage));
+  const pct = Math.round(((idx + 1) / stages.length) * 100);
+  const label = currentStage;
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
@@ -134,7 +129,7 @@ export function ProjectMiniBar({ project }: { project: Project }) {
         {project.ownerName && <span className="text-[10px] text-[#8992a0] shrink-0 truncate max-w-[40%]">{project.ownerName}</span>}
       </div>
       <div className="h-1.5 rounded-full bg-[#f0f1f3] overflow-hidden">
-        <div className={`h-full rounded-full ${churned ? 'bg-[#c0c4cc]' : 'bg-[#307fe2]'}`} style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-[#307fe2]" style={{ width: `${pct}%` }} />
       </div>
       <div className="text-[10px] text-[#6a7282] mt-0.5">{label}</div>
     </div>
@@ -168,10 +163,11 @@ function OwnerSelect({ value, onChange, className }: { value: string; onChange: 
 
 // ─── Create form ─────────────────────────────────────────────────────────────
 
-function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () => void }) {
+function ProjectForm({ mountainId, teamId, availableTypes, onClose }: { mountainId?: string; teamId?: string; availableTypes: ProjectType[]; onClose: () => void }) {
   const { addProject, contacts } = useData();
   const createdBy = useAuthor();
   const [name, setName] = useState('');
+  const [type, setType] = useState<ProjectType>(availableTypes[0]);
   const [notes, setNotes] = useState('');
   const [ownerContactId, setOwnerContactId] = useState('');
 
@@ -180,10 +176,11 @@ function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () 
     const owner = contacts.find(c => c.id === ownerContactId);
     addProject({
       mountainId,
+      teamId,
       name: name.trim(),
       notes: notes.trim() || undefined,
-      type: 'Install',      // sensible default; change in the project detail
-      stage: 'Prospect',
+      type,
+      stage: DEFAULT_STAGE_BY_TYPE[type],
       ownerContactId: owner?.id,
       ownerName: owner?.name,
       createdBy,
@@ -206,6 +203,16 @@ function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () 
             <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
             <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Eggbeater + Links" autoFocus />
           </div>
+          {availableTypes.length > 1 && (
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
+              <div className="flex flex-wrap gap-2">
+                {availableTypes.map(t => (
+                  <button key={t} type="button" onClick={() => setType(t)} className={`px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
             <textarea className={`${inputCls} resize-none`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything worth capturing up front…" />
@@ -239,20 +246,16 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const [stallNote, setStallNote] = useState('');
 
   if (!project) { onClose(); return null; }
-  const isInstall = project.type === 'Install';
+  const availableTypes = project.teamId ? TEAM_PROJECT_TYPES : MOUNTAIN_PROJECT_TYPES;
+  const stages = PROJECT_STAGES_BY_TYPE[project.type];
 
   const setType = (t: ProjectType) => {
-    if (t === 'Install') updateProject(project.id, { type: t, status: undefined, stage: project.stage || 'Prospect' });
-    else updateProject(project.id, { type: t, stage: undefined, status: project.status || 'Open' });
+    updateProject(project.id, { type: t, stage: DEFAULT_STAGE_BY_TYPE[t] });
   };
 
-  const changeStage = (stage: PipelineStage) => {
+  const changeStage = (stage: ProjectStage) => {
     updateProject(project.id, { stage });
     logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" stage → ${stage}`);
-  };
-  const changeStatus = (status: ProjectWorkStatus) => {
-    updateProject(project.id, { status });
-    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" → ${status}`);
   };
 
   const applyStall = () => {
@@ -309,9 +312,9 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
               {/* Type — editable only in edit mode */}
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
-                <div className="flex gap-2">
-                  {(['Install', 'Repair', 'Upgrade'] as ProjectType[]).map(t => (
-                    <button key={t} onClick={() => setType(t)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
+                <div className="flex flex-wrap gap-2">
+                  {availableTypes.map(t => (
+                    <button key={t} onClick={() => setType(t)} className={`px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
                   ))}
                 </div>
               </div>
@@ -337,25 +340,13 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
                 <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide ${TYPE_BADGE[project.type]}`}>{project.type}</span>
               </div>
 
-              {/* Stage / status — quick update, stays in view mode */}
-              {isInstall ? (
-                <div>
-                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
-                  <select className={inputCls} value={project.stage || 'Prospect'} onChange={e => changeStage(e.target.value as PipelineStage)}>
-                    {INSTALL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                    <option value="Churned">Churned</option>
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Status</label>
-                  <div className="flex gap-2">
-                    {WORK_STATUSES.map(s => (
-                      <button key={s} onClick={() => changeStatus(s)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.status === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{s}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Stage — quick update, stays in view mode */}
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
+                <select className={inputCls} value={project.stage || stages[0]} onChange={e => changeStage(e.target.value as ProjectStage)}>
+                  {stages.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
 
               {/* Owner — read-only in view mode */}
               <div className="flex items-center justify-between">

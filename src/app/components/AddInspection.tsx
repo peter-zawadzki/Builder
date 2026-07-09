@@ -32,7 +32,7 @@ export function AddInspection() {
   const existingCount = (location?.inspections?.length) || (location?.inspection ? 1 : 0);
 
   // Each visit adds a NEW inspection. Attach to a project (default the single active).
-  const activeProjects = getProjectsByMountainId(mountainId!).filter(p => p.stage !== 'Churned' && p.status !== 'Done');
+  const activeProjects = getProjectsByMountainId(mountainId!).filter(p => p.stage !== 'Completed');
   const [items, setItems] = useState<SiteInspectionItem[]>([]);
   const [notes, setNotes] = useState('');
   const [difficulty, setDifficulty] = useState<number>(0);
