@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
-import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2 } from 'lucide-react';
-import { useData, PROJECT_STAGES_BY_TYPE, DEFAULT_STAGE_BY_TYPE } from '../../context/DataContext';
+import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2, Check } from 'lucide-react';
+import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted } from '../../context/DataContext';
 import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
@@ -37,6 +37,39 @@ function useAuthor() {
   return user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
 }
 
+// Each status is its own checkbox — any can be checked/unchecked independent
+// of the others, so a status can be skipped without blocking later ones.
+// Equal-width grid columns keep the row evenly spaced regardless of how many
+// statuses a project type has (4 for Followup Training vs 7 for Install).
+export function StageChecklist({
+  stages, completedStages, onToggle,
+}: {
+  stages: ProjectStage[];
+  completedStages: ProjectStage[];
+  onToggle: (stage: ProjectStage) => void;
+}) {
+  return (
+    <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
+      {stages.map(s => {
+        const checked = completedStages.includes(s);
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={e => { e.stopPropagation(); onToggle(s); }}
+            className="flex flex-col items-center gap-1 py-1 active:opacity-70"
+          >
+            <span className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 ${checked ? 'bg-[#22c55e] border-[#22c55e]' : 'bg-white border-[#d1d5db]'}`}>
+              {checked && <Check size={10} className="text-white" />}
+            </span>
+            <span className={`text-[9px] text-center leading-tight ${checked ? 'text-[#3f7a5c] font-medium' : 'text-[#8992a0]'}`}>{s}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Pane ────────────────────────────────────────────────────────────────────
 
 export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; teamId?: string }) {
@@ -48,8 +81,8 @@ export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; team
   const [showArchived, setShowArchived] = useState(false);
 
   const projects = allProjects.filter(p => showArchived ? p.archived : !p.archived);
-  const active = projects.filter(p => p.stage !== 'Completed');
-  const closed = projects.filter(p => p.stage === 'Completed');
+  const active = projects.filter(p => !isProjectCompleted(p));
+  const closed = projects.filter(p => isProjectCompleted(p));
   const archivedCount = allProjects.filter(p => p.archived).length;
 
   return (
@@ -93,13 +126,26 @@ export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; team
 // ─── Card (progress bar) ───────────────────────────────────────────────────
 
 function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
+  const { updateProject } = useData();
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
-  const currentStage = project.stage || stages[0];
-  const stageIndex = Math.max(0, stages.indexOf(currentStage));
-  const pct = Math.round(((stageIndex + 1) / stages.length) * 100);
+  const furthestIndex = furthestCompletedStageIndex(project);
+  const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
+  const currentLabel = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
+  const completedStages = project.completedStages || [];
+
+  const toggleStage = (stage: ProjectStage) => {
+    const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
+    updateProject(project.id, { completedStages: updated });
+  };
 
   return (
-    <button onClick={onOpen} className="w-full text-left border border-[rgba(0,0,0,0.08)] rounded-[10px] p-3 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={e => { if (e.key === 'Enter') onOpen(); }}
+      className="w-full text-left border border-[rgba(0,0,0,0.08)] rounded-[10px] p-3 cursor-pointer active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]"
+    >
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{project.name}</span>
@@ -114,17 +160,13 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: stageBarColor(pct) }} />
       </div>
       <div className="flex items-center justify-between mt-1.5">
-        <span className="text-[11px] text-[#6a7282]">{currentStage}</span>
+        <span className="text-[11px] text-[#6a7282]">{currentLabel}</span>
         {project.ownerName && <span className="text-[11px] text-[#8992a0] flex items-center gap-1"><UserCircle2 size={11} /> {project.ownerName}</span>}
       </div>
-      <div className="flex flex-wrap gap-x-1.5 gap-y-1 mt-1.5">
-        {stages.map((s, i) => (
-          <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${i < stageIndex ? 'text-[#3f7a5c] bg-[#eaf5ef]' : i === stageIndex ? 'text-white bg-[#1D2930]' : 'text-[#8992a0] bg-[#f3f3f5]'}`}>
-            {s}
-          </span>
-        ))}
+      <div className="mt-1.5">
+        <StageChecklist stages={stages} completedStages={completedStages} onToggle={toggleStage} />
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -132,10 +174,9 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
 // list so each mountain card can show a bar per project.
 export function ProjectMiniBar({ project }: { project: Project }) {
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
-  const currentStage = project.stage || stages[0];
-  const idx = Math.max(0, stages.indexOf(currentStage));
-  const pct = Math.round(((idx + 1) / stages.length) * 100);
-  const label = currentStage;
+  const furthestIndex = furthestCompletedStageIndex(project);
+  const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
+  const label = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
@@ -198,7 +239,7 @@ function ProjectForm({ mountainId, teamId, availableTypes, onClose }: { mountain
       name: name.trim(),
       notes: notes.trim() || undefined,
       type,
-      stage: DEFAULT_STAGE_BY_TYPE[type],
+      completedStages: [],
       ownerContactId: owner?.id,
       ownerName: owner?.name,
       createdBy,
@@ -266,14 +307,18 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   if (!project) { onClose(); return null; }
   const availableTypes = project.teamId ? TEAM_PROJECT_TYPES : MOUNTAIN_PROJECT_TYPES;
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
+  const completedStages = project.completedStages || [];
 
   const setType = (t: ProjectType) => {
-    updateProject(project.id, { type: t, stage: DEFAULT_STAGE_BY_TYPE[t] });
+    // Stage list is entirely different per type — start fresh rather than
+    // carrying over checkmarks that don't correspond to the new sequence.
+    updateProject(project.id, { type: t, completedStages: [] });
   };
 
-  const changeStage = (stage: ProjectStage) => {
-    updateProject(project.id, { stage });
-    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}" stage → ${stage}`);
+  const toggleStage = (stage: ProjectStage) => {
+    const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
+    updateProject(project.id, { completedStages: updated });
+    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}": ${stage} ${updated.includes(stage) ? 'checked' : 'unchecked'}`);
   };
 
   const applyStall = () => {
@@ -358,12 +403,11 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
                 <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide ${TYPE_BADGE[project.type]}`}>{project.type}</span>
               </div>
 
-              {/* Stage — quick update, stays in view mode */}
+              {/* Stage checklist — quick update, stays in view mode. Each
+                  status is independently checkable so one can be skipped. */}
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
-                <select className={inputCls} value={project.stage || stages[0]} onChange={e => changeStage(e.target.value as ProjectStage)}>
-                  {stages.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <StageChecklist stages={stages} completedStages={completedStages} onToggle={toggleStage} />
               </div>
 
               {/* Owner — read-only in view mode */}

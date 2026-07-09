@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Database } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench } from 'lucide-react';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsSuperAdmin } from '../hooks/useRole';
 
@@ -49,7 +49,6 @@ export function AppHeader() {
                 <UserButton.MenuItems>
                   <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
                   <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
-                  <UserButton.Action label="Local DB check" labelIcon={<Database size={16} />} onClick={() => navigate('/system-check')} />
                 </UserButton.MenuItems>
               )}
             </UserButton>

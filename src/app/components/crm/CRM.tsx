@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import {
   ArrowLeft, Users, Users2, Building2, Activity, Bell, LayoutDashboard, Mountain,
@@ -55,6 +55,60 @@ function isOverdue(dateStr?: string) {
 function StageBadge({ stage }: { stage?: MountainPipelineStage }) {
   if (!stage) return <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">No stage</span>;
   return <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${STAGE_COLORS[stage]}`}>{stage}</span>;
+}
+
+// A count pill for an association (Teams/Mountains). Clicking opens the single
+// associated record directly, or a small picker menu if there's more than one.
+function AssocPill({
+  icon, label, items, onOpenOne, colorClass,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  items: { id: string; name: string }[];
+  onOpenOne: (id: string) => void;
+  colorClass: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+  return (
+    <div className="relative">
+      <button
+        onClick={e => {
+          e.stopPropagation();
+          if (items.length === 1) onOpenOne(items[0].id);
+          else setOpen(v => !v);
+        }}
+        className={`text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 active:opacity-70 ${colorClass}`}
+      >
+        {icon} {label} ({items.length})
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 left-0 bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] shadow-lg py-1 min-w-[160px]" onClick={e => e.stopPropagation()}>
+          {items.map(it => (
+            <button key={it.id} onClick={() => { setOpen(false); onOpenOne(it.id); }} className="w-full text-left px-3 py-1.5 text-[13px] text-[#0a0a0a] hover:bg-[#f3f3f5]">{it.name}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A count pill that just navigates to a filtered list (no picker needed).
+function LinkPill({
+  icon, label, count, onClick, colorClass,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  onClick: () => void;
+  colorClass: string;
+}) {
+  if (count === 0) return null;
+  return (
+    <button onClick={e => { e.stopPropagation(); onClick(); }} className={`text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 active:opacity-70 ${colorClass}`}>
+      {icon} {label} ({count})
+    </button>
+  );
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -385,11 +439,12 @@ export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; 
 // ─── Contact Detail ───────────────────────────────────────────────────────────
 
 export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
-  const { updateContact, deleteContact, getMountainById } = useData();
+  const { updateContact, deleteContact, getMountainById, organizations } = useData();
   const navigate = useNavigate();
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const mountain = contact.mountainId ? getMountainById(contact.mountainId) : undefined;
+  const org = contact.organizationId ? organizations.find(o => o.id === contact.organizationId) : undefined;
 
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
     const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
@@ -461,8 +516,13 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
             <a key={i} href={`tel:${p.number}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{p.number}{p.label ? <span className="text-[11px] text-[#8992a0]">{p.label.toLowerCase()}</span> : null}</a>
           ))}
           {mountain && (
-            <button onClick={() => navigate(`/mountains/${mountain.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] active:opacity-70">
+            <button onClick={() => navigate(`/mountains/${mountain.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] hover:text-[#307fe2] active:opacity-70">
               <ExternalLink size={14} />{mountain.name} <StageBadge stage={mountain.pipelineStage} />
+            </button>
+          )}
+          {org && (
+            <button onClick={() => navigate(`/crm?tab=organizations&open=${org.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] hover:text-[#7c3aed] active:opacity-70">
+              <Building2 size={14} />{org.name}
             </button>
           )}
           {contact.tags.length > 0 && (
@@ -486,8 +546,16 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
 
 // ─── Contacts ─────────────────────────────────────────────────────────────────
 
-function Contacts() {
-  const { contacts, organizations, mountains, addContact, updateContact, deleteContact, importContactsFromMountains } = useData();
+function Contacts({
+  filterMountainId, filterOrgId, filterTeamId, onClearFilter,
+}: {
+  filterMountainId?: string;
+  filterOrgId?: string;
+  filterTeamId?: string;
+  onClearFilter?: () => void;
+} = {}) {
+  const { contacts, organizations, mountains, teams, addContact, updateContact, deleteContact, importContactsFromMountains } = useData();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<ContactType | ''>('');
   const [showForm, setShowForm] = useState(false);
@@ -503,8 +571,16 @@ function Contacts() {
     }
   }, []);
 
+  const filterLabel = filterMountainId ? mountains.find(m => m.id === filterMountainId)?.name
+    : filterOrgId ? organizations.find(o => o.id === filterOrgId)?.name
+    : filterTeamId ? teams.find(t => t.id === filterTeamId)?.name
+    : undefined;
+
   const filtered = useMemo(() => {
     let list = contacts.filter(c => showArchived ? c.archived : !c.archived);
+    if (filterMountainId) list = list.filter(c => c.mountainId === filterMountainId);
+    if (filterOrgId) list = list.filter(c => c.organizationId === filterOrgId);
+    if (filterTeamId) list = list.filter(c => c.teamId === filterTeamId);
     if (filterType) list = list.filter(c => c.type === filterType);
     if (search) {
       const q = search.toLowerCase();
@@ -518,7 +594,7 @@ function Contacts() {
       );
     }
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [contacts, search, filterType, mountains, showArchived]);
+  }, [contacts, search, filterType, filterMountainId, filterOrgId, filterTeamId, mountains, showArchived]);
 
   // Show detail view if contact selected
   if (selectedContact) {
@@ -529,6 +605,12 @@ function Contacts() {
 
   return (
     <div className="p-4 space-y-3">
+      {filterLabel && (
+        <div className="flex items-center gap-2 bg-[#eef3fb] text-[#307fe2] rounded-[8px] px-3 py-2 text-[13px]">
+          <span className="flex-1">Showing contacts for <strong>{filterLabel}</strong></span>
+          <button onClick={onClearFilter} className="p-0.5 active:opacity-70"><X size={14} /></button>
+        </div>
+      )}
       <div className="flex gap-2">
         <div className="flex-1 relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
@@ -560,18 +642,32 @@ function Contacts() {
                 <button onClick={() => setSelectedContact(c)} className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif] active:opacity-70">
                   {c.name.charAt(0).toUpperCase()}
                 </button>
-                <button onClick={() => setSelectedContact(c)} className="flex-1 min-w-0 text-left active:opacity-70">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedContact(c)}
+                  onKeyDown={e => { if (e.key === 'Enter') setSelectedContact(c); }}
+                  className="flex-1 min-w-0 text-left cursor-pointer active:opacity-70"
+                >
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{c.name}</p>
                     {c.isPrimary && <Star size={12} className="text-[#e65100]" />}
                     <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{c.type}</span>
-                    {linkedMountain && <span className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full flex items-center gap-1"><Mountain size={10} /> {linkedMountain.name}</span>}
-                    {org && <span className="text-[11px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1"><Building2 size={10} /> {org.name}</span>}
+                    {linkedMountain && (
+                      <button onClick={e => { e.stopPropagation(); navigate(`/mountains/${linkedMountain.id}`); }} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-[#cfe6fb] active:opacity-70">
+                        <Mountain size={10} /> {linkedMountain.name}
+                      </button>
+                    )}
+                    {org && (
+                      <button onClick={e => { e.stopPropagation(); navigate(`/crm?tab=organizations&open=${org.id}`); }} className="text-[11px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-[#e6d9f7] active:opacity-70">
+                        <Building2 size={10} /> {org.name}
+                      </button>
+                    )}
                     {openActions > 0 && <span className="text-[11px] bg-[#fff3e0] text-[#e65100] px-2 py-0.5 rounded-full">{openActions} action{openActions !== 1 ? 's' : ''}</span>}
                   </div>
                   {c.title && <p className="text-[12px] text-[#6a7282]">{c.title}</p>}
                   {c.email && <p className="text-[11px] text-[#6a7282] mt-0.5">{c.email}</p>}
-                </button>
+                </div>
                 {showArchived ? (
                   <button onClick={() => { updateContact(c.id, { archived: false }); toast.success('Restored'); }} className="shrink-0 self-center text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] px-2 py-1 active:opacity-70">Restore</button>
                 ) : (
@@ -814,8 +910,8 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
 
 // ─── Organizations ────────────────────────────────────────────────────────────
 
-function Organizations() {
-  const { organizations, mountains, contacts, addOrganization, updateOrganization, deleteOrganization, updateMountain } = useData();
+function Organizations({ openId }: { openId?: string } = {}) {
+  const { organizations, mountains, contacts, teams, addOrganization, updateOrganization, deleteOrganization, updateMountain } = useData();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<OrgType | ''>('');
@@ -823,6 +919,12 @@ function Organizations() {
   const [editTarget, setEditTarget] = useState<CRMOrganization | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CRMOrganization | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+
+  useEffect(() => {
+    if (!openId) return;
+    const org = organizations.find(o => o.id === openId);
+    if (org) { setEditTarget(org); setShowForm(true); }
+  }, [openId, organizations]);
 
   const filtered = useMemo(() => {
     let list = organizations.filter(o => showArchived ? o.archived : !o.archived);
@@ -857,7 +959,8 @@ function Organizations() {
         <div className="space-y-2">
           {filtered.map(org => {
             const linkedMountains = mountains.filter(m => org.mountainIds.includes(m.id));
-            const linkedContacts = contacts.filter(c => org.contactIds.includes(c.id));
+            const linkedContacts = contacts.filter(c => org.contactIds.includes(c.id) || c.organizationId === org.id);
+            const linkedTeams = teams.filter(t => linkedContacts.some(c => c.teamId === t.id));
             return (
               <div key={org.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3">
                 <button onClick={() => { setEditTarget(org); setShowForm(true); }} className="w-full text-left active:opacity-70">
@@ -868,16 +971,25 @@ function Organizations() {
                       ? <span onClick={e => { e.stopPropagation(); updateOrganization(org.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0">Restore</span>
                       : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
                   </div>
-                  {linkedContacts.length > 0 && <p className="text-[12px] text-[#6a7282]">{linkedContacts.length} contact{linkedContacts.length !== 1 ? 's' : ''}</p>}
                   {org.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{org.notes}</p>}
                 </button>
-                {linkedMountains.length > 0 && (
-                  <div className="flex gap-1 flex-wrap mt-1.5">
-                    {linkedMountains.map(m => (
-                      <button key={m.id} onClick={() => navigate(`/mountains/${m.id}`)} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full">{m.name}</button>
-                    ))}
-                  </div>
-                )}
+                <div className="flex gap-1.5 flex-wrap mt-1.5">
+                  <AssocPill
+                    icon={<Users2 size={10} />} label="Teams" colorClass="bg-[#eef3fb] text-[#307fe2]"
+                    items={linkedTeams.map(t => ({ id: t.id, name: t.name }))}
+                    onOpenOne={id => navigate(`/crm?tab=teams&open=${id}`)}
+                  />
+                  <AssocPill
+                    icon={<Mountain size={10} />} label="Mountains" colorClass="bg-[#e3f2fd] text-[#1565c0]"
+                    items={linkedMountains.map(m => ({ id: m.id, name: m.name }))}
+                    onOpenOne={id => navigate(`/mountains/${id}`)}
+                  />
+                  <LinkPill
+                    icon={<Users size={10} />} label="Contacts" colorClass="bg-[#f3edfb] text-[#7c3aed]"
+                    count={linkedContacts.length}
+                    onClick={() => navigate(`/crm?tab=contacts&filterOrgId=${org.id}`)}
+                  />
+                </div>
               </div>
             );
           })}
@@ -1004,12 +1116,18 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
 // archive/delete in edit mode) but tracks its own projects instead of
 // mountains.
 
-function Teams() {
+function Teams({ openId }: { openId?: string } = {}) {
   const { teams, contacts, updateTeam } = useData();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<CRMTeam | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+
+  useEffect(() => {
+    if (!openId) return;
+    const team = teams.find(t => t.id === openId);
+    if (team) { setEditTarget(team); setShowForm(true); }
+  }, [openId, teams]);
 
   const filtered = useMemo(() => {
     let list = teams.filter(t => showArchived ? t.archived : !t.archived);
@@ -1409,7 +1527,7 @@ export function CRMSection() {
 // Mountains tab — a simple roster with add; the operational mountains list
 // lives under the Mountains icon (/mountains).
 function MountainsTab() {
-  const { mountains } = useData();
+  const { mountains, organizations, teams, contacts } = useData();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const filtered = useMemo(() => {
@@ -1436,24 +1554,52 @@ function MountainsTab() {
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-[#6a7282] text-[14px]">No mountains found</div>
       ) : (
-        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] divide-y divide-[rgba(0,0,0,0.06)]">
-          {filtered.map(m => (
-            <button key={m.id} onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between p-3 text-left active:bg-[#f9fafb]">
-              <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
-              <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-                {m.proposalCreated ? 'Customer' : 'Prospect'}
-              </span>
-            </button>
-          ))}
+        <div className="space-y-2">
+          {filtered.map(m => {
+            const org = m.organizationId ? organizations.find(o => o.id === m.organizationId) : undefined;
+            const linkedTeams = teams.filter(t => t.mountainIds.includes(m.id));
+            const linkedContacts = contacts.filter(c => c.mountainId === m.id);
+            return (
+              <div key={m.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3">
+                <button onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between text-left active:opacity-70">
+                  <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+                    {m.proposalCreated ? 'Customer' : 'Prospect'}
+                  </span>
+                </button>
+                <div className="flex gap-1.5 flex-wrap mt-1.5">
+                  {org && (
+                    <button onClick={() => navigate(`/crm?tab=organizations&open=${org.id}`)} className="text-[11px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 active:opacity-70">
+                      <Building2 size={10} /> {org.name}
+                    </button>
+                  )}
+                  <AssocPill
+                    icon={<Users2 size={10} />} label="Teams" colorClass="bg-[#eef3fb] text-[#307fe2]"
+                    items={linkedTeams.map(t => ({ id: t.id, name: t.name }))}
+                    onOpenOne={id => navigate(`/crm?tab=teams&open=${id}`)}
+                  />
+                  <LinkPill
+                    icon={<Users size={10} />} label="Contacts" colorClass="bg-[#eaf5ef] text-[#3f7a5c]"
+                    count={linkedContacts.length}
+                    onClick={() => navigate(`/crm?tab=contacts&filterMountainId=${m.id}`)}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
+// Organizations/Teams don't have their own route (they open as a modal within
+// a tab), so cross-record navigation (a pill on one record opening another)
+// goes through URL query params: ?tab=, ?open= (auto-open a record's modal),
+// and ?filterMountainId=/?filterOrgId=/?filterTeamId= (pre-filter Contacts).
 function CRMContent() {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<CRMTab>('contacts');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as CRMTab) || 'contacts';
 
   const TABS: { id: CRMTab; icon: React.ReactNode; label: string }[] = [
     { id: 'contacts',      icon: <Users size={14} />,     label: 'Contacts' },
@@ -1461,6 +1607,8 @@ function CRMContent() {
     { id: 'teams',         icon: <Users2 size={14} />,    label: 'Teams' },
     { id: 'mountains',     icon: <Mountain size={14} />,  label: 'Mountains' },
   ];
+
+  const setActiveTab = (t: CRMTab) => setSearchParams({ tab: t });
 
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
@@ -1477,9 +1625,16 @@ function CRMContent() {
       </div>
 
       <div className="flex-1 overflow-y-auto pb-8">
-        {activeTab === 'contacts'      && <Contacts />}
-        {activeTab === 'organizations' && <Organizations />}
-        {activeTab === 'teams'         && <Teams />}
+        {activeTab === 'contacts'      && (
+          <Contacts
+            filterMountainId={searchParams.get('filterMountainId') || undefined}
+            filterOrgId={searchParams.get('filterOrgId') || undefined}
+            filterTeamId={searchParams.get('filterTeamId') || undefined}
+            onClearFilter={() => setSearchParams({ tab: 'contacts' })}
+          />
+        )}
+        {activeTab === 'organizations' && <Organizations openId={searchParams.get('open') || undefined} />}
+        {activeTab === 'teams'         && <Teams openId={searchParams.get('open') || undefined} />}
         {activeTab === 'mountains'     && <MountainsTab />}
       </div>
     </div>

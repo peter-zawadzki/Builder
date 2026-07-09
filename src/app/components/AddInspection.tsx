@@ -4,7 +4,7 @@ import {
   ArrowLeft, Loader2, Check, Plus, Minus,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useData } from '../context/DataContext';
+import { useData, isProjectCompleted } from '../context/DataContext';
 import type { SiteInspectionItem, SiteInspectionItemType } from '../context/DataContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
@@ -32,7 +32,7 @@ export function AddInspection() {
   const existingCount = (location?.inspections?.length) || (location?.inspection ? 1 : 0);
 
   // Each visit adds a NEW inspection. Attach to a project (default the single active).
-  const activeProjects = getProjectsByMountainId(mountainId!).filter(p => p.stage !== 'Completed');
+  const activeProjects = getProjectsByMountainId(mountainId!).filter(p => !isProjectCompleted(p));
   const [items, setItems] = useState<SiteInspectionItem[]>([]);
   const [notes, setNotes] = useState('');
   const [difficulty, setDifficulty] = useState<number>(0);

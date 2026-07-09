@@ -312,9 +312,16 @@ export const PROJECT_STAGES_BY_TYPE: Record<ProjectType, ProjectStage[]> = {
   'Special Event': ['Event Requested', 'Proposal Sent', 'Proposal Signed', 'Event Scheduled', 'Event In-Progress', 'Completed'],
 };
 
-export const DEFAULT_STAGE_BY_TYPE: Record<ProjectType, ProjectStage> = Object.fromEntries(
-  (Object.entries(PROJECT_STAGES_BY_TYPE) as [ProjectType, ProjectStage[]][]).map(([t, stages]) => [t, stages[0]])
-) as Record<ProjectType, ProjectStage>;
+// The progress bar reflects the furthest-along checked status, not a single
+// linear "current stage" — earlier statuses can be skipped without blocking it.
+export function furthestCompletedStageIndex(project: { type: ProjectType; completedStages?: ProjectStage[] }): number {
+  const stages = PROJECT_STAGES_BY_TYPE[project.type];
+  return (project.completedStages || []).reduce((max, s) => Math.max(max, stages.indexOf(s)), -1);
+}
+
+export function isProjectCompleted(project: { type: ProjectType; completedStages?: ProjectStage[] }): boolean {
+  return (project.completedStages || []).includes('Completed');
+}
 
 export interface Project {
   id: string;
@@ -323,7 +330,9 @@ export interface Project {
   name: string;
   notes?: string;               // free-text project notes
   type: ProjectType;
-  stage?: ProjectStage;
+  // Each stage in PROJECT_STAGES_BY_TYPE[type] is independently checkable —
+  // a status can be skipped without blocking later ones from being marked.
+  completedStages?: ProjectStage[];
   ownerContactId?: string;      // the owning YULLR contact (employee)
   ownerName?: string;           // display name of the current owner
   ownerUserId?: string;         // legacy: Clerk user id, if owner was a login

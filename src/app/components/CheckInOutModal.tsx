@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
 import { X, Hash, PackageCheck } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useData, isProjectCompleted } from '../context/DataContext';
 import type { Asset } from '../context/DataContext';
 
 function assetName(a: Asset) {
@@ -19,7 +19,7 @@ export function AssignInventoryModal({ mountainId, onClose }: { mountainId: stri
   const { user } = useUser();
   const actor = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const mountain = getMountainById(mountainId);
-  const activeProjects = getProjectsByMountainId(mountainId).filter(p => p.stage !== 'Completed');
+  const activeProjects = getProjectsByMountainId(mountainId).filter(p => !isProjectCompleted(p));
 
   const [projectId, setProjectId] = useState(activeProjects.length === 1 ? activeProjects[0].id : '');
   const [serial, setSerial] = useState('');

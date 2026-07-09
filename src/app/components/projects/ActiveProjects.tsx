@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
-import { useData, PROJECT_STAGES_BY_TYPE } from '../../context/DataContext';
+import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted } from '../../context/DataContext';
+import type { ProjectStage } from '../../context/DataContext';
 import { useMyContact, useCanSeeAll } from '../../hooks/useMyContact';
-import { stageBarColor } from './ProjectsPane';
+import { stageBarColor, StageChecklist } from './ProjectsPane';
 
 const TYPE_BADGE: Record<string, string> = {
   Install: 'bg-[#eef3fb] text-[#307fe2]',
@@ -17,7 +18,7 @@ const TYPE_BADGE: Record<string, string> = {
 // Dashboard widget — "your pipeline is your projects." Lists active projects
 // across mountains, scoped to Mine (owner) or All (Employees only).
 export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
-  const { projects, mountains } = useData();
+  const { projects, mountains, updateProject } = useData();
   const navigate = useNavigate();
   const me = useMyContact();
 
@@ -29,7 +30,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
     const byId = Object.fromEntries(mountains.map(m => [m.id, m]));
     // This widget is scoped to mountain projects — team projects don't have a
     // mountain to navigate to.
-    let active = projects.filter(p => !!p.mountainId && p.stage !== 'Completed');
+    let active = projects.filter(p => !!p.mountainId && !isProjectCompleted(p));
     // "Mine" = projects I own OR projects on a mountain where I'm an affiliate.
     if (effective === 'mine') {
       active = active.filter(p =>
@@ -50,12 +51,23 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
       ) : (
         rows.map(({ p, m }) => {
           const stages = PROJECT_STAGES_BY_TYPE[p.type];
-          const label = p.stage || stages[0];
-          const idx = Math.max(0, stages.indexOf(label));
-          const pct = Math.round(((idx + 1) / stages.length) * 100);
+          const furthestIndex = furthestCompletedStageIndex(p);
+          const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
+          const label = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
+          const completedStages = p.completedStages || [];
+          const toggleStage = (stage: ProjectStage) => {
+            const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
+            updateProject(p.id, { completedStages: updated });
+          };
           return (
-            <button key={p.id} onClick={() => navigate(`/mountains/${p.mountainId}`)}
-              className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-3 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]">
+            <div
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/mountains/${p.mountainId}`)}
+              onKeyDown={e => { if (e.key === 'Enter') navigate(`/mountains/${p.mountainId}`); }}
+              className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-3 cursor-pointer active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]"
+            >
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{p.name}</span>
@@ -71,14 +83,8 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
                 <span className="truncate">{m?.name || 'Unknown mountain'} · {label}</span>
                 {p.ownerName && <span className="flex items-center gap-1 text-[#8992a0] shrink-0"><UserCircle2 size={11} /> {p.ownerName}</span>}
               </div>
-              <div className="flex flex-wrap gap-x-1.5 gap-y-1">
-                {stages.map((s, i) => (
-                  <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${i < idx ? 'text-[#3f7a5c] bg-[#eaf5ef]' : i === idx ? 'text-white bg-[#1D2930]' : 'text-[#8992a0] bg-[#f3f3f5]'}`}>
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </button>
+              <StageChecklist stages={stages} completedStages={completedStages} onToggle={toggleStage} />
+            </div>
           );
         })
       )}

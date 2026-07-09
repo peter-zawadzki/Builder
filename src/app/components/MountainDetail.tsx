@@ -45,8 +45,8 @@ function ExpandablePane({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 flex flex-col">
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 flex flex-col h-full">
+        <div className="flex items-center justify-between mb-3 min-h-[28px]">
           <button onClick={() => setOpen(true)} className="flex items-center gap-2 active:opacity-70">
             <Maximize2 size={15} className="text-[#6a7282]" />
             <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{title}</h2>
@@ -502,10 +502,7 @@ export function MountainDetail() {
               const crmContacts = contacts.filter((c) => c.mountainId === mountainId);
               if (crmContacts.length === 0) {
                 return (
-                  <div className="text-[13px] text-[#6a7282]">
-                    No contacts yet.{' '}
-                    <button onClick={() => setShowAddContact(true)} className="text-[#307fe2]">Add a contact</button>
-                  </div>
+                  <div className="text-[13px] text-[#6a7282]">No contacts yet.</div>
                 );
               }
               return (
