@@ -240,45 +240,34 @@ export function MountainDetail() {
           >
             <Pencil size={16} className="text-[#6a7282]" />
           </button>
-          <div className="flex items-center gap-1.5 ml-auto">
-            <button
-              onClick={() => setShowExport(true)}
-              className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
-              aria-label="Export Reports"
-              title="Export Reports"
-            >
-              <Download size={18} className="text-[#1e3a5f]" />
-            </button>
-            <button
-              onClick={() => setShowMap(true)}
-              className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
-              aria-label="Map view"
-              title="Map view"
-            >
-              <Map size={18} className="text-[#0a0a0a]" />
-            </button>
-            <button
-              onClick={() => navigate(`/mountains/${mountainId}/edit`)}
-              className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
-              aria-label="Edit mountain"
-              title="Edit mountain"
-            >
-              <Info size={18} className="text-[#0a0a0a]" />
-            </button>
-          </div>
         </div>
-        <div className="pl-8">
-          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">
+        <div className="pl-8 flex items-start justify-between gap-2">
+          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] truncate">
             {mountain.address}
           </p>
-          {mountain.parentOrganization && (
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Building2 size={13} className="text-[#6a7282]" />
-              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px]">
-                {mountain.parentOrganization}
-              </p>
-            </div>
+          {(linkedOrg?.name || mountain.parentOrganization) && (
+            <span className="shrink-0 flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full">
+              <Building2 size={11} />
+              {linkedOrg?.name || mountain.parentOrganization}
+            </span>
           )}
+        </div>
+        {/* Secondary actions — deliberately distinct from the global nav icons above */}
+        <div className="pl-8 mt-2 flex items-center gap-2">
+          <button
+            onClick={() => setShowExport(true)}
+            className="flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#1e3a5f] active:bg-[#f3f3f5]"
+          >
+            <Download size={13} />
+            Reports
+          </button>
+          <button
+            onClick={() => setShowMap(true)}
+            className="flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] active:bg-[#f3f3f5]"
+          >
+            <Map size={13} />
+            Map
+          </button>
         </div>
       </div>
 
