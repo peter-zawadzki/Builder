@@ -379,6 +379,7 @@ export interface CRMContact {
   tags: ContactTag[];
   isPrimary: boolean;
   mountainId?: string;       // single linked mountain
+  teamId?: string;           // single linked team
   affiliation?: 'Employee' | 'Ambassador';  // for YULLR-org people: their role in Builder
   archived?: boolean;        // archived contacts drop out of default lists/search
   notes?: string;
@@ -408,10 +409,15 @@ export interface CRMOrganization {
 export interface CRMTeam {
   id: string;
   name: string;
-  contactIds: string[];
+  mountainIds: string[];   // mountains this team is associated with
+  website?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
   archived?: boolean;
   notes?: string;
   activities?: ContactActivity[];
+  createdBy?: string;      // name of the user who created the team
   createdAt: string;
   updatedAt: string;
 }
@@ -1637,6 +1643,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
     const newTeam: CRMTeam = { ...team, id, createdAt: now, updatedAt: now };
     setTeams(prev => [...prev, newTeam]);
+    (newTeam.mountainIds || []).forEach(mid =>
+      logActivity(mid, 'team_added', `Team "${newTeam.name}" added${newTeam.createdBy ? ` by ${newTeam.createdBy}` : ''}`)
+    );
     return id;
   };
 

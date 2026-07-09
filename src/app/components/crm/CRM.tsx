@@ -621,7 +621,7 @@ function findDuplicateContacts(
 }
 
 export function ContactForm({ contact, onClose, defaults }: { contact: CRMContact | null; onClose: () => void; defaults?: Partial<CRMContact> }) {
-  const { addContact, updateContact, contacts, mountains, organizations } = useData();
+  const { addContact, updateContact, contacts, mountains, organizations, teams } = useData();
   const [dupCandidates, setDupCandidates] = useState<CRMContact[] | null>(null);
   type Phone = { number: string; label: 'Mobile' | 'Work' | 'Home' };
   const [form, setForm] = useState({
@@ -636,6 +636,7 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
     type: contact?.type || 'General' as ContactType,
     title: contact?.title || '',
     organizationId: contact?.organizationId || defaults?.organizationId || '',
+    teamId: contact?.teamId || defaults?.teamId || '',
     tags: contact?.tags || [] as ContactTag[],
     isPrimary: contact?.isPrimary || false,
     mountainId: contact?.mountainId || defaults?.mountainId || '',
@@ -651,6 +652,7 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
       ...form,
       mountainId: form.mountainId || undefined,
       organizationId: form.organizationId || undefined,
+      teamId: form.teamId || undefined,
       phones: cleanPhones,
       phone: cleanPhones[0]?.number || '',
       emails: form.emails.map(s => s.trim()).filter(Boolean),
@@ -742,6 +744,14 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
             <select value={form.organizationId} onChange={e => set('organizationId', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] appearance-none">
               <option value="">— None —</option>
               {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Team</label>
+            <select value={form.teamId} onChange={e => set('teamId', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] appearance-none">
+              <option value="">— None —</option>
+              {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
 
@@ -1028,7 +1038,7 @@ function Teams() {
       ) : (
         <div className="space-y-2">
           {filtered.map(team => {
-            const linkedContacts = contacts.filter(c => team.contactIds.includes(c.id));
+            const linkedContacts = contacts.filter(c => c.teamId === team.id);
             return (
               <button key={team.id} onClick={() => { setEditTarget(team); setShowForm(true); }} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:opacity-70">
                 <div className="flex items-center gap-2 mb-1">
@@ -1051,55 +1061,151 @@ function Teams() {
 }
 
 function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void }) {
-  const { contacts, addTeam, updateTeam, deleteTeam } = useData();
+  const { mountains, contacts, addTeam, updateTeam, deleteTeam } = useData();
+  const { user } = useUser();
+  const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
+  const [isEditMode, setIsEditMode] = useState(!team);
   const [showDelete, setShowDelete] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
   const [form, setForm] = useState({
     name: team?.name || '',
-    contactIds: team?.contactIds || [] as string[],
+    mountainIds: team?.mountainIds || [] as string[],
+    website: team?.website || '',
+    address: team?.address || '',
+    phone: team?.phone || '',
+    email: team?.email || '',
     notes: team?.notes || '',
   });
 
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
-  const toggleContact = (id: string) => set('contactIds', form.contactIds.includes(id) ? form.contactIds.filter(x => x !== id) : [...form.contactIds, id]);
+  const toggleMountain = (id: string) => set('mountainIds', form.mountainIds.includes(id) ? form.mountainIds.filter(x => x !== id) : [...form.mountainIds, id]);
 
-  const save = () => {
+  const linkedContacts = team ? contacts.filter(c => c.teamId === team.id) : [];
+  const linkedMountains = mountains.filter(m => form.mountainIds.includes(m.id));
+
+  const create = () => {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
-    if (team) updateTeam(team.id, form);
-    else addTeam(form);
-    toast.success(team ? 'Updated' : 'Created');
+    addTeam({ ...form, createdBy });
+    toast.success('Team created');
     onClose();
   };
+
+  // Live field edits on an existing team — same "hit edit, then change things"
+  // pattern used for Projects/Mountains, rather than a staged save.
+  const editField = (updates: Partial<CRMTeam>) => {
+    if (!team) return;
+    updateTeam(team.id, updates);
+  };
+
+  const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
-          <h2 className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{team ? 'Edit Team' : 'New Team'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+        <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
+          <div className="min-w-0 pr-3 flex-1">
+            {team && isEditMode ? (
+              <input value={form.name} onChange={e => { set('name', e.target.value); editField({ name: e.target.value }); }} className="w-full text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] bg-[#f3f3f5] rounded-[8px] px-2.5 py-1.5 outline-none" />
+            ) : (
+              <p className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{team ? team.name : 'New Team'}</p>
+            )}
+            {team?.createdBy && <p className="text-[11px] text-[#8992a0] mt-0.5">Created by {team.createdBy}</p>}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {team && (
+              <button onClick={() => setIsEditMode(v => !v)} className={`p-1.5 rounded-full active:opacity-70 ${isEditMode ? 'bg-[#1D2930]' : 'bg-[#eef3fb]'}`} title={isEditMode ? 'Done editing' : 'Edit'}>
+                <Pencil size={15} className={isEditMode ? 'text-white' : 'text-[#307fe2]'} />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+          </div>
         </div>
+
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
-            <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
-          </div>
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Contacts</label>
-            <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-32 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
-              {contacts.map(c => (
-                <button key={c.id} type="button" onClick={() => toggleContact(c.id)} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] ${form.contactIds.includes(c.id) ? 'bg-[#f0fdf4] text-[#1b5e20]' : 'text-[#0a0a0a]'}`}>
-                  {form.contactIds.includes(c.id) && <Check size={12} className="text-[#2e7d32]" />}
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none resize-none" />
-          </div>
+          {!team || isEditMode ? (
+            <>
+              {!team && (
+                <div>
+                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
+                  <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className={inputCls} />
+                </div>
+              )}
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Associated Mountains</label>
+                <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-32 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
+                  {mountains.map(m => (
+                    <button key={m.id} type="button" onClick={() => { toggleMountain(m.id); if (team) editField({ mountainIds: form.mountainIds.includes(m.id) ? form.mountainIds.filter(x => x !== m.id) : [...form.mountainIds, m.id] }); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] ${form.mountainIds.includes(m.id) ? 'bg-[#f0fdf4] text-[#1b5e20]' : 'text-[#0a0a0a]'}`}>
+                      {form.mountainIds.includes(m.id) && <Check size={12} className="text-[#2e7d32]" />}
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Website</label>
+                <input type="text" value={form.website} onChange={e => { set('website', e.target.value); editField({ website: e.target.value }); }} className={inputCls} placeholder="https://…" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Address</label>
+                <input type="text" value={form.address} onChange={e => { set('address', e.target.value); editField({ address: e.target.value }); }} className={inputCls} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Phone</label>
+                  <input type="tel" value={form.phone} onChange={e => { set('phone', e.target.value); editField({ phone: e.target.value }); }} className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Email</label>
+                  <input type="email" value={form.email} onChange={e => { set('email', e.target.value); editField({ email: e.target.value }); }} className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
+                <textarea value={form.notes} onChange={e => { set('notes', e.target.value); editField({ notes: e.target.value }); }} rows={3} className={`${inputCls} resize-none`} />
+              </div>
+            </>
+          ) : (
+            <>
+              {(team.website || team.address || team.phone || team.email) && (
+                <div className="space-y-1.5">
+                  {team.website && <div className="text-[13px] text-[#307fe2]">{team.website}</div>}
+                  {team.address && <div className="text-[13px] text-[#0a0a0a]">{team.address}</div>}
+                  {team.phone && <div className="text-[13px] text-[#0a0a0a] flex items-center gap-1.5"><Phone size={13} className="text-[#6a7282]" /> {team.phone}</div>}
+                  {team.email && <div className="text-[13px] text-[#0a0a0a] flex items-center gap-1.5"><Mail size={13} className="text-[#6a7282]" /> {team.email}</div>}
+                </div>
+              )}
+              {linkedMountains.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {linkedMountains.map(m => <span key={m.id} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full">{m.name}</span>)}
+                </div>
+              )}
+              {team.notes && <p className="text-[13px] text-[#6a7282]">{team.notes}</p>}
+            </>
+          )}
 
           {team && (
-            <div>
+            <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide">Contacts</label>
+                <button onClick={() => setShowAddContact(true)} className="text-[12px] text-[#307fe2] flex items-center gap-1 active:opacity-70"><Plus size={13} /> Add</button>
+              </div>
+              {linkedContacts.length === 0 ? (
+                <p className="text-[13px] text-[#8992a0]">No contacts yet.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {linkedContacts.map(c => (
+                    <div key={c.id} className="text-[13px] text-[#0a0a0a] flex items-center justify-between bg-[#f9fafb] rounded-[8px] px-3 py-2">
+                      <span>{c.name}</span>
+                      {c.title && <span className="text-[11px] text-[#6a7282]">{c.title}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {team && (
+            <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={team.activities || []}
@@ -1111,23 +1217,29 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
           )}
 
           {team && (
-            <div>
+            <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Projects</label>
               <ProjectsPane teamId={team.id} />
             </div>
           )}
         </div>
-        <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
-          {team && (
-            <button onClick={() => { updateTeam(team.id, { archived: !team.archived }); toast.success(team.archived ? 'Restored' : 'Archived'); onClose(); }} className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title={team.archived ? 'Restore' : 'Archive'}><Archive size={16} className="text-[#6a7282]" /></button>
-          )}
-          {team && (
+
+        {!team ? (
+          <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3">
+            <button onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Cancel</button>
+            <button onClick={create} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Create</button>
+          </div>
+        ) : isEditMode && (
+          <div className="px-5 py-3 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
+            <button onClick={() => { updateTeam(team.id, { archived: !team.archived }); toast.success(team.archived ? 'Restored' : 'Archived'); if (!team.archived) onClose(); }} className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title={team.archived ? 'Restore' : 'Archive'}><Archive size={16} className="text-[#6a7282]" /></button>
             <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete team"><Trash2 size={16} className="text-[#F95C39]" /></button>
-          )}
-          <button onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Cancel</button>
-          <button onClick={save} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Save</button>
-        </div>
+            <span className="flex-1 text-[12px] text-[#8992a0]">Editing — tap the pencil again when done.</span>
+          </div>
+        )}
       </div>
+      {showAddContact && team && (
+        <ContactForm contact={null} defaults={{ teamId: team.id }} onClose={() => setShowAddContact(false)} />
+      )}
       {showDelete && team && (
         <DeleteConfirmModal
           title="Delete team"
