@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { Plus, Pencil, Trash2, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2 } from 'lucide-react';
-import { useData, MountainNote, NoteTopic } from '../context/DataContext';
+import { useData, getYullrMembers, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 function formatShortDate(iso: string): string {
@@ -335,9 +335,10 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
           <p className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] leading-relaxed whitespace-pre-wrap">
             {note.text}
           </p>
-          <div className="flex items-center justify-between mt-3">
+          <div className="flex items-center justify-between mt-3 flex-wrap gap-1.5">
             <p className="text-[#5a8fc7] font-['Inter:Regular',sans-serif] text-[12px]">
               {wasEdited ? 'Edited ' : ''}{formatFullDateTime(note.updatedAt)}
+              {note.assigneeName ? ` · → ${note.assigneeName}` : ''}
             </p>
             <button
               onClick={() => { setIsExpanded(false); setIsAddingTo(true); }}
@@ -494,13 +495,15 @@ interface MountainNotesProps {
 
 export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps) {
   const location = useLocation();
-  const { addNote, updateNote, deleteNote, getNotesByMountainId } = useData();
+  const { addNote, updateNote, deleteNote, getNotesByMountainId, contacts, organizations } = useData();
+  const yullrMembers = getYullrMembers(contacts, organizations);
   const [isAdding, setIsAdding] = useState(false);
   const [newText, setNewText] = useState('');
   const [newTopic, setNewTopic] = useState<NoteTopic | undefined>();
   const [newScheduled, setNewScheduled] = useState(false);
   const [newCompleted, setNewCompleted] = useState(false);
   const [newInstallProgress, setNewInstallProgress] = useState<number | undefined>();
+  const [newAssigneeId, setNewAssigneeId] = useState('');
   const newTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [highlightedTopic, setHighlightedTopic] = useState<NoteTopic | null>(null);
 
@@ -532,7 +535,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
       return;
     }
 
-    addNote(
+    const id = addNote(
       mountainId,
       trimmed,
       newTopic,
@@ -541,11 +544,17 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
       newTopic === 'Install' ? newInstallProgress : undefined
     );
 
+    if (newAssigneeId) {
+      const assignee = yullrMembers.find(m => m.id === newAssigneeId);
+      if (assignee) updateNote(id, { assigneeContactId: assignee.id, assigneeName: assignee.name });
+    }
+
     setNewText('');
     setNewTopic(undefined);
     setNewScheduled(false);
     setNewCompleted(false);
     setNewInstallProgress(undefined);
+    setNewAssigneeId('');
     setIsAdding(false);
   };
 
@@ -682,6 +691,16 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
             rows={4}
             className="w-full bg-white border border-[#307FE2] rounded-[8px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-[#307FE2]/30 placeholder:text-[#9ca3af]"
           />
+          {yullrMembers.length > 0 && (
+            <select
+              value={newAssigneeId}
+              onChange={e => setNewAssigneeId(e.target.value)}
+              className="w-full mt-2 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+            >
+              <option value="">Assign to… (optional)</option>
+              {yullrMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          )}
           <div className="flex items-center gap-2 mt-2">
             <button
               onClick={handleAdd}

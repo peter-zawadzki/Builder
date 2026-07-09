@@ -401,6 +401,8 @@ export interface MountainNote {
   source?: 'mountain' | 'crm';
   contactId?: string;
   organizationId?: string;
+  assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to
+  assigneeName?: string;
 }
 
 export interface MiscItem {
