@@ -298,6 +298,8 @@ export interface Project {
   stallReason?: StallReason;
   stallNote?: string;           // required when stallReason === 'Other'
   reconcileConfirmed?: boolean; // install-vs-inspection reconciliation acknowledged
+  archived?: boolean;
+  activities?: ContactActivity[]; // notes / action items, same shape as contacts
   createdBy?: string;           // name of the user who created the project
   createdAt: string;
   updatedAt: string;
@@ -325,6 +327,8 @@ export interface ContactActivity {
   completed?: boolean;
   completedAt?: string;
   createdAt: string;
+  assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to
+  assigneeName?: string;
 }
 
 export interface CRMContact {
@@ -360,8 +364,17 @@ export interface CRMOrganization {
   keyDates: { label: string; date: string }[];
   archived?: boolean;
   notes?: string;
+  activities?: ContactActivity[];
   createdAt: string;
   updatedAt: string;
+}
+
+// People in the YULLR organization — the pool notes/action items can be
+// assigned to, across contacts, organizations, mountains, and projects.
+export function getYullrMembers(contacts: CRMContact[], organizations: CRMOrganization[]): CRMContact[] {
+  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
+  if (!yullrOrg) return [];
+  return contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type NoteTopic = 'Demo' | 'Site Visit' | 'Proposal' | 'Install' | 'Training' | 'Updates' | 'Follow-up';

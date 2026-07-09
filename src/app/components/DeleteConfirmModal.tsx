@@ -17,7 +17,7 @@ export function DeleteConfirmModal({
   onCancel,
 }: DeleteConfirmModalProps) {
   const [typed, setTyped] = useState('');
-  const confirmed = typed.toLowerCase() === 'delete';
+  const confirmed = typed === 'DELETE';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
@@ -40,16 +40,16 @@ export function DeleteConfirmModal({
         {/* Type-to-confirm input */}
         <div>
           <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-2 text-center">
-            Type <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">delete</span> to confirm
+            Type <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">DELETE</span> to confirm
           </label>
           <input
             type="text"
             value={typed}
             onChange={e => setTyped(e.target.value)}
             autoComplete="off"
-            autoCapitalize="none"
+            autoCapitalize="characters"
             spellCheck={false}
-            placeholder="delete"
+            placeholder="DELETE"
             className={`w-full rounded-[8px] px-4 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[16px] outline-none border-2 text-center transition-colors ${
               typed.length === 0
                 ? 'bg-[#f3f3f5] border-transparent'

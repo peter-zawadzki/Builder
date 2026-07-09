@@ -15,6 +15,7 @@ import type {
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
 import { useMyContact } from '../../hooks/useMyContact';
+import { ActivitySection } from '../ActivitySection';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -388,29 +389,13 @@ export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; 
 export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
   const { updateContact, deleteContact, getMountainById } = useData();
   const navigate = useNavigate();
-  const [newText, setNewText] = useState('');
-  const [newType, setNewType] = useState<'note' | 'action'>('note');
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const mountain = contact.mountainId ? getMountainById(contact.mountainId) : undefined;
 
-  const activities = [...(contact.activities || [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const openActions = activities.filter(a => a.type === 'action' && !a.completed);
-  const doneActions = activities.filter(a => a.type === 'action' && a.completed);
-  const notes = activities.filter(a => a.type === 'note');
-
-  const addActivity = () => {
-    if (!newText.trim()) return;
-    const entry: ContactActivity = {
-      id: crypto.randomUUID(),
-      text: newText.trim(),
-      type: newType,
-      createdAt: new Date().toISOString(),
-      completed: false,
-    };
-    updateContact(contact.id, { activities: [...(contact.activities || []), entry] });
-    setNewText('');
-    toast.success(newType === 'note' ? 'Note added' : 'Action item added');
+  const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
+    const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    updateContact(contact.id, { activities: [...(contact.activities || []), full] });
   };
 
   const toggleAction = (id: string) => {
@@ -490,76 +475,12 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           {contact.notes && <p className="text-[13px] text-[#6a7282] pt-1">{contact.notes}</p>}
         </div>
 
-        {/* Add note / action */}
-        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 space-y-3">
-          <div className="flex gap-2">
-            <button onClick={() => setNewType('note')} className={`flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${newType === 'note' ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}><MessageSquare size={13} /> Note</button>
-            <button onClick={() => setNewType('action')} className={`flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${newType === 'action' ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}><ListTodo size={13} /> Action Item</button>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newText}
-              onChange={e => setNewText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') addActivity(); }}
-              placeholder={newType === 'note' ? 'Add a note…' : 'Add an action item…'}
-              className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none"
-            />
-            <button onClick={addActivity} className="px-4 bg-[#1D2930] text-white rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80">Add</button>
-          </div>
-        </div>
-
-        {/* Open action items */}
-        {openActions.length > 0 && (
-          <div>
-            <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2 flex items-center gap-1.5"><ListTodo size={12} /> Action Items ({openActions.length})</h3>
-            <div className="space-y-2">
-              {openActions.map(a => (
-                <div key={a.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5 flex items-start gap-3">
-                  <button onClick={() => toggleAction(a.id)} className="w-5 h-5 rounded border-2 border-[#1D2930] flex items-center justify-center shrink-0 mt-0.5 active:opacity-70" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] text-[#0a0a0a]">{a.text}</p>
-                    <p className="text-[11px] text-[#6a7282]">{new Date(a.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  <button onClick={() => deleteActivity(a.id)} className="p-1 active:opacity-70"><X size={12} className="text-[#6a7282]" /></button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Notes timeline */}
-        {notes.length > 0 && (
-          <div>
-            <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2 flex items-center gap-1.5"><MessageSquare size={12} /> Notes</h3>
-            <div className="space-y-2">
-              {notes.map(n => (
-                <div key={n.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5">
-                  <p className="text-[13px] text-[#0a0a0a]">{n.text}</p>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-[11px] text-[#6a7282]">{new Date(n.createdAt).toLocaleString()}</p>
-                    <button onClick={() => deleteActivity(n.id)} className="p-1 active:opacity-70"><X size={12} className="text-[#6a7282]" /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Completed actions */}
-        {doneActions.length > 0 && (
-          <div>
-            <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2">Completed Actions ({doneActions.length})</h3>
-            <div className="space-y-2">
-              {doneActions.map(a => (
-                <div key={a.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.05)] px-3 py-2.5 flex items-start gap-3 opacity-60">
-                  <button onClick={() => toggleAction(a.id)} className="w-5 h-5 rounded bg-[#1D2930] flex items-center justify-center shrink-0 mt-0.5"><Check size={11} className="text-white" /></button>
-                  <p className="text-[13px] text-[#6a7282] line-through flex-1">{a.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <ActivitySection
+          activities={contact.activities || []}
+          onAdd={addActivity}
+          onToggle={toggleAction}
+          onDelete={deleteActivity}
+        />
       </div>
     </div>
   );

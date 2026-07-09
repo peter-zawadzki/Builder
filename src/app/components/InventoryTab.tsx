@@ -6,7 +6,8 @@ import {
 import {
   Plus, Search, X, ChevronDown, ChevronRight, Check,
   Package, Server as ServerIcon, Camera, Wifi, Wrench,
-  Pencil, Trash2, Building2, BarChart3, Filter, Scan, Loader2,
+  Pencil, Trash2, Building2, Filter, Scan, Loader2,
+  Tag, Hash, Calendar, Truck, FileText, DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
@@ -313,24 +314,46 @@ const SERVER_EMPTY: AssetFormData = {
 
 function AddEditModal({
   editAsset,
-  isServerBuild = false,
+  isServerBuild: initialServerBuild = false,
   onClose,
+  onDeleted,
 }: {
   editAsset: Asset | null;
   isServerBuild?: boolean;
   onClose: () => void;
+  onDeleted?: () => void;
 }) {
-  const { addAsset, updateAsset, assets, options, addOption, mountains, getLocationsByMountainId } = useData();
+  const { addAsset, updateAsset, deleteAsset, assets, options, addOption, mountains, getLocationsByMountainId } = useData();
+  const isSuperAdmin = useIsSuperAdmin();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const mountainOptions = useMemo(
     () => ['Unassigned / Warehouse', ...mountains.map(m => m.name).sort()],
     [mountains],
   );
 
-  const initialForm = editAsset ? assetToForm(editAsset, assets) : isServerBuild ? SERVER_EMPTY : EMPTY_FORM;
+  // Delete lives only in edit mode, super-admin only, with typed confirmation.
+  const handleDeleteAsset = async () => {
+    if (!editAsset) return;
+    if (editAsset.serverComponentIds?.length) {
+      editAsset.serverComponentIds.forEach(id =>
+        updateAsset(id, { inventoryStatus: 'In Stock', serverId: undefined }),
+      );
+    }
+    await deleteAsset(editAsset.id);
+    toast.success('Item deleted');
+    setConfirmDelete(false);
+    onDeleted?.();
+    onClose();
+  };
+
+  // "Build Server" can be preloaded via prop, or chosen as a tile in the
+  // category picker below — either way it's tracked as local state.
+  const [serverBuild, setServerBuild] = useState(initialServerBuild);
+  const initialForm = editAsset ? assetToForm(editAsset, assets) : initialServerBuild ? SERVER_EMPTY : EMPTY_FORM;
   const [form, setForm] = useState<AssetFormData>(initialForm);
   // Step 1 = category picker, Step 2 = fields. Skip step 1 when editing or server build.
   const [step, setStep] = useState<'category' | 'form'>(
-    editAsset || isServerBuild || initialForm.inventoryCategory ? 'form' : 'category',
+    editAsset || initialServerBuild || initialForm.inventoryCategory ? 'form' : 'category',
   );
 
   const [scanTarget, setScanTarget] = useState<'upc' | 'serial' | 'yin' | null>(null);
@@ -548,7 +571,7 @@ function AddEditModal({
   // ── Render ────────────────────────────────────────────────────────────────────
 
   const title = editAsset ? 'Edit Item'
-    : isServerBuild ? 'Build a Server'
+    : serverBuild ? 'Build a Server'
     : step === 'category' ? 'Add Inventory Item'
     : cat ? `Add ${cat}` : 'Add Inventory Item';
 
@@ -557,8 +580,8 @@ function AddEditModal({
       <div className="bg-white rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
-          {step === 'form' && !editAsset && !isServerBuild && (
-            <button type="button" onClick={() => { setStep('category'); set('inventoryCategory', ''); set('inventorySubcategory', ''); }} className="p-1.5 rounded-full bg-[#f3f3f5] active:bg-[#e5e7eb]">
+          {step === 'form' && !editAsset && (
+            <button type="button" onClick={() => { setStep('category'); setServerBuild(false); set('inventoryCategory', ''); set('inventorySubcategory', ''); }} className="p-1.5 rounded-full bg-[#f3f3f5] active:bg-[#e5e7eb]">
               <ChevronRight size={16} className="text-[#6a7282] rotate-180" />
             </button>
           )}
@@ -594,6 +617,21 @@ function AddEditModal({
                   <ChevronRight size={16} className="text-[#d1d5db] ml-auto" />
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setServerBuild(true);
+                  setForm(SERVER_EMPTY);
+                  setStep('form');
+                }}
+                className="flex items-center gap-4 px-4 py-4 rounded-[12px] border border-[rgba(0,0,0,0.1)] bg-white text-left active:bg-[#f9fafb] transition-colors"
+              >
+                <div className="w-10 h-10 rounded-[10px] bg-[#f3f3f5] flex items-center justify-center text-[#6a7282]">
+                  <ServerIcon size={16} />
+                </div>
+                <span className="text-[15px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Build Server</span>
+                <ChevronRight size={16} className="text-[#d1d5db] ml-auto" />
+              </button>
             </div>
           </div>
         ) : (
@@ -921,7 +959,12 @@ function AddEditModal({
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3">
+            <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
+              {editAsset && isSuperAdmin && (
+                <button type="button" onClick={() => setConfirmDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" aria-label="Delete item" title="Delete">
+                  <Trash2 size={16} className="text-[#F95C39]" />
+                </button>
+              )}
               <button type="button" onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:bg-[#e5e7eb]">Cancel</button>
               <button type="button" onClick={handleSave} className="flex-1 bg-[#F95C39] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:opacity-80">
                 {editAsset ? 'Save Changes' : 'Add Item'}
@@ -930,6 +973,15 @@ function AddEditModal({
           </>
         )}
       </div>
+
+      {confirmDelete && editAsset && (
+        <DeleteConfirmModal
+          title="Delete inventory item"
+          description={<>Remove <strong>{assetDisplayName(editAsset)}</strong> ({editAsset.yullrInventoryNumber}) from inventory? This cannot be undone.</>}
+          onConfirm={handleDeleteAsset}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }
@@ -938,21 +990,17 @@ function AddEditModal({
 
 function AssetCard({
   asset,
-  onEdit,
-  onDelete,
+  onOpen,
   componentCount,
-  canManage,
 }: {
   asset: Asset;
-  onEdit: () => void;
-  onDelete: () => void;
+  onOpen: () => void;
   componentCount?: number;
-  canManage: boolean;
 }) {
   const cat = asset.inventoryCategory;
 
   return (
-    <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden">
+    <button onClick={onOpen} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]">
       <div className="px-4 py-3 flex items-start gap-3">
         {/* Category icon */}
         <div className="w-9 h-9 rounded-[8px] bg-[#f3f3f5] flex items-center justify-center shrink-0 text-[#6a7282]">
@@ -960,28 +1008,26 @@ function AssetCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[14px] truncate leading-tight">
-                {assetDisplayName(asset)}
-              </p>
-              <p className="text-[11px] text-[#6a7282] mt-0.5">
-                {asset.yullrInventoryNumber || <span className="italic">No YIN</span>}
-                {asset.inventorySubcategory && ` · ${asset.inventorySubcategory}`}
-                {asset.dateAddedToInventory && ` · Added ${asset.dateAddedToInventory}`}
-              </p>
-            </div>
-          </div>
+          <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[14px] truncate leading-tight">
+            {assetDisplayName(asset)}
+          </p>
+          <p className="text-[11px] text-[#6a7282] mt-0.5">
+            {asset.yullrInventoryNumber || <span className="italic">No YIN</span>}
+            {asset.dateAddedToInventory && ` · Added ${asset.dateAddedToInventory}`}
+          </p>
 
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 mt-2">
+          <div className="flex items-center flex-wrap gap-1.5 mt-2">
+            <span className="text-[11px] bg-[#eef3fb] text-[#307fe2] px-2 py-0.5 rounded-full flex items-center gap-1">
+              <Building2 size={10} />
+              {asset.mountainDeployment && asset.mountainDeployment !== 'Unassigned / Warehouse' ? asset.mountainDeployment : 'Unassigned'}
+            </span>
+            {cat && (
+              <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">
+                {cat}
+              </span>
+            )}
             {asset.serialNumber && (
               <span className="text-[11px] text-[#6a7282] font-mono">{asset.serialNumber}</span>
-            )}
-            {asset.mountainDeployment && asset.mountainDeployment !== 'Unassigned / Warehouse' && (
-              <span className="text-[11px] text-[#1D2930] flex items-center gap-1">
-                <Building2 size={10} />
-                {asset.mountainDeployment}
-              </span>
             )}
             {asset.cost !== undefined && (
               <span className="text-[11px] text-[#6a7282]">{fmt(asset.cost)}</span>
@@ -992,26 +1038,112 @@ function AssetCard({
           </div>
         </div>
 
-        {canManage && (
-          <div className="flex gap-1 shrink-0">
-            <button onClick={onEdit} className="p-1.5 rounded-[6px] bg-[#eef3fb] active:bg-[#dce8f4]">
-              <Pencil size={13} className="text-[#307fe2]" />
-            </button>
-            <button onClick={onDelete} className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]">
-              <Trash2 size={14} className="text-[#F95C39]" />
+        <ChevronRight size={16} className="text-[#d1d5db] shrink-0 mt-1" />
+      </div>
+    </button>
+  );
+}
+
+// ─── Asset Detail Modal (read-only; pencil enters edit mode) ──────────────────
+
+function AssetDetailModal({
+  asset,
+  canManage,
+  onEdit,
+  onClose,
+}: {
+  asset: Asset;
+  canManage: boolean;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const cat = asset.inventoryCategory;
+  const displayName = assetDisplayName(asset);
+
+  function Row({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+    return (
+      <div className="flex items-start gap-3 py-2.5 border-b border-[rgba(0,0,0,0.05)] last:border-0">
+        <div className="w-7 shrink-0 text-[#6a7282] mt-0.5">{icon}</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-[#6a7282] uppercase tracking-wide font-['Inter:Medium',sans-serif] mb-0.5">{label}</p>
+          <p className="text-[14px] text-[#0a0a0a] font-['Inter:Regular',sans-serif] break-words">{value}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
+          <div className="flex-1 min-w-0 pr-3">
+            <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[17px] truncate">{displayName}</p>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {asset.yullrInventoryNumber && (
+                <span className="text-[11px] font-mono text-[#6a7282] bg-[#f3f3f5] px-2 py-0.5 rounded-full">{asset.yullrInventoryNumber}</span>
+              )}
+              <span className="text-[11px] bg-[#eef3fb] text-[#307fe2] px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Building2 size={10} />
+                {asset.mountainDeployment && asset.mountainDeployment !== 'Unassigned / Warehouse' ? asset.mountainDeployment : 'Unassigned'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {canManage && (
+              <button onClick={onEdit} className="p-1.5 rounded-full bg-[#eef3fb] active:bg-[#dce8f4]" aria-label="Edit item" title="Edit">
+                <Pencil size={15} className="text-[#307fe2]" />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5] active:bg-[#e5e7eb]" aria-label="Close">
+              <X size={16} className="text-[#6a7282]" />
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Deployment log strip */}
-      {asset.deploymentLog && asset.deploymentLog.length > 1 && (
-        <div className="px-4 py-2 bg-[#f9fafb] border-t border-[rgba(0,0,0,0.05)]">
-          <p className="text-[11px] text-[#6a7282]">
-            Previously at: {asset.deploymentLog.slice(0, -1).map(e => e.mountainName).join(' → ')}
-          </p>
         </div>
-      )}
+
+        <div className="overflow-y-auto flex-1 px-5 py-3">
+          {asset.cost !== undefined && asset.cost > 0 && (
+            <div className="bg-[#f9fafb] rounded-[10px] px-4 py-3 mb-4 flex items-center justify-between">
+              <span className="text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif] uppercase tracking-wide">Cost</span>
+              <span className="text-[18px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{fmt(asset.cost)}</span>
+            </div>
+          )}
+
+          <div>
+            <Row icon={cat ? CATEGORY_ICONS[cat] : <Package size={14} />} label="Category" value={cat || '—'} />
+            {asset.inventorySubcategory && (
+              <Row icon={<Tag size={14} />} label="Subcategory" value={asset.inventorySubcategory} />
+            )}
+            {(asset.manufacturer || asset.customManufacturer) && (
+              <Row icon={<Tag size={14} />} label="Manufacturer" value={asset.customManufacturer || asset.manufacturer} />
+            )}
+            {(asset.model || asset.customModel) && (
+              <Row icon={<Tag size={14} />} label="Model" value={asset.customModel || asset.model} />
+            )}
+            {asset.serialNumber && (
+              <Row icon={<Hash size={14} />} label="Serial Number" value={<span className="font-mono">{asset.serialNumber}</span>} />
+            )}
+            {asset.upc && (
+              <Row icon={<Hash size={14} />} label="UPC" value={<span className="font-mono">{asset.upc}</span>} />
+            )}
+            {asset.vendor && (
+              <Row icon={<Truck size={14} />} label="Vendor" value={asset.vendor} />
+            )}
+            {asset.dateOfPurchase && (
+              <Row icon={<Calendar size={14} />} label="Date of Purchase" value={asset.dateOfPurchase} />
+            )}
+            {asset.dateAddedToInventory && (
+              <Row icon={<Calendar size={14} />} label="Date Added to Inventory" value={asset.dateAddedToInventory} />
+            )}
+            {asset.assetClass && (
+              <Row icon={<DollarSign size={14} />} label="Class" value={asset.assetClass} />
+            )}
+            {asset.notes && (
+              <Row icon={<FileText size={14} />} label="Notes" value={asset.notes} />
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1024,7 +1156,7 @@ interface Filters {
   mountain: string;
 }
 
-function FilterBar({ filters, onChange, mountainOptions }: { filters: Filters; onChange: (f: Filters) => void; mountainOptions: string[] }) {
+function FilterBar({ filters, onChange, mountainOptions, onAddClick }: { filters: Filters; onChange: (f: Filters) => void; mountainOptions: string[]; onAddClick?: () => void }) {
   const set = (k: keyof Filters, v: string) => onChange({ ...filters, [k]: v });
   const active = filters.category || filters.mountain;
 
@@ -1106,6 +1238,14 @@ function FilterBar({ filters, onChange, mountainOptions }: { filters: Filters; o
         >
           <Scan size={15} />
         </button>
+        {onAddClick && (
+          <button
+            onClick={onAddClick}
+            className="shrink-0 flex items-center gap-1 bg-[#ff5c39] text-white rounded-[8px] px-3 py-2 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
+          >
+            <Plus size={14} /> Add
+          </button>
+        )}
         {active && (
           <button
             onClick={() => onChange({ search: filters.search, category: '', mountain: '' })}
@@ -1167,8 +1307,8 @@ export function InventoryTab() {
   );
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Asset | null>(null);
-  const [preloadServer, setPreloadServer] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
+  const [viewTargetId, setViewTargetId] = useState<string | null>(null);
+  const viewTarget = viewTargetId ? assets.find(a => a.id === viewTargetId) || null : null;
   const [viewMode, setViewMode] = useState<'list' | 'mountain'>('list');
   const [filters, setFilters] = useState<Filters>({ search: '', category: '', mountain: '' });
   const [expandedMountains, setExpandedMountains] = useState<Set<string>>(new Set());
@@ -1220,60 +1360,18 @@ export function InventoryTab() {
     });
   };
 
-  const handleDelete = async (asset: Asset) => {
-    // Release any components assigned to this server back to In Stock
-    if (asset.serverComponentIds?.length) {
-      asset.serverComponentIds.forEach(id =>
-        updateAsset(id, { inventoryStatus: 'In Stock', serverId: undefined }),
-      );
-    }
-    await deleteAsset(asset.id);
-    toast.success('Item deleted');
-    setDeleteTarget(null);
-  };
-
   const componentCountFor = (asset: Asset) =>
     asset.serverComponentIds?.length ?? 0;
 
   return (
     <div className="space-y-4">
-      {/* Summary bar */}
-      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-[8px] bg-[#fff4f1] flex items-center justify-center">
-            <BarChart3 size={15} className="text-[#F95C39]" />
-          </div>
-          <div>
-            <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[15px]">
-              {inventoryAssets.length} item{inventoryAssets.length !== 1 ? 's' : ''}
-            </p>
-            <p className="text-[11px] text-[#6a7282]">
-              {inventoryAssets.filter(a => a.cost).length > 0 && `Total value: ${fmt(inventoryAssets.reduce((s, a) => s + (a.cost || 0), 0))}`}
-            </p>
-          </div>
-        </div>
-        {isSuperAdmin && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setEditTarget(null); setPreloadServer(true); setShowAdd(true); }}
-              className="flex items-center gap-1.5 bg-[#1D2930] text-white px-3 py-2 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] active:opacity-80"
-            >
-              <ServerIcon size={13} />
-              Build Server
-            </button>
-            <button
-              onClick={() => { setEditTarget(null); setPreloadServer(false); setShowAdd(true); }}
-              className="flex items-center gap-1.5 bg-[#F95C39] text-white px-3.5 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
-            >
-              <Plus size={14} />
-              Add Item
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Filter bar */}
-      <FilterBar filters={filters} onChange={setFilters} mountainOptions={mountainOptions} />
+      {/* Filter bar (search + scan + Add, all in one place) */}
+      <FilterBar
+        filters={filters}
+        onChange={setFilters}
+        mountainOptions={mountainOptions}
+        onAddClick={isSuperAdmin ? () => { setEditTarget(null); setShowAdd(true); } : undefined}
+      />
 
       {/* View toggle */}
       <div className="flex gap-1 bg-[#f3f3f5] rounded-[8px] p-1">
@@ -1315,10 +1413,8 @@ export function InventoryTab() {
             <AssetCard
               key={a.id}
               asset={a}
-              canManage={isSuperAdmin}
               componentCount={componentCountFor(a)}
-              onEdit={() => { setEditTarget(a); setShowAdd(true); }}
-              onDelete={() => setDeleteTarget(a)}
+              onOpen={() => setViewTargetId(a.id)}
             />
           ))}
         </div>
@@ -1354,29 +1450,27 @@ export function InventoryTab() {
                   {expanded && (
                     <div className="border-t border-[rgba(0,0,0,0.06)] divide-y divide-[rgba(0,0,0,0.04)]">
                       {items.map(a => (
-                        <div key={a.id} className="px-4 py-3 flex items-center gap-3">
+                        <button key={a.id} onClick={() => setViewTargetId(a.id)} className="w-full px-4 py-3 flex items-center gap-3 text-left active:bg-[#f9fafb]">
                           <div className="w-7 h-7 rounded-[6px] bg-[#f3f3f5] flex items-center justify-center shrink-0 text-[#6a7282]">
                             {a.inventoryCategory ? CATEGORY_ICONS[a.inventoryCategory] : <Package size={12} />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[13px] text-[#0a0a0a] font-['Inter:Medium',sans-serif] truncate">{assetDisplayName(a)}</p>
-                            <p className="text-[11px] text-[#6a7282]">
-                              {a.yullrInventoryNumber}
-                              {a.inventorySubcategory && ` · ${a.inventorySubcategory}`}
-                              {a.serialNumber && ` · ${a.serialNumber}`}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                              {a.inventoryCategory && (
+                                <span className="text-[10px] bg-[#f3f3f5] text-[#6a7282] px-1.5 py-0.5 rounded-full">{a.inventoryCategory}</span>
+                              )}
+                              {a.yullrInventoryNumber && <span className="text-[11px] text-[#6a7282]">{a.yullrInventoryNumber}</span>}
+                              {a.serialNumber && <span className="text-[11px] text-[#6a7282] font-mono">{a.serialNumber}</span>}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {a.cost !== undefined && (
                               <span className="text-[11px] text-[#6a7282]">{fmt(a.cost)}</span>
                             )}
-                            {isSuperAdmin && (
-                              <button onClick={() => { setEditTarget(a); setShowAdd(true); }} className="p-1.5 rounded-[6px] bg-[#eef3fb] active:bg-[#dce8f4]">
-                                <Pencil size={12} className="text-[#307fe2]" />
-                              </button>
-                            )}
+                            <ChevronRight size={14} className="text-[#d1d5db]" />
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -1386,22 +1480,22 @@ export function InventoryTab() {
         </div>
       )}
 
+      {/* Read-only detail view — pencil enters edit mode; delete lives inside edit mode */}
+      {viewTarget && !showAdd && (
+        <AssetDetailModal
+          asset={viewTarget}
+          canManage={isSuperAdmin}
+          onEdit={() => { setEditTarget(viewTarget); setShowAdd(true); }}
+          onClose={() => setViewTargetId(null)}
+        />
+      )}
+
       {/* Add / Edit modal */}
       {showAdd && (
         <AddEditModal
           editAsset={editTarget}
-          isServerBuild={preloadServer}
-          onClose={() => { setShowAdd(false); setEditTarget(null); setPreloadServer(false); }}
-        />
-      )}
-
-      {/* Delete confirmation */}
-      {deleteTarget && (
-        <DeleteConfirmModal
-          title="Delete inventory item"
-          description={<>Remove <strong>{assetDisplayName(deleteTarget)}</strong> ({deleteTarget.yullrInventoryNumber}) from inventory? This cannot be undone.</>}
-          onConfirm={() => handleDelete(deleteTarget)}
-          onCancel={() => setDeleteTarget(null)}
+          onClose={() => { setShowAdd(false); setEditTarget(null); }}
+          onDeleted={() => setViewTargetId(null)}
         />
       )}
     </div>
