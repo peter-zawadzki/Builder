@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
-import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2 } from 'lucide-react';
+import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import type { Project, ProjectType, ProjectWorkStatus, PipelineStage, StallReason } from '../../context/DataContext';
+import type { Project, ProjectType, ProjectWorkStatus, PipelineStage, StallReason, ContactActivity } from '../../context/DataContext';
+import { ActivitySection } from '../ActivitySection';
+import { DeleteConfirmModal } from '../DeleteConfirmModal';
 
 // Install runs the full sales stage list (Churned is handled via stall/cancel,
 // so it's not part of the forward progress bar).
@@ -28,12 +30,15 @@ function useAuthor() {
 
 export function ProjectsPane({ mountainId }: { mountainId: string }) {
   const { getProjectsByMountainId } = useData();
-  const projects = getProjectsByMountainId(mountainId);
+  const allProjects = getProjectsByMountainId(mountainId);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
+  const projects = allProjects.filter(p => showArchived ? p.archived : !p.archived);
   const active = projects.filter(p => p.stage !== 'Churned' && p.status !== 'Done');
   const closed = projects.filter(p => p.stage === 'Churned' || p.status === 'Done');
+  const archivedCount = allProjects.filter(p => p.archived).length;
 
   return (
     <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
@@ -42,18 +47,24 @@ export function ProjectsPane({ mountainId }: { mountainId: string }) {
           Projects
           {projects.length > 0 && <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({projects.length})</span>}
         </h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
-        >
-          <Plus size={14} /> New
-        </button>
+        <div className="flex items-center gap-2">
+          {archivedCount > 0 && (
+            <button onClick={() => setShowArchived(v => !v)} className={`px-2.5 py-1.5 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] ${showArchived ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>Archived</button>
+          )}
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+          >
+            <Plus size={14} /> New
+          </button>
+        </div>
       </div>
 
       {projects.length === 0 ? (
         <div className="text-[13px] text-[#6a7282]">
-          No projects yet.{' '}
-          <button onClick={() => setShowForm(true)} className="text-[#307fe2]">Create one</button>
+          {showArchived ? 'No archived projects.' : (
+            <>No projects yet. <button onClick={() => setShowForm(true)} className="text-[#307fe2]">Create one</button></>
+          )}
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -223,6 +234,8 @@ function ProjectForm({ mountainId, onClose }: { mountainId: string; onClose: () 
 function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts, logActivity } = useData();
   const project = getProjectById(projectId);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [stallOpen, setStallOpen] = useState(false);
   const [stallReason, setStallReason] = useState<StallReason>('No response');
   const [stallNote, setStallNote] = useState('');
@@ -252,101 +265,169 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
     toast.success('Marked stalled');
   };
 
+  const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
+    const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    updateProject(project.id, { activities: [...(project.activities || []), full] });
+  };
+  const toggleActivity = (id: string) => {
+    const updated = (project.activities || []).map(a =>
+      a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a,
+    );
+    updateProject(project.id, { activities: updated });
+  };
+  const deleteActivity = (id: string) => {
+    updateProject(project.id, { activities: (project.activities || []).filter(a => a.id !== id) });
+  };
+
   const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-[16px] w-full max-w-md max-h-[90vh] flex flex-col">
         <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
-          <div className="min-w-0 pr-3">
-            <p className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{project.name}</p>
+          <div className="min-w-0 pr-3 flex-1">
+            {isEditMode ? (
+              <input
+                value={project.name}
+                onChange={e => updateProject(project.id, { name: e.target.value })}
+                className="w-full text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] bg-[#f3f3f5] rounded-[8px] px-2.5 py-1.5 outline-none"
+              />
+            ) : (
+              <p className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{project.name}</p>
+            )}
             {project.createdBy && <p className="text-[11px] text-[#8992a0] mt-0.5">Created by {project.createdBy}</p>}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5] shrink-0"><X size={16} className="text-[#6a7282]" /></button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => setIsEditMode(v => !v)} className={`p-1.5 rounded-full active:opacity-70 ${isEditMode ? 'bg-[#1D2930]' : 'bg-[#eef3fb]'}`} title={isEditMode ? 'Done editing' : 'Edit'}>
+              <Pencil size={15} className={isEditMode ? 'text-white' : 'text-[#307fe2]'} />
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+          </div>
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          {/* Type */}
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
-            <div className="flex gap-2">
-              {(['Install', 'Repair', 'Upgrade'] as ProjectType[]).map(t => (
-                <button key={t} onClick={() => setType(t)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Stage / status */}
-          {isInstall ? (
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
-              <select className={inputCls} value={project.stage || 'Prospect'} onChange={e => changeStage(e.target.value as PipelineStage)}>
-                {INSTALL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                <option value="Churned">Churned</option>
-              </select>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Status</label>
-              <div className="flex gap-2">
-                {WORK_STATUSES.map(s => (
-                  <button key={s} onClick={() => changeStatus(s)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.status === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{s}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Owner */}
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide flex items-center gap-1.5"><UserCircle2 size={13} /> Owner</label>
-            <OwnerSelect
-              value={project.ownerContactId || ''}
-              onChange={(id) => {
-                const c = contacts.find(x => x.id === id);
-                transferProjectOwner(project.id, id, c?.name || '');
-              }}
-              className={inputCls}
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
-            <textarea className={`${inputCls} resize-none`} rows={3} value={project.notes || ''} onChange={e => updateProject(project.id, { notes: e.target.value || undefined })} placeholder="Project notes…" />
-          </div>
-
-          {/* Stall */}
-          <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
-            {project.isStalled ? (
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] text-[#F95C39] flex items-center gap-1.5"><AlertTriangle size={13} /> Stalled — {project.stallReason}{project.stallNote ? `: ${project.stallNote}` : ''}</span>
-                <button onClick={() => { updateProject(project.id, { isStalled: false, stallReason: undefined, stallNote: undefined }); logActivity(project.mountainId, 'stall_cleared', `Project "${project.name}" stall cleared`); }} className="text-[12px] text-[#307fe2]">Clear</button>
-              </div>
-            ) : !stallOpen ? (
-              <button onClick={() => setStallOpen(true)} className="text-[13px] text-[#F95C39] flex items-center gap-1.5 active:opacity-70"><AlertTriangle size={13} /> Mark stalled</button>
-            ) : (
-              <div className="space-y-2">
-                <select className={inputCls} value={stallReason} onChange={e => setStallReason(e.target.value as StallReason)}>
-                  {STALL_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-                {stallReason === 'Other' && (
-                  <input className={inputCls} value={stallNote} onChange={e => setStallNote(e.target.value)} placeholder="Required note for “Other”" />
-                )}
+          {isEditMode ? (
+            <>
+              {/* Type — editable only in edit mode */}
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
                 <div className="flex gap-2">
-                  <button onClick={() => setStallOpen(false)} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[8px] py-2 text-[13px] font-['Inter:Medium',sans-serif]">Cancel</button>
-                  <button onClick={applyStall} className="flex-1 bg-[#F95C39] text-white rounded-[8px] py-2 text-[13px] font-['Inter:Medium',sans-serif]">Confirm</button>
+                  {(['Install', 'Repair', 'Upgrade'] as ProjectType[]).map(t => (
+                    <button key={t} onClick={() => setType(t)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
+                  ))}
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Owner — editable only in edit mode */}
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide flex items-center gap-1.5"><UserCircle2 size={13} /> Owner</label>
+                <OwnerSelect
+                  value={project.ownerContactId || ''}
+                  onChange={(id) => {
+                    const c = contacts.find(x => x.id === id);
+                    transferProjectOwner(project.id, id, c?.name || '');
+                  }}
+                  className={inputCls}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Type — read-only in view mode */}
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] text-[#6a7282]">Type</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide ${TYPE_BADGE[project.type]}`}>{project.type}</span>
+              </div>
+
+              {/* Stage / status — quick update, stays in view mode */}
+              {isInstall ? (
+                <div>
+                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
+                  <select className={inputCls} value={project.stage || 'Prospect'} onChange={e => changeStage(e.target.value as PipelineStage)}>
+                    {INSTALL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="Churned">Churned</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Status</label>
+                  <div className="flex gap-2">
+                    {WORK_STATUSES.map(s => (
+                      <button key={s} onClick={() => changeStatus(s)} className={`flex-1 px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.status === s ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Owner — read-only in view mode */}
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] text-[#6a7282] flex items-center gap-1.5"><UserCircle2 size={13} /> Owner</span>
+                <span className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{project.ownerName || '—'}</span>
+              </div>
+
+              {/* Stall — a quick day-to-day action, stays in view mode */}
+              <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
+                {project.isStalled ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#F95C39] flex items-center gap-1.5"><AlertTriangle size={13} /> Stalled — {project.stallReason}{project.stallNote ? `: ${project.stallNote}` : ''}</span>
+                    <button onClick={() => { updateProject(project.id, { isStalled: false, stallReason: undefined, stallNote: undefined }); logActivity(project.mountainId, 'stall_cleared', `Project "${project.name}" stall cleared`); }} className="text-[12px] text-[#307fe2]">Clear</button>
+                  </div>
+                ) : !stallOpen ? (
+                  <button onClick={() => setStallOpen(true)} className="text-[13px] text-[#F95C39] flex items-center gap-1.5 active:opacity-70"><AlertTriangle size={13} /> Mark stalled</button>
+                ) : (
+                  <div className="space-y-2">
+                    <select className={inputCls} value={stallReason} onChange={e => setStallReason(e.target.value as StallReason)}>
+                      {STALL_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    {stallReason === 'Other' && (
+                      <input className={inputCls} value={stallNote} onChange={e => setStallNote(e.target.value)} placeholder="Required note for “Other”" />
+                    )}
+                    <div className="flex gap-2">
+                      <button onClick={() => setStallOpen(false)} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[8px] py-2 text-[13px] font-['Inter:Medium',sans-serif]">Cancel</button>
+                      <button onClick={applyStall} className="flex-1 bg-[#F95C39] text-white rounded-[8px] py-2 text-[13px] font-['Inter:Medium',sans-serif]">Confirm</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Notes & Action Items — quick updates, stay in view mode */}
+              <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
+                <ActivitySection
+                  activities={project.activities || []}
+                  onAdd={addActivity}
+                  onToggle={toggleActivity}
+                  onDelete={deleteActivity}
+                />
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="px-5 py-3 border-t border-[rgba(0,0,0,0.08)]">
-          <button onClick={() => { if (confirm('Delete this project? Linked items are unlinked, not deleted.')) { deleteProject(project.id); onClose(); } }}
-            className="text-[12px] text-[#6a7282] active:opacity-70">Delete project</button>
-        </div>
+        {isEditMode && (
+          <div className="px-5 py-3 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
+            <button
+              onClick={() => { updateProject(project.id, { archived: !project.archived }); toast.success(project.archived ? 'Restored' : 'Archived'); if (!project.archived) onClose(); }}
+              className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]"
+              title={project.archived ? 'Restore' : 'Archive'}
+            >
+              <Archive size={16} className="text-[#6a7282]" />
+            </button>
+            <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete project">
+              <Trash2 size={16} className="text-[#F95C39]" />
+            </button>
+            <span className="flex-1 text-[12px] text-[#8992a0]">Editing — tap the pencil again when done.</span>
+          </div>
+        )}
       </div>
 
+      {showDelete && (
+        <DeleteConfirmModal
+          title="Delete project"
+          description={<>Delete <strong>{project.name}</strong>? Linked items are unlinked, not deleted. This cannot be undone.</>}
+          onConfirm={() => { deleteProject(project.id); toast.success('Project deleted'); onClose(); }}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
     </div>
   );
 }
