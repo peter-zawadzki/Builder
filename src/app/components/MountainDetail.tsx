@@ -45,7 +45,7 @@ function ExpandablePane({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 flex flex-col">
+      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setOpen(true)} className="flex items-center gap-2 active:opacity-70">
             <Maximize2 size={15} className="text-[#6a7282]" />
