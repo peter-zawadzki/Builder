@@ -55,8 +55,8 @@ function ExpandablePane({
             {headerRight}
           </div>
         </div>
-        <div className="max-h-[240px] overflow-hidden relative">
-          {children}
+        <div className="h-[320px] overflow-hidden relative">
+          <div className="pb-8">{children}</div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent" />
         </div>
       </div>
@@ -85,8 +85,8 @@ function ExpandableSection({ children }: { children: (openModal: () => void) => 
   const openModal = () => setOpen(true);
   return (
     <div>
-      <div className="max-h-[400px] overflow-hidden relative rounded-[12px]">
-        {children(openModal)}
+      <div className="h-[400px] overflow-hidden relative rounded-[12px]">
+        <div className="pb-10">{children(openModal)}</div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
       </div>
 
