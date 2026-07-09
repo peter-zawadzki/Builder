@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, File, FileText, Image, Video, Download, Trash2, X, Grid, List, Edit3 } from 'lucide-react';
+import { Upload, File, FileText, Image, Video, Download, Trash2, X, Grid, List, Edit3, Maximize2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import * as locMediaDB from '../utils/locationMediaDB';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
@@ -23,9 +23,10 @@ interface Document {
 
 interface MountainDocumentsProps {
   mountainId: string;
+  onExpandClick?: () => void;
 }
 
-export function MountainDocuments({ mountainId }: MountainDocumentsProps) {
+export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumentsProps) {
   const { getLocationsByMountainId, getAssetsByMountainId } = useData();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -536,12 +537,24 @@ export function MountainDocuments({ mountainId }: MountainDocumentsProps) {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
-          Documents
-          {!loading && (
-            <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({documents.length})</span>
-          )}
-        </h2>
+        {onExpandClick ? (
+          <button onClick={onExpandClick} className="flex items-center gap-2 active:opacity-70">
+            <Maximize2 size={15} className="text-[#6a7282]" />
+            <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+              Documents
+              {!loading && (
+                <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({documents.length})</span>
+              )}
+            </h2>
+          </button>
+        ) : (
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+            Documents
+            {!loading && (
+              <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({documents.length})</span>
+            )}
+          </h2>
+        )}
         <div className="flex items-center gap-2">
           {/* View toggle */}
           <div className="flex items-center bg-[#f3f3f5] rounded-[6px] p-0.5">

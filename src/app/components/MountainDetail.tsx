@@ -48,12 +48,11 @@ function ExpandablePane({
       <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setOpen(true)} className="flex items-center gap-2 active:opacity-70">
-            {icon}
+            <Maximize2 size={15} className="text-[#6a7282]" />
             <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{title}</h2>
           </button>
           <div className="flex items-center gap-2">
             {headerRight}
-            <button onClick={() => setOpen(true)} title="Expand" className="text-[#6a7282] active:opacity-60"><Maximize2 size={15} /></button>
           </div>
         </div>
         <div className="max-h-[240px] overflow-hidden relative">
@@ -79,21 +78,17 @@ function ExpandablePane({
 
 // Wraps a pane that already has its own header (Trails, Notes, Inventory,
 // Documents). Caps the inline card height and reveals the full content in a
-// modal, so these panes don't grow the page without bound.
-function ExpandableSection({ children }: { children: React.ReactNode }) {
+// modal. Children is a render function so the wrapped content can put the
+// expand trigger to the left of its own title, consistent with ExpandablePane.
+function ExpandableSection({ children }: { children: (openModal: () => void) => React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const openModal = () => setOpen(true);
   return (
     <div>
       <div className="max-h-[400px] overflow-hidden relative rounded-[12px]">
-        {children}
+        {children(openModal)}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
       </div>
-      <button
-        onClick={() => setOpen(true)}
-        className="mt-1.5 w-full flex items-center justify-center gap-1 text-[12px] text-[#307fe2] py-1 active:opacity-70"
-      >
-        <Maximize2 size={13} /> Open full view
-      </button>
 
       {open && (
         <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto p-4 sm:p-6" onClick={() => setOpen(false)}>
@@ -104,7 +99,7 @@ function ExpandableSection({ children }: { children: React.ReactNode }) {
             >
               <X size={18} /> Close
             </button>
-            {children}
+            {children(openModal)}
           </div>
         </div>
       )}
@@ -442,7 +437,7 @@ export function MountainDetail() {
             title="Contacts"
             icon={<Users size={16} className="text-[#6a7282]" />}
             headerRight={
-              <button onClick={() => setShowAddContact(true)} className="text-[12px] text-[#307fe2] active:opacity-60 flex items-center gap-1"><Plus size={12} /> Add</button>
+              <button onClick={() => setShowAddContact(true)} className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"><Plus size={14} /> New</button>
             }
           >
             {(() => {
@@ -504,14 +499,18 @@ export function MountainDetail() {
 
           {/* ── Trails Pane ── */}
           <ExpandableSection>
+          {(openModal) => (
           <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
-                Trails
-                {trails.length > 0 && (
-                  <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({trails.length})</span>
-                )}
-              </h2>
+              <button onClick={openModal} className="flex items-center gap-2 active:opacity-70">
+                <Maximize2 size={15} className="text-[#6a7282]" />
+                <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+                  Trails
+                  {trails.length > 0 && (
+                    <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({trails.length})</span>
+                  )}
+                </h2>
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -659,13 +658,16 @@ export function MountainDetail() {
               )}
             </div>
           </div>
+          )}
           </ExpandableSection>
 
           {/* ── Notes Pane ── */}
           <ExpandableSection>
+            {(openModal) => (
             <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
-              <MountainNotes mountainId={mountainId!} />
+              <MountainNotes mountainId={mountainId!} onExpandClick={openModal} />
             </div>
+            )}
           </ExpandableSection>
 
         </div>
@@ -675,25 +677,29 @@ export function MountainDetail() {
 
           {/* Inventory */}
           <ExpandableSection>
+          {(openModal) => (
           <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
           <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
-                Inventory
-                {inventoryAssets.length > 0 && (
-                  <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({inventoryAssets.length})</span>
+            <button onClick={openModal} className="flex items-start gap-2 active:opacity-70 text-left">
+              <Maximize2 size={15} className="text-[#6a7282] mt-0.5 shrink-0" />
+              <div>
+                <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+                  Inventory
+                  {inventoryAssets.length > 0 && (
+                    <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({inventoryAssets.length})</span>
+                  )}
+                </h2>
+                {inventoryTotalCost > 0 && (
+                  <p className="text-[#6a7282] text-[12px] mt-0.5">{fmtCost(inventoryTotalCost)} total value</p>
                 )}
-              </h2>
-              {inventoryTotalCost > 0 && (
-                <p className="text-[#6a7282] text-[12px] mt-0.5">{fmtCost(inventoryTotalCost)} total value</p>
-              )}
-              {(trackedCount > 0 || expensedCount > 0) && (
-                <p className="text-[#8992a0] text-[11px] mt-0.5">{trackedCount} tracked · {expensedCount} expensed</p>
-              )}
-            </div>
+                {(trackedCount > 0 || expensedCount > 0) && (
+                  <p className="text-[#8992a0] text-[11px] mt-0.5">{trackedCount} tracked · {expensedCount} expensed</p>
+                )}
+              </div>
+            </button>
             <button
               onClick={() => setShowCheckInOut(true)}
-              className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+              className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80 shrink-0"
             >
               <Truck size={14} /> Assign
             </button>
@@ -769,13 +775,16 @@ export function MountainDetail() {
             </>
           )}
           </div>
+          )}
           </ExpandableSection>
 
           {/* Documents */}
           <ExpandableSection>
+            {(openModal) => (
             <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
-              <MountainDocuments mountainId={mountainId!} />
+              <MountainDocuments mountainId={mountainId!} onExpandClick={openModal} />
             </div>
+            )}
           </ExpandableSection>
 
         </div>

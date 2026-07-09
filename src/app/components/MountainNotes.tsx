@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router';
-import { Plus, Pencil, Trash2, Check, X, StickyNote, ChevronDown, PlusCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2 } from 'lucide-react';
 import { useData, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
@@ -489,9 +489,10 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
 
 interface MountainNotesProps {
   mountainId: string;
+  onExpandClick?: () => void;
 }
 
-export function MountainNotes({ mountainId }: MountainNotesProps) {
+export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps) {
   const location = useLocation();
   const { addNote, updateNote, deleteNote, getNotesByMountainId } = useData();
   const [isAdding, setIsAdding] = useState(false);
@@ -577,16 +578,25 @@ export function MountainNotes({ mountainId }: MountainNotesProps) {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
-          Notes
-        </h2>
+        {onExpandClick ? (
+          <button onClick={onExpandClick} className="flex items-center gap-2 active:opacity-70">
+            <Maximize2 size={15} className="text-[#6a7282]" />
+            <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+              Notes
+            </h2>
+          </button>
+        ) : (
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
+            Notes
+          </h2>
+        )}
         {!isAdding && (
           <button
             onClick={() => setIsAdding(true)}
-            className="bg-[#307FE2] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+            className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
           >
             <Plus size={14} />
-            Add
+            New
           </button>
         )}
       </div>
