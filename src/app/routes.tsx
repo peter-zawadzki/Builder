@@ -71,7 +71,7 @@ export const router = createBrowserRouter([
           { path: "/mountains/new", Component: CreateMountain },
           { path: "/mountains/:mountainId", Component: MountainDetail },
           { path: "/mountains/:mountainId/edit", Component: EditMountain },
-          { path: "/mountains/:mountainId/proposal", Component: ProposalBuilder },
+          { path: "/mountains/:mountainId/proposal/:proposalId", Component: ProposalBuilder },
           { path: "/mountains/:mountainId/agreement", Component: CustomerAgreementBuilder },
           { path: "/mountains/:mountainId/invoice", Component: InvoiceViewer },
           // ── Trails ────────────────────────────────────────────────────────

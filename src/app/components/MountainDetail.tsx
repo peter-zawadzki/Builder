@@ -5,6 +5,7 @@ import { useData } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact } from '../context/DataContext';
 import { ContactDetail, DealDetailsModal, ContactForm } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
+import { ProposalsPane } from './projects/ProposalsPane';
 import { AssignInventoryModal } from './CheckInOutModal';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
@@ -123,6 +124,7 @@ export function MountainDetail() {
     assets,
     contacts,
     organizations,
+    getProposalsByMountainId,
     updateLocation,
     updateMountain,
   } = useData();
@@ -205,6 +207,7 @@ export function MountainDetail() {
   const mountainAssetsAll = getAssetsByMountainId(mountainId!);
   const trackedCount = mountainAssetsAll.filter(a => (a.assetClass || 'Asset') === 'Asset').length;
   const expensedCount = mountainAssetsAll.filter(a => a.assetClass === 'Expense').length;
+  const hasProposal = getProposalsByMountainId(mountainId!).some(p => p.proposalCreated);
 
   // Resolve / persist a single contact by its slot in the mountain record.
   const contactForSlot = (slot: ContactSlot): Contact | undefined =>
@@ -243,14 +246,6 @@ export function MountainDetail() {
             <Pencil size={16} className="text-[#6a7282]" />
           </button>
           <div className="flex items-center gap-1.5 ml-auto">
-            <button
-              onClick={() => navigate(`/mountains/${mountainId}/proposal`)}
-              className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
-              aria-label="Build Proposal"
-              title="Build Proposal"
-            >
-              <FileText size={18} className="text-[#ff5c39]" />
-            </button>
             <button
               onClick={() => setShowExport(true)}
               className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
@@ -338,8 +333,8 @@ export function MountainDetail() {
             title="Status"
             icon={<Info size={16} className="text-[#6a7282]" />}
             headerRight={
-              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] font-medium ${mountain.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-                {mountain.proposalCreated ? 'Customer' : 'Prospect'}
+              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] font-medium ${hasProposal ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+                {hasProposal ? 'Customer' : 'Prospect'}
               </span>
             }
           >
@@ -349,7 +344,7 @@ export function MountainDetail() {
                 <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{mountain.pipelineStage || '—'}</span>
               </div>
               {[
-                { label: 'Proposal created', done: !!mountain.proposalCreated },
+                { label: 'Proposal created', done: hasProposal },
                 { label: 'Invoice', done: !!mountain.invoice },
                 { label: 'Install confirmed', done: !!mountain.confirmedInstallDate },
               ].map((s) => (
@@ -500,6 +495,9 @@ export function MountainDetail() {
 
         {/* Projects — the unit of work; one progress bar per project */}
         <ProjectsPane mountainId={mountainId!} />
+
+        {/* Proposals — one per project */}
+        <ProposalsPane mountainId={mountainId!} />
 
         {/* Top Row: Trails + Notes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

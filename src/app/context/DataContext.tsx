@@ -303,6 +303,21 @@ export interface Project {
   updatedAt: string;
 }
 
+// A proposal — one per project. Content (trails/fees/terms) lives in `form`.
+export interface Proposal {
+  id: string;
+  mountainId: string;
+  projectId?: string;
+  title?: string;
+  proposalCreated?: boolean;    // finalized / sent for signature
+  proposalCreatedAt?: string;
+  form?: any;                   // the editable ProposalForm content
+  invoice?: Invoice;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ContactActivity {
   id: string;
   text: string;
@@ -410,6 +425,12 @@ interface DataContextType {
   deleteProject: (id: string) => Promise<void>;
   getProjectsByMountainId: (mountainId: string) => Project[];
   getProjectById: (id: string) => Project | undefined;
+  proposals: Proposal[];
+  addProposal: (proposal: Omit<Proposal, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateProposal: (id: string, updates: Partial<Proposal>) => void;
+  deleteProposal: (id: string) => Promise<void>;
+  getProposalsByMountainId: (mountainId: string) => Proposal[];
+  getProposalById: (id: string) => Proposal | undefined;
   getAssetById: (id: string) => Asset | undefined;
   getLocationsByMountainId: (mountainId: string) => Location[];
   getAssetsByLocationId: (locationId: string) => Asset[];
@@ -455,6 +476,7 @@ const STORAGE_KEYS = {
   NOTES: 'yullrLocal_notes',
   TRAILS: 'yullrLocal_trails',
   PROJECTS: 'yullrLocal_projects',
+  PROPOSALS: 'yullrLocal_proposals',
   OPTIONS: 'yullrLocal_options',
   ITEM_PRICES: 'yullrLocal_item_prices',
   PENDING_PHOTOS: 'yullrLocal_pendingPhotoSync',
@@ -649,6 +671,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.PROJECTS) || '[]'); }
     catch { return []; }
   });
+  const [proposals, setProposals] = useState<Proposal[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.PROPOSALS) || '[]'); }
+    catch { return []; }
+  });
   const [options, setOptions] = useState<Record<string, string[]>>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.OPTIONS) || '{}'); }
     catch { return {}; }
@@ -690,12 +716,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let localNotes: MountainNote[] = [];
         let localTrails: Trail[] = [];
         let localProjects: Project[] = [];
+        let localProposals: Proposal[] = [];
         try { localMountains = JSON.parse(localStorage.getItem(STORAGE_KEYS.MOUNTAINS) || '[]'); } catch {}
         try { localLocations = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATIONS) || '[]'); } catch {}
         try { localAssets = JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSETS) || '[]'); } catch {}
         try { localNotes = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTES) || '[]'); } catch {}
         try { localTrails = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]'); } catch {}
         try { localProjects = JSON.parse(localStorage.getItem(STORAGE_KEYS.PROJECTS) || '[]'); } catch {}
+        try { localProposals = JSON.parse(localStorage.getItem(STORAGE_KEYS.PROPOSALS) || '[]'); } catch {}
 
         // Fetch local photos first (IndexedDB — no network cost)
         const photoLookup = await photoDB.getAllPhotos().catch(() => ({}));
@@ -717,10 +745,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
 
         // Batch 2: large collections
-        const [assetsRes, notesRes, projectsRes] = await Promise.all([
+        const [assetsRes, notesRes, projectsRes, proposalsRes] = await Promise.all([
           apiCall('/assets').catch(() => silent()),
           apiCall('/notes').catch(() => silent()),
           apiCall('/projects').catch(() => silent()),
+          apiCall('/proposals').catch(() => silent()),
         ]);
 
         // Merge helper: server is authoritative for items it knows about;
@@ -769,6 +798,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         if (notesRes) setNotes(mergeById(notesRes.notes || [], localNotes, 'notes'));
         if (projectsRes) setProjects(mergeById(projectsRes.projects || [], localProjects, 'projects'));
+        if (proposalsRes) setProposals(mergeById(proposalsRes.proposals || [], localProposals, 'proposals'));
         if (optionsRes?.options) {
           // Merge server options with any locally-added options
           setOptions(prev => {
@@ -978,6 +1008,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       catch (e) { console.error('Error saving projects:', e); }
     }
   }, [projects, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.PROPOSALS, JSON.stringify(proposals)); }
+      catch (e) { console.error('Error saving proposals:', e); }
+    }
+  }, [proposals, isLoading]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -1247,6 +1284,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const getProjectsByMountainId = (mountainId: string) => projects.filter(p => p.mountainId === mountainId);
   const getProjectById = (id: string) => projects.find(p => p.id === id);
+
+  // ─── Proposals ──────────────────────────────────────────────────────────────
+  // One per project. Content lives in the record's `form`.
+
+  const addProposal = (proposal: Omit<Proposal, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const newProposal: Proposal = { ...proposal, id, createdAt: now, updatedAt: now };
+    setProposals(prev => [...prev, newProposal]);
+    syncOrQueue('/proposals', 'POST', JSON.stringify(newProposal))
+      .catch(e => console.error('Proposal sync error:', e));
+    return id;
+  };
+
+  const updateProposal = (id: string, updates: Partial<Proposal>) => {
+    const patch = { ...updates, updatedAt: new Date().toISOString() };
+    setProposals(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+    syncOrQueue(`/proposals/${id}`, 'PUT', JSON.stringify(patch))
+      .catch(e => console.error('Proposal update sync error:', e));
+  };
+
+  const deleteProposal = async (id: string) => {
+    setProposals(prev => prev.filter(p => p.id !== id));
+    addTombstone('proposals', id);
+    syncOrQueue(`/proposals/${id}`, 'DELETE', null)
+      .catch(e => console.error('Proposal delete sync error:', e));
+  };
+
+  const getProposalsByMountainId = (mountainId: string) => proposals.filter(p => p.mountainId === mountainId);
+  const getProposalById = (id: string) => proposals.find(p => p.id === id);
 
   // ─── Notes ──────────────────────────────────────────────────────────────────
 
@@ -1544,6 +1611,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         deleteProject,
         getProjectsByMountainId,
         getProjectById,
+        proposals,
+        addProposal,
+        updateProposal,
+        deleteProposal,
+        getProposalsByMountainId,
+        getProposalById,
         getAssetById,
         getLocationsByMountainId,
         getAssetsByLocationId,

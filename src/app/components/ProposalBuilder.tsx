@@ -92,16 +92,21 @@ function numberToWord(n: string): string {
 
 export function ProposalBuilder() {
   const navigate = useNavigate();
-  const { mountainId } = useParams<{ mountainId: string }>();
+  const { mountainId, proposalId } = useParams<{ mountainId: string; proposalId: string }>();
   const {
     getMountainById, getTrailsByMountainId, getLocationsByMountainId,
     addTrail: saveTrailToDB,
     updateMountain,
     addNote,
     getNotesByMountainId,
+    getProposalById, updateProposal, deleteProposal: removeProposal, getProjectById,
   } = useData();
 
   const mountain = mountainId ? getMountainById(mountainId) : null;
+  const proposalRecord = proposalId ? getProposalById(proposalId) : undefined;
+  const proposalProject = proposalRecord?.projectId ? getProjectById(proposalRecord.projectId) : undefined;
+  // Signing/persistence are keyed by the proposal, not the mountain.
+  const signId = proposalId || mountainId;
   const dbTrails = mountainId ? getTrailsByMountainId(mountainId) : [];
   const allLocations = mountainId ? getLocationsByMountainId(mountainId) : [];
 
@@ -113,7 +118,7 @@ export function ProposalBuilder() {
   const [newTrailMode, setNewTrailMode] = useState<Record<string, boolean>>({});
 
   // Edit mode: false when proposal already saved (locked), true when new or explicitly unlocked
-  const alreadySaved = !!mountain?.proposalCreated;
+  const alreadySaved = !!proposalRecord?.proposalCreated;
   const [isEditMode, setIsEditMode] = useState(!alreadySaved);
 
   // ── Signing state ──────────────────────────────────────────────────────────
@@ -165,13 +170,8 @@ export function ProposalBuilder() {
 
   const today = todayISO();
   const [form, setForm] = useState<ProposalForm>(() => {
-    // Try to load a previously saved proposal for this mountain
-    if (mountainId) {
-      try {
-        const saved = localStorage.getItem(`proposal:${mountainId}`);
-        if (saved) return JSON.parse(saved) as ProposalForm;
-      } catch {}
-    }
+    // Load this proposal's saved content, if any.
+    if (proposalRecord?.form) return proposalRecord.form as ProposalForm;
     // Fresh form
     const mountainPrefix = (mountain?.name || '').replace(/\s+/g, '').toUpperCase().slice(0, 4);
     const [y, m, dd] = today.split('-');
@@ -203,14 +203,11 @@ export function ProposalBuilder() {
     };
   });
 
-  // Auto-save proposal to localStorage whenever form changes
+  // Auto-save this proposal's content to its record whenever the form changes.
   useEffect(() => {
-    if (mountainId) {
-      try {
-        localStorage.setItem(`proposal:${mountainId}`, JSON.stringify(form));
-      } catch {}
-    }
-  }, [form, mountainId]);
+    if (proposalId) updateProposal(proposalId, { form });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, proposalId]);
 
   // ── Trail calcs ──
   function trailTotal(t: TrailRow) {
@@ -273,15 +270,10 @@ export function ProposalBuilder() {
 
   // Save & lock proposal
   const handleSave = () => {
-    if (mountainId) {
-      try { localStorage.setItem(`proposal:${mountainId}`, JSON.stringify(form)); } catch {}
-      const updates: Record<string, any> = {
-        proposalCreated: true,
-        proposalCreatedAt: new Date().toISOString()
-      };
-      if (form.legalEntity.trim()) updates.legalEntity = form.legalEntity.trim();
-      updateMountain(mountainId, updates);
+    if (proposalId) {
+      updateProposal(proposalId, { form, proposalCreated: true, proposalCreatedAt: new Date().toISOString() });
     }
+    if (mountainId && form.legalEntity.trim()) updateMountain(mountainId, { legalEntity: form.legalEntity.trim() });
     setIsEditMode(false);
     toast.success('Proposal saved');
   };
@@ -460,8 +452,8 @@ export function ProposalBuilder() {
 
   // Load existing sign status when proposal is already saved
   useEffect(() => {
-    if (!alreadySaved || !mountainId) return;
-    fetch(`${API_BASE}/proposals/sign-status/${mountainId}`, { headers: API_HEADERS })
+    if (!alreadySaved || !signId) return;
+    fetch(`${API_BASE}/proposals/sign-status/${signId}`, { headers: API_HEADERS })
       .then(r => r.json())
       .then((data: any) => {
         if (data.token) setSignToken(data.token);
@@ -656,7 +648,7 @@ export function ProposalBuilder() {
         method: 'POST',
         headers: API_HEADERS,
         body: JSON.stringify({
-          mountainId,
+          mountainId: signId,
           proposalNumber: form.proposalNumber,
           mountainName: form.mountainName,
           recipientEmail: clientEmail,
@@ -689,18 +681,18 @@ export function ProposalBuilder() {
   }
 
   async function generateSignLink() {
-    if (!mountainId) return;
+    if (!signId) return;
     setSignLoading(true);
     try {
       const res = await fetch(`${API_BASE}/proposals/sign-request`, {
         method: 'POST',
         headers: API_HEADERS,
-        body: JSON.stringify({ mountainId, proposalSnapshot: form }),
+        body: JSON.stringify({ mountainId: signId, proposalSnapshot: form }),
       });
       const data = await res.json() as any;
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to generate link');
       setSignToken(data.token);
-      setSignRecord({ token: data.token, mountainId, createdAt: new Date().toISOString(), proposalSnapshot: form, yullrSignature: null, clientSignature: null });
+      setSignRecord({ token: data.token, mountainId: signId, createdAt: new Date().toISOString(), proposalSnapshot: form, yullrSignature: null, clientSignature: null });
       toast.success('Signing link generated');
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
@@ -821,10 +813,7 @@ export function ProposalBuilder() {
           headers: API_HEADERS,
         });
       }
-      if (mountainId) {
-        localStorage.removeItem(`proposal:${mountainId}`);
-        updateMountain(mountainId, { proposalCreated: false });
-      }
+      if (proposalId) await removeProposal(proposalId);
       toast.success('Proposal deleted');
       navigate(mountainId ? `/mountains/${mountainId}` : '/');
     } catch (e: any) {
@@ -834,7 +823,7 @@ export function ProposalBuilder() {
   }
 
   async function sendProposalEmail() {
-    if (!mountainId || !emailRecipient.trim()) {
+    if (!signId || !emailRecipient.trim()) {
       toast.error('Please enter recipient email');
       return;
     }
@@ -844,7 +833,7 @@ export function ProposalBuilder() {
         method: 'POST',
         headers: API_HEADERS,
         body: JSON.stringify({
-          mountainId,
+          mountainId: signId,
           recipientEmail: emailRecipient.trim(),
           recipientName: emailRecipientName.trim() || undefined,
           ccEmails: emailCc.trim() || undefined,
@@ -1215,7 +1204,9 @@ export function ProposalBuilder() {
               Proposal Builder
             </h1>
             {mountain && (
-              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">{mountain.name}</p>
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">
+                {mountain.name}{proposalProject ? ` · ${proposalProject.name}` : ''}
+              </p>
             )}
           </div>
 
