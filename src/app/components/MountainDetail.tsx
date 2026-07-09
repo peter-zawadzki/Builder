@@ -241,8 +241,8 @@ export function MountainDetail() {
             <Pencil size={16} className="text-[#6a7282]" />
           </button>
         </div>
-        <div className="pl-8 flex items-start justify-between gap-2">
-          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] truncate">
+        <div className="pl-8 flex items-center gap-2 min-w-0">
+          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] truncate min-w-0">
             {mountain.address}
           </p>
           {(linkedOrg?.name || mountain.parentOrganization) && (
