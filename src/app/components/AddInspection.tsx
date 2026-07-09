@@ -136,7 +136,7 @@ export function AddInspection() {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
-              {isEditing ? 'Edit Inspection' : 'Add Inspection'}
+              Add Inspection
             </h1>
             <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] truncate">
               {location.name}
@@ -297,7 +297,7 @@ export function AddInspection() {
         <button type="button" onClick={handleSave} disabled={saving}
           className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-4 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[16px] active:opacity-80 disabled:opacity-50">
           {saving ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} />}
-          {saving ? 'Saving…' : isEditing ? 'Update Inspection' : 'Save Inspection'}
+          {saving ? 'Saving…' : 'Save Inspection'}
         </button>
 
       </div>
