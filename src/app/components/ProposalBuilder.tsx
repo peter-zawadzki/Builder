@@ -149,17 +149,39 @@ export function ProposalBuilder() {
   const bothSigned = yullrSigned && clientSigned;
   const ro = !isEditMode || bothSigned;
 
+  // Capture points for a trail come from inspections tied to this proposal's
+  // project (camera counts on that trail's locations). Falls back to counting
+  // Install Site locations when there's no project or no inspection data yet.
+  const capturePointsForTrail = (trailId: string): number => {
+    const trailLocations = allLocations.filter(l => l.trailId === trailId);
+    const projectId = proposalRecord?.projectId;
+    if (projectId) {
+      let sawInspection = false;
+      let total = 0;
+      trailLocations.forEach(loc => {
+        const inspections = loc.inspections && loc.inspections.length
+          ? loc.inspections
+          : (loc.inspection ? [loc.inspection] : []);
+        inspections.filter(insp => insp.projectId === projectId).forEach(insp => {
+          sawInspection = true;
+          total += insp.items.filter(i => i.type === 'Camera').reduce((s, i) => s + i.count, 0);
+        });
+      });
+      if (sawInspection) return total;
+    }
+    return trailLocations.filter(l => l.locationType === 'Install Site').length;
+  };
+
   // Seed trails from DB Trail records (falling back to a blank row)
   const seedTrails = (): TrailRow[] => {
     if (dbTrails.length > 0) {
       return dbTrails.map(t => {
-        // Proposals count Install Site locations only (camera capture points).
-        const locCount = allLocations.filter(l => l.trailId === t.id && l.locationType === 'Install Site').length;
+        const count = capturePointsForTrail(t.id);
         return {
           id: uid(),
           trailId: t.id,
           name: t.name,
-          capturePoints: locCount > 0 ? String(locCount) : '',
+          capturePoints: count > 0 ? String(count) : '',
           notes: t.notes || '',
           unitPrice: '1000',
         };
@@ -1330,6 +1352,9 @@ export function ProposalBuilder() {
         {/* ── Trails / Capture Points ── */}
         <div className={section}>
           <h2 className={sectionH}>Trails / Capture Points</h2>
+          {proposalProject && (
+            <p className="text-[11px] text-[#9ca3af] -mt-1 mb-2">Capture points are pulled from inspections logged for “{proposalProject.name}”.</p>
+          )}
           {/* Column headers */}
           <div className="hidden sm:grid grid-cols-[1.8fr_0.8fr_2fr_1fr_1fr_28px] gap-2 mb-1">
             {['Trail Name', 'Capture Points', 'Notes', 'Unit $', 'Total', ''].map(h => (
@@ -1364,7 +1389,10 @@ export function ProposalBuilder() {
                           setNewTrailMode(prev => ({ ...prev, [t.id]: true }));
                         } else {
                           const sel = dbTrails.find(dt => dt.id === e.target.value);
-                          if (sel) setTrailFields(t.id, { name: sel.name, trailId: sel.id });
+                          if (sel) {
+                            const count = capturePointsForTrail(sel.id);
+                            setTrailFields(t.id, { name: sel.name, trailId: sel.id, capturePoints: count > 0 ? String(count) : '' });
+                          }
                         }
                       }}
                     >
