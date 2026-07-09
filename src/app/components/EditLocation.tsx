@@ -233,8 +233,8 @@ export function EditLocation() {
   const [nickname, setNickname] = useState(location?.name || '');
   const [trailName, setTrailName] = useState(location?.trailName || '');
   const [notes, setNotes] = useState(location?.notes || '');
-  const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4 | 5 | null>(location?.difficulty || null);
-  const [validationErrors, setValidationErrors] = useState<{ name?: string }>({});
+  const [locationType, setLocationType] = useState<string>(location?.locationType || '');
+  const [validationErrors, setValidationErrors] = useState<{ name?: string; locationType?: string }>({});
 
   // ─── GPS ─────────────────────────────────────────────────────────────────────
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(
@@ -271,13 +271,13 @@ export function EditLocation() {
       nickname !== (location.name || '') ||
       trailName !== (location.trailName || '') ||
       notes !== (location.notes || '') ||
-      difficulty !== (location.difficulty || null) ||
+      locationType !== (location.locationType || '') ||
       JSON.stringify(coords) !== JSON.stringify(location.coordinates || null) ||
       photos.length !== 0 || // New photos added
       videos.length !== 0;   // New videos added
 
     setHasUnsavedChanges(hasChanges);
-  }, [nickname, trailName, notes, difficulty, coords, photos, videos, location]);
+  }, [nickname, trailName, notes, locationType, coords, photos, videos, location]);
 
   // Load existing media from IndexedDB on mount; fall back to cloud if empty
   useEffect(() => {
@@ -391,6 +391,11 @@ export function EditLocation() {
       toast.error('Please fix the errors before saving');
       return;
     }
+    if (!locationType) {
+      setValidationErrors({ locationType: 'Please select a location type' });
+      toast.error('Please select a location type');
+      return;
+    }
 
     // Disable the blocker immediately since we're intentionally saving and navigating
     isNavigatingAfterSaveRef.current = true;
@@ -405,7 +410,7 @@ export function EditLocation() {
         trailName: trailName.trim() || undefined,
         coordinates: coords || undefined,
         notes: notes.trim() || undefined,
-        difficulty: difficulty || undefined,
+        locationType: locationType as any,
       });
 
       // Only save local data: URLs to IndexedDB (not cloud signed URLs)
@@ -560,35 +565,24 @@ export function EditLocation() {
 
           <div>
             <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-2">
-              Installation Difficulty
+              Location Type <span className="text-[#ff5c39]">*</span>
             </label>
-            <div className="grid grid-cols-5 gap-2">
-              {([1, 2, 3, 4, 5] as const).map((level) => (
+            <div className="grid grid-cols-2 gap-2">
+              {(['Install Site', 'Power', 'Start', 'Finish'] as const).map((t) => (
                 <button
-                  key={level}
+                  key={t}
                   type="button"
-                  onClick={() => setDifficulty(level)}
-                  className={`h-12 rounded-[8px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                    difficulty === level
-                      ? 'bg-[#ff5c39] text-white'
-                      : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
+                  onClick={() => { setLocationType(t); setValidationErrors(v => ({ ...v, locationType: undefined })); }}
+                  className={`h-11 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] transition-colors ${
+                    locationType === t ? 'bg-[#ff5c39] text-white' : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
                   }`}
                 >
-                  <span className="font-['Inter:Bold',sans-serif] font-bold text-[18px]">{level}</span>
-                  <span className="font-['Inter:Regular',sans-serif] text-[9px]">
-                    {level === 1 ? 'Easy' : level === 5 ? 'Hard' : ''}
-                  </span>
+                  {t}
                 </button>
               ))}
             </div>
-            {difficulty && (
-              <button
-                type="button"
-                onClick={() => setDifficulty(null)}
-                className="mt-2 text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] active:opacity-60"
-              >
-                Clear rating
-              </button>
+            {validationErrors.locationType && (
+              <p className="text-[#ef4444] font-['Inter:Regular',sans-serif] text-[12px] mt-1">{validationErrors.locationType}</p>
             )}
           </div>
         </div>

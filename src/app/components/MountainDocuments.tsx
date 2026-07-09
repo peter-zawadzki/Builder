@@ -31,7 +31,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showAnnotator, setShowAnnotator] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [loading, setLoading] = useState(true);

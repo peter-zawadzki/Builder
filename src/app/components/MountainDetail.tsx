@@ -229,8 +229,10 @@ export function MountainDetail() {
           <button onClick={() => navigate('/')} className="p-1.5 active:opacity-60">
             <ArrowLeft size={22} className="text-[#0a0a0a]" />
           </button>
-          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px] truncate">
-            {mountain.name}
+          <h1 className="min-w-0">
+            <span className="inline-block max-w-full truncate bg-[#f3f3f5] text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px] px-3 py-1 rounded-full">
+              {mountain.name}
+            </span>
           </h1>
           <button
             onClick={() => navigate(`/mountains/${mountainId}/edit`)}
