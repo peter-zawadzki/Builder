@@ -21,6 +21,17 @@ const TYPE_BADGE: Record<ProjectType, string> = {
   'Special Event': 'bg-[#fce4ec] text-[#880e4f]',
 };
 
+// Interpolates red (just started) → green (completed) for the progress bar fill.
+function stageBarColor(pct: number): string {
+  const from = { r: 239, g: 68, b: 68 };   // red-500
+  const to = { r: 34, g: 197, b: 94 };     // green-500
+  const t = Math.max(0, Math.min(1, pct / 100));
+  const r = Math.round(from.r + (to.r - from.r) * t);
+  const g = Math.round(from.g + (to.g - from.g) * t);
+  const b = Math.round(from.b + (to.b - from.b) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 function useAuthor() {
   const { user } = useUser();
   return user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
@@ -100,11 +111,18 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         </div>
       </div>
       <div className="h-1.5 rounded-full bg-[#f0f1f3] overflow-hidden">
-        <div className="h-full rounded-full bg-[#307fe2]" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: stageBarColor(pct) }} />
       </div>
       <div className="flex items-center justify-between mt-1.5">
         <span className="text-[11px] text-[#6a7282]">{currentStage}</span>
         {project.ownerName && <span className="text-[11px] text-[#8992a0] flex items-center gap-1"><UserCircle2 size={11} /> {project.ownerName}</span>}
+      </div>
+      <div className="flex flex-wrap gap-x-1.5 gap-y-1 mt-1.5">
+        {stages.map((s, i) => (
+          <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${i < stageIndex ? 'text-[#3f7a5c] bg-[#eaf5ef]' : i === stageIndex ? 'text-white bg-[#1D2930]' : 'text-[#8992a0] bg-[#f3f3f5]'}`}>
+            {s}
+          </span>
+        ))}
       </div>
     </button>
   );
