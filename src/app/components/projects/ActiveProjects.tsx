@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
 import { useData, PROJECT_STAGES_BY_TYPE } from '../../context/DataContext';
 import { useMyContact, useCanSeeAll } from '../../hooks/useMyContact';
+import { stageBarColor } from './ProjectsPane';
 
 const TYPE_BADGE: Record<string, string> = {
   Install: 'bg-[#eef3fb] text-[#307fe2]',
@@ -64,11 +65,18 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
                 <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
               </div>
               <div className="h-1.5 rounded-full bg-[#f0f1f3] overflow-hidden mb-1.5">
-                <div className="h-full rounded-full bg-[#307fe2]" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: stageBarColor(pct) }} />
               </div>
-              <div className="flex items-center justify-between text-[11px] text-[#6a7282]">
+              <div className="flex items-center justify-between text-[11px] text-[#6a7282] mb-1.5">
                 <span className="truncate">{m?.name || 'Unknown mountain'} · {label}</span>
                 {p.ownerName && <span className="flex items-center gap-1 text-[#8992a0] shrink-0"><UserCircle2 size={11} /> {p.ownerName}</span>}
+              </div>
+              <div className="flex flex-wrap gap-x-1.5 gap-y-1">
+                {stages.map((s, i) => (
+                  <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${i < idx ? 'text-[#3f7a5c] bg-[#eaf5ef]' : i === idx ? 'text-white bg-[#1D2930]' : 'text-[#8992a0] bg-[#f3f3f5]'}`}>
+                    {s}
+                  </span>
+                ))}
               </div>
             </button>
           );

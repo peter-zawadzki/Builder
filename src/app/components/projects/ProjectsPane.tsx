@@ -22,7 +22,7 @@ const TYPE_BADGE: Record<ProjectType, string> = {
 };
 
 // Interpolates red (just started) → green (completed) for the progress bar fill.
-function stageBarColor(pct: number): string {
+export function stageBarColor(pct: number): string {
   const from = { r: 239, g: 68, b: 68 };   // red-500
   const to = { r: 34, g: 197, b: 94 };     // green-500
   const t = Math.max(0, Math.min(1, pct / 100));
@@ -150,13 +150,6 @@ export function ProjectMiniBar({ project }: { project: Project }) {
         <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: stageBarColor(pct) }} />
       </div>
       <div className="text-[10px] text-[#6a7282] mt-0.5">{label}</div>
-      <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
-        {stages.map((s, i) => (
-          <span key={s} className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${i < idx ? 'text-[#3f7a5c] bg-[#eaf5ef]' : i === idx ? 'text-white bg-[#1D2930]' : 'text-[#8992a0] bg-[#f3f3f5]'}`}>
-            {s}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
