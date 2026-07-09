@@ -1,12 +1,5 @@
-import { ReactNode } from "react";
-import {
-  ClerkLoading,
-  ClerkLoaded,
-  SignedIn,
-  SignedOut,
-  RedirectToSignIn,
-  useClerk,
-} from "@clerk/clerk-react";
+import { ReactNode, useEffect, useState } from "react";
+import { useAuth as useClerkAuthState, useClerk, RedirectToSignIn } from "@clerk/clerk-react";
 
 // ─── Auth context shim ────────────────────────────────────────────────────────
 // The app previously exposed a `useAuth()` hook from this module that returned a
@@ -14,9 +7,16 @@ import {
 // the same call site contract (MountainsList uses `const { logout } = useAuth()`)
 // while delegating to Clerk's sign-out.
 
+const WAS_SIGNED_IN_KEY = "builder_wasSignedIn";
+
 export function useAuth() {
   const { signOut } = useClerk();
-  return { logout: () => signOut() };
+  return {
+    logout: () => {
+      try { localStorage.removeItem(WAS_SIGNED_IN_KEY); } catch { /* ignore */ }
+      return signOut();
+    },
+  };
 }
 
 // ─── Loading shell ────────────────────────────────────────────────────────────
@@ -37,23 +37,44 @@ function LoadingScreen() {
   );
 }
 
+function readWasSignedIn(): boolean {
+  try { return localStorage.getItem(WAS_SIGNED_IN_KEY) === "1"; } catch { return false; }
+}
+
+// Clerk needs a live network round-trip to confirm a session. On a weak or
+// absent connection that round-trip can hang indefinitely — after a short
+// grace period we fall back to trusting a previously-confirmed local session
+// rather than stranding an offline field user on a spinner. Explicit logout
+// is the only thing that clears the flag, per "stay logged in until you log
+// out" — a fresh sign-in still requires reaching Clerk at least once.
+const OFFLINE_FALLBACK_MS = 6000;
+
 // ─── PasswordGate ─────────────────────────────────────────────────────────────
 // Name and `{ children }` shape are unchanged so RootLayout is untouched. Signed-
 // out users are redirected to the /sign-in route (branded) rather than shown an
 // inline form, so there is a single canonical sign-in surface.
 
 export function PasswordGate({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <ClerkLoading>
-        <LoadingScreen />
-      </ClerkLoading>
-      <ClerkLoaded>
-        <SignedIn>{children}</SignedIn>
-        <SignedOut>
-          <RedirectToSignIn />
-        </SignedOut>
-      </ClerkLoaded>
-    </>
-  );
+  const { isLoaded, isSignedIn } = useClerkAuthState();
+  const [offlineFallback, setOfflineFallback] = useState(false);
+
+  useEffect(() => {
+    if (isLoaded || !readWasSignedIn()) return;
+    const t = setTimeout(() => setOfflineFallback(true), OFFLINE_FALLBACK_MS);
+    return () => clearTimeout(t);
+  }, [isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      if (isSignedIn) localStorage.setItem(WAS_SIGNED_IN_KEY, "1");
+      else localStorage.removeItem(WAS_SIGNED_IN_KEY);
+    } catch { /* ignore */ }
+  }, [isLoaded, isSignedIn]);
+
+  if (!isLoaded) {
+    return offlineFallback ? <>{children}</> : <LoadingScreen />;
+  }
+
+  return isSignedIn ? <>{children}</> : <RedirectToSignIn />;
 }

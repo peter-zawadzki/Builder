@@ -663,7 +663,12 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
         if (text) errorMsg = text.slice(0, 200);
       } catch { /* ignore */ }
     }
-    throw new Error(errorMsg);
+    // Tag with the HTTP status so callers (e.g. the offline queue) can tell a
+    // permanent application error (4xx — retrying won't help) apart from a
+    // transient network/server failure that's worth retrying.
+    const error = new Error(errorMsg) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -674,7 +679,10 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
  */
 async function syncOrQueue(endpoint: string, method: string, body: string | null): Promise<void> {
   if (!navigator.onLine) {
-    await offlineQueue.enqueue({ endpoint, method, body });
+    await offlineQueue.enqueue({ endpoint, method, body }).catch(err => {
+      console.error(`Failed to queue offline write for ${method} ${endpoint} — change will not sync:`, err);
+      toast.error('Could not save this change for syncing — please retry once back online', { duration: 5000 });
+    });
     return;
   }
   try {
@@ -684,7 +692,10 @@ async function syncOrQueue(endpoint: string, method: string, body: string | null
     });
   } catch (err) {
     console.error(`Sync failed for ${method} ${endpoint} — queuing for retry:`, err);
-    await offlineQueue.enqueue({ endpoint, method, body }).catch(() => {});
+    await offlineQueue.enqueue({ endpoint, method, body }).catch(err2 => {
+      console.error(`Failed to queue retry for ${method} ${endpoint}:`, err2);
+      toast.error('Could not save this change for syncing — please retry once back online', { duration: 5000 });
+    });
   }
 }
 
@@ -905,10 +916,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ─── Flush offline queue on mount + whenever connectivity returns ─────────────
+  // A queued op that fails with a permanent (4xx) error, or one that's been
+  // retried past the cap, is dropped instead of blocking every op queued after
+  // it — otherwise one permanently-broken write would silently freeze all
+  // future syncs (including new trail/location/inspection writes) forever.
+  const MAX_QUEUE_RETRIES = 10;
   const flushQueue = useCallback(async () => {
     const ops = await offlineQueue.getAll().catch(() => []);
     if (ops.length === 0) return;
     let succeeded = 0;
+    let deadLettered = 0;
     for (const op of ops) {
       try {
         await apiCall(op.endpoint, {
@@ -918,14 +935,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
         await offlineQueue.remove(op.id);
         succeeded++;
       } catch (err) {
-        console.error(`Queue flush failed for ${op.method} ${op.endpoint}:`, err);
-        break; // Preserve FIFO ordering — stop on first failure
+        const status = (err as Error & { status?: number }).status;
+        const isPermanent = typeof status === 'number' && status >= 400 && status < 500;
+        const retries = await offlineQueue.bumpRetry(op.id).catch(() => 0);
+        if (isPermanent || retries >= MAX_QUEUE_RETRIES) {
+          console.error(`Dropping permanently-failed queued op ${op.method} ${op.endpoint} after ${retries} attempt(s):`, err);
+          await offlineQueue.remove(op.id).catch(() => {});
+          deadLettered++;
+          continue; // don't let this one block ops queued after it
+        }
+        console.error(`Queue flush failed for ${op.method} ${op.endpoint} (attempt ${retries}) — will retry:`, err);
+        break; // transient/network failure — preserve FIFO, retry later
       }
     }
     if (succeeded > 0) {
       console.log(`Flushed ${succeeded} queued operation(s)`);
       window.dispatchEvent(new CustomEvent('queueflushed', { detail: { count: succeeded } }));
       toast.success(`${succeeded} offline change${succeeded !== 1 ? 's' : ''} synced ☁️`, { duration: 3000 });
+    }
+    if (deadLettered > 0) {
+      toast.error(`${deadLettered} offline change${deadLettered !== 1 ? 's' : ''} couldn't be synced and ${deadLettered !== 1 ? 'were' : 'was'} dropped`, { duration: 6000 });
     }
   }, []);
 

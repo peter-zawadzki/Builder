@@ -19,6 +19,7 @@ export interface PendingOp {
   method: string;
   body: string | null;
   createdAt: number;
+  retries?: number;
 }
 
 // ── DB singleton ───────────────────────────────────────────────────────────────
@@ -93,6 +94,25 @@ export async function remove(id: string): Promise<void> {
     const req = tx.objectStore(STORE).delete(id);
     req.onsuccess = () => resolve();
     req.onerror  = () => reject(req.error);
+  });
+}
+
+/** Increment and persist an op's retry count; returns the new count (0 if the op is gone). */
+export async function bumpRetry(id: string): Promise<number> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const item = getReq.result as PendingOp | undefined;
+      if (!item) { resolve(0); return; }
+      const retries = (item.retries || 0) + 1;
+      const putReq = store.put({ ...item, retries });
+      putReq.onsuccess = () => resolve(retries);
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
   });
 }
 
