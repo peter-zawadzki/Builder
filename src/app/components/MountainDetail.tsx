@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import { useData } from '../context/DataContext';
-import type { Asset, Contact, ContactNote, CRMContact } from '../context/DataContext';
+import { useData, MOUNTAIN_PIPELINE_STAGES } from '../context/DataContext';
+import type { Asset, Contact, ContactNote, CRMContact, ContactActivity, MountainPipelineStage } from '../context/DataContext';
 import { ContactDetail, DealDetailsModal, ContactForm } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import { ProposalsPane } from './projects/ProposalsPane';
@@ -11,7 +11,7 @@ import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
-  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, CheckCircle2, Circle, Maximize2, Pencil,
+  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Circle, Maximize2, Pencil,
 } from 'lucide-react';
 
 type ContactSlot =
@@ -55,7 +55,7 @@ function ExpandablePane({
             {headerRight}
           </div>
         </div>
-        <div className="h-[320px] overflow-hidden relative">
+        <div className="h-[360px] overflow-hidden relative">
           <div className="pb-8">{children}</div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent" />
         </div>
@@ -85,7 +85,7 @@ function ExpandableSection({ children }: { children: (openModal: () => void) => 
   const openModal = () => setOpen(true);
   return (
     <div>
-      <div className="h-[400px] overflow-hidden relative rounded-[12px]">
+      <div className="h-[360px] overflow-hidden relative rounded-[12px]">
         <div className="pb-10">{children(openModal)}</div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
       </div>
@@ -122,6 +122,7 @@ export function MountainDetail() {
     getProposalsByMountainId,
     updateLocation,
     updateMountain,
+    updateContact,
   } = useData();
 
   const mountain = getMountainById(mountainId!);
@@ -137,6 +138,7 @@ export function MountainDetail() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showNextAction, setShowNextAction] = useState(false);
   const [showCheckInOut, setShowCheckInOut] = useState(false);
+  const [newActionText, setNewActionText] = useState('');
 
   // Updates feed for the Status pane.
   const { getToken } = useAuth();
@@ -189,7 +191,45 @@ export function MountainDetail() {
 
   // At-a-glance summary for the Status pane.
   const linkedOrg = mountain.organizationId ? organizations.find(o => o.id === mountain.organizationId) : undefined;
-  const contactCount = contacts.filter(c => c.mountainId === mountainId).length;
+
+  // Teams pill — distinct team names among this mountain's own contacts.
+  const teamNames = Array.from(new Set(
+    [mountain.adminContact?.teamName, mountain.technicalContact?.teamName, ...(mountain.additionalContacts || []).map(c => c.teamName)]
+      .filter((t): t is string => !!t && t.trim().length > 0)
+  ));
+
+  // Next Actions — the mountain's own open action items, plus a rollup of
+  // open action items from any CRM contact associated with this mountain.
+  const mountainActivities = mountain.activities || [];
+  const mountainContacts = contacts.filter(c => c.mountainId === mountainId);
+  type ActionItem = ContactActivity & { source: 'mountain' | 'contact'; contactId?: string; contactName?: string };
+  const allActionItems: ActionItem[] = [
+    ...mountainActivities.filter(a => a.type === 'action').map(a => ({ ...a, source: 'mountain' as const })),
+    ...mountainContacts.flatMap(c => (c.activities || [])
+      .filter(a => a.type === 'action')
+      .map(a => ({ ...a, source: 'contact' as const, contactId: c.id, contactName: c.name }))),
+  ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const openActionItems = allActionItems.filter(a => !a.completed);
+
+  const toggleActionItem = (item: ActionItem) => {
+    const now = new Date().toISOString();
+    if (item.source === 'mountain') {
+      updateMountain(mountainId!, {
+        activities: mountainActivities.map(a => a.id === item.id ? { ...a, completed: !a.completed, completedAt: !a.completed ? now : undefined } : a),
+      });
+    } else {
+      const c = contacts.find(ct => ct.id === item.contactId);
+      if (!c) return;
+      updateContact(c.id, {
+        activities: (c.activities || []).map(a => a.id === item.id ? { ...a, completed: !a.completed, completedAt: !a.completed ? now : undefined } : a),
+      });
+    }
+  };
+
+  const addActionItem = (text: string) => {
+    const entry: ContactActivity = { id: crypto.randomUUID(), text, type: 'action', createdAt: new Date().toISOString() };
+    updateMountain(mountainId!, { activities: [...mountainActivities, entry] });
+  };
 
   // Affiliates: YULLR people who sell/represent this mountain.
   const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
@@ -251,6 +291,12 @@ export function MountainDetail() {
             <span className="shrink-0 flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full">
               <Building2 size={11} />
               {linkedOrg?.name || mountain.parentOrganization}
+            </span>
+          )}
+          {teamNames.length > 0 && (
+            <span className="shrink-0 flex items-center gap-1 bg-[#eef3fb] text-[#307fe2] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full">
+              <Users size={11} />
+              {teamNames.join(', ')}
             </span>
           )}
         </div>
@@ -325,33 +371,54 @@ export function MountainDetail() {
             }
           >
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] text-[#6a7282]">Pipeline stage</span>
-                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{mountain.pipelineStage || '—'}</span>
+              <div>
+                <label className="block text-[12px] text-[#6a7282] mb-1">Pipeline Stage</label>
+                <select
+                  value={mountain.pipelineStage || ''}
+                  onChange={e => updateMountain(mountainId!, { pipelineStage: (e.target.value || undefined) as MountainPipelineStage | undefined })}
+                  className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] outline-none"
+                >
+                  <option value="">Select stage…</option>
+                  {MOUNTAIN_PIPELINE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
-              {[
-                { label: 'Proposal created', done: hasProposal },
-                { label: 'Invoice', done: !!mountain.invoice },
-                { label: 'Install confirmed', done: !!mountain.confirmedInstallDate },
-              ].map((s) => (
-                <div key={s.label} className="flex items-center justify-between">
-                  <span className="text-[13px] text-[#6a7282]">{s.label}</span>
-                  {s.done
-                    ? <CheckCircle2 size={16} className="text-[#16a34a]" />
-                    : <Circle size={16} className="text-[#d1d5db]" />}
+
+              <div className="pt-1">
+                <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-1.5">Next Actions</div>
+                {openActionItems.length === 0 ? (
+                  <div className="text-[12px] text-[#8992a0] mb-2">No open actions.</div>
+                ) : (
+                  <div className="space-y-1.5 mb-2">
+                    {openActionItems.map(item => (
+                      <div key={item.id} className="flex items-start gap-2">
+                        <button onClick={() => toggleActionItem(item)} className="mt-0.5 shrink-0 active:opacity-60" aria-label="Mark action complete">
+                          <Circle size={15} className="text-[#d1d5db]" />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] text-[#0a0a0a]">{item.text}</div>
+                          {item.source === 'contact' && <div className="text-[11px] text-[#8992a0]">via {item.contactName}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    value={newActionText}
+                    onChange={e => setNewActionText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); } }}
+                    placeholder="Add an action item…"
+                    className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+                  />
+                  <button
+                    onClick={() => { if (newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); } }}
+                    disabled={!newActionText.trim()}
+                    className="bg-[#ff5c39] text-white rounded-[8px] px-3 flex items-center justify-center active:opacity-80 disabled:opacity-40"
+                    aria-label="Add action item"
+                  >
+                    <Plus size={15} />
+                  </button>
                 </div>
-              ))}
-              <div className="flex items-center justify-between pt-2 mt-0.5 border-t border-[rgba(0,0,0,0.06)]">
-                <span className="text-[13px] text-[#6a7282]">Organization</span>
-                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate max-w-[60%] text-right">{linkedOrg?.name || '—'}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] text-[#6a7282]">Contacts</span>
-                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{contactCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] text-[#6a7282]">Inventory</span>
-                <span className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{inventoryAssets.length} item{inventoryAssets.length === 1 ? '' : 's'}</span>
               </div>
             </div>
             {mountain.phone && (

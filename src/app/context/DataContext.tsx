@@ -92,7 +92,8 @@ export interface Mountain {
     contactId?: string;               // CRM contact ID if linked
   };
   // CRM fields
-  pipelineStage?: PipelineStage;
+  pipelineStage?: MountainPipelineStage;
+  activities?: ContactActivity[]; // action items (Next Actions) shown in the Status window
   isStalled?: boolean;
   stallReason?: StallReason;
   stalledAt?: string;
@@ -277,6 +278,16 @@ export type PipelineStage =
   | 'Verbal Yes' | 'Contract Sent' | 'Signed' | 'Installing' | 'Live' | 'Churned';
 export type StallReason = 'No response' | 'Waiting on legal' | 'Budget hold' | 'Timing — offseason' | 'Other';
 
+// Mountain-level relationship stage — distinct from Project.stage (the
+// per-install sales pipeline), tracked in the mountain detail Status window.
+export type MountainPipelineStage =
+  | 'Prospect' | 'Demo Scheduled' | 'Demo Completed' | 'Verbal Yes'
+  | 'Signed Agreement' | 'Onboarding' | 'Active' | 'Declined' | 'Dead';
+export const MOUNTAIN_PIPELINE_STAGES: MountainPipelineStage[] = [
+  'Prospect', 'Demo Scheduled', 'Demo Completed', 'Verbal Yes',
+  'Signed Agreement', 'Onboarding', 'Active', 'Declined', 'Dead',
+];
+
 // ─── Projects (the unit of work on a mountain) ───────────────────────────────
 // Install / Repair / Upgrade. An Install always has a proposal ($0 allowed) and
 // runs the full sales stage list; Repair/Upgrade use a lightweight status.
@@ -403,6 +414,7 @@ export interface MountainNote {
   organizationId?: string;
   assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to
   assigneeName?: string;
+  authorName?: string;         // who created the note
 }
 
 export interface MiscItem {
@@ -458,7 +470,7 @@ interface DataContextType {
   addOption: (key: string, value: string) => void;
   deleteOption: (key: string, value: string) => void;
   setItemPrice: (name: string, price: number | null) => void;
-  addNote: (mountainId: string, text: string, topic?: NoteTopic, scheduled?: boolean, completed?: boolean, installProgress?: number) => string;
+  addNote: (mountainId: string, text: string, topic?: NoteTopic, scheduled?: boolean, completed?: boolean, installProgress?: number, authorName?: string) => string;
   updateNote: (id: string, updates: Partial<Omit<MountainNote, 'id' | 'mountainId' | 'createdAt'>>) => void;
   deleteNote: (id: string) => void;
   getNotesByMountainId: (mountainId: string) => MountainNote[];
@@ -1332,7 +1344,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // ─── Notes ──────────────────────────────────────────────────────────────────
 
-  const addNote = (mountainId: string, text: string, topic?: NoteTopic, scheduled?: boolean, completed?: boolean, installProgress?: number) => {
+  const addNote = (mountainId: string, text: string, topic?: NoteTopic, scheduled?: boolean, completed?: boolean, installProgress?: number, authorName?: string) => {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const newNote: MountainNote = {
@@ -1341,6 +1353,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       text,
       createdAt: now,
       updatedAt: now,
+      ...(authorName && { authorName }),
       ...(topic && { topic, scheduled, completed, installProgress }),
     };
     setNotes(prev => [...prev, newNote]);

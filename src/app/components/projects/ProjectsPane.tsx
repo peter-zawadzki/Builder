@@ -62,9 +62,7 @@ export function ProjectsPane({ mountainId }: { mountainId: string }) {
 
       {projects.length === 0 ? (
         <div className="text-[13px] text-[#6a7282]">
-          {showArchived ? 'No archived projects.' : (
-            <>No projects yet. <button onClick={() => setShowForm(true)} className="text-[#307fe2]">Create one</button></>
-          )}
+          {showArchived ? 'No archived projects.' : 'No projects yet.'}
         </div>
       ) : (
         <div className="space-y-2.5">

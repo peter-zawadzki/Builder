@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import type { Contact } from '../context/DataContext';
-import { ArrowLeft, Plus, X, FileText, MapPin } from 'lucide-react';
+import { ArrowLeft, Plus, X, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPhone } from '../utils/formatPhone';
 import { ContactForm } from './ContactForm';
@@ -45,7 +45,6 @@ export function CreateMountain() {
   });
 
   const [billingSameAsMain, setBillingSameAsMain] = useState(false);
-  const [savedMountainId, setSavedMountainId] = useState<string | null>(null);
   const [timingSystems, setTimingSystems] = useState<string[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -141,60 +140,15 @@ export function CreateMountain() {
     trailNames.forEach(name => addTrail({ mountainId: newId, name }));
     toast.success('Mountain added successfully!');
     setHasUnsavedChanges(false);
-    setSavedMountainId(newId);
+    navigate('/');
   };
 
   // Unsaved changes protection
   const { showPrompt, handleSave, handleDiscard, handleCancel } = useUnsavedChanges({
-    when: hasUnsavedChanges && !savedMountainId,
+    when: hasUnsavedChanges,
     message: 'You have unsaved changes. Do you want to save this mountain before leaving?',
     onSave: handleSubmit,
   });
-
-  // ── Success / Proposal prompt ──
-  if (savedMountainId) {
-    return (
-      <div className="min-h-screen bg-[#F2F3F5] flex flex-col items-center justify-center p-6">
-        <div className="bg-white rounded-[16px] border border-[rgba(0,0,0,0.1)] p-6 w-full max-w-sm text-center shadow-sm">
-          <div className="w-14 h-14 bg-[#fff3f0] rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <path d="M20 6L9 17L4 12" stroke="#ff5c39" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-semibold text-[18px] mb-1">
-            {formData.name} added!
-          </h2>
-          {trailNames.length > 0 && (
-            <p className="text-[#22c55e] font-['Inter:Regular',sans-serif] text-[13px] mb-2">
-              {trailNames.length} trail{trailNames.length !== 1 ? 's' : ''} saved
-            </p>
-          )}
-          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px] mb-6">
-            Would you like to build a proposal for this mountain?
-          </p>
-          <button
-            onClick={() => navigate(`/mountains/${savedMountainId}/proposal`)}
-            className="w-full bg-[#ff5c39] text-white rounded-[10px] px-4 py-3.5 font-['Inter:Medium',sans-serif] font-semibold text-[15px] active:opacity-80 flex items-center justify-center gap-2 mb-3"
-          >
-            <FileText size={18} />
-            Build Proposal
-          </button>
-          <button
-            onClick={() => navigate(`/mountains/${savedMountainId}`)}
-            className="w-full bg-[#f3f3f5] text-[#0a0a0a] rounded-[10px] px-4 py-3.5 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:opacity-70"
-          >
-            View Mountain
-          </button>
-          <button
-            onClick={() => navigate('/')}
-            className="mt-3 text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] active:opacity-60"
-          >
-            Back to mountains list
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">

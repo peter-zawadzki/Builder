@@ -10,8 +10,9 @@ import {
 import { useData } from '../../context/DataContext';
 import type {
   CRMContact, CRMOrganization, ContactType, ContactTag, ContactActivity,
-  OrgType, PipelineStage, StallReason, MountainNote,
+  OrgType, MountainPipelineStage, StallReason, MountainNote,
 } from '../../context/DataContext';
+import { MOUNTAIN_PIPELINE_STAGES } from '../../context/DataContext';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
 import { useMyContact } from '../../hooks/useMyContact';
@@ -19,22 +20,18 @@ import { ActivitySection } from '../ActivitySection';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PIPELINE_STAGES: PipelineStage[] = [
-  'Prospect', 'Contacted', 'Demo Scheduled', 'Positive',
-  'Verbal Yes', 'Contract Sent', 'Signed', 'Installing', 'Live', 'Churned',
-];
+const PIPELINE_STAGES: MountainPipelineStage[] = MOUNTAIN_PIPELINE_STAGES;
 
-const STAGE_COLORS: Record<PipelineStage, string> = {
-  'Prospect':       'bg-[#f3f3f5] text-[#6a7282]',
-  'Contacted':      'bg-[#e3f2fd] text-[#1565c0]',
-  'Demo Scheduled': 'bg-[#e8f5e9] text-[#2e7d32]',
-  'Positive':       'bg-[#e8f5e9] text-[#1b5e20]',
-  'Verbal Yes':     'bg-[#fff3e0] text-[#e65100]',
-  'Contract Sent':  'bg-[#fff3e0] text-[#bf360c]',
-  'Signed':         'bg-[#fce4ec] text-[#880e4f]',
-  'Installing':     'bg-[#f3e5f5] text-[#4a148c]',
-  'Live':           'bg-[#e8f5e9] text-[#1b5e20]',
-  'Churned':        'bg-[#f5f5f5] text-[#9e9e9e]',
+const STAGE_COLORS: Record<MountainPipelineStage, string> = {
+  'Prospect':         'bg-[#f3f3f5] text-[#6a7282]',
+  'Demo Scheduled':   'bg-[#e3f2fd] text-[#1565c0]',
+  'Demo Completed':   'bg-[#e8f5e9] text-[#2e7d32]',
+  'Verbal Yes':       'bg-[#fff3e0] text-[#e65100]',
+  'Signed Agreement': 'bg-[#fce4ec] text-[#880e4f]',
+  'Onboarding':       'bg-[#f3e5f5] text-[#4a148c]',
+  'Active':           'bg-[#e8f5e9] text-[#1b5e20]',
+  'Declined':         'bg-[#fff4f1] text-[#F95C39]',
+  'Dead':             'bg-[#f5f5f5] text-[#9e9e9e]',
 };
 
 const CONTACT_TYPES: ContactType[] = ['Staff', 'Partner', 'Vendor', 'Investor', 'Advisor', 'Coach', 'Team', 'General'];
@@ -54,7 +51,7 @@ function isOverdue(dateStr?: string) {
   return new Date(dateStr) < new Date();
 }
 
-function StageBadge({ stage }: { stage?: PipelineStage }) {
+function StageBadge({ stage }: { stage?: MountainPipelineStage }) {
   if (!stage) return <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">No stage</span>;
   return <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${STAGE_COLORS[stage]}`}>{stage}</span>;
 }
@@ -73,8 +70,8 @@ function Dashboard({ setTab }: { setTab: (t: CRMTab) => void }) {
   }, [mountains]);
 
   const stalled = mountains.filter(m => m.isStalled);
-  const liveCount = mountains.filter(m => m.pipelineStage === 'Live').length;
-  const pipelineCount = mountains.filter(m => m.pipelineStage && !['Live', 'Churned'].includes(m.pipelineStage)).length;
+  const liveCount = mountains.filter(m => m.pipelineStage === 'Active').length;
+  const pipelineCount = mountains.filter(m => m.pipelineStage && !['Active', 'Declined', 'Dead'].includes(m.pipelineStage)).length;
   const overdueFollowUps = notes.filter(n => n.followUpDate && isOverdue(n.followUpDate));
   const recentActivity = [...notes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 10);
 
@@ -83,7 +80,7 @@ function Dashboard({ setTab }: { setTab: (t: CRMTab) => void }) {
       <div className="grid grid-cols-2 gap-3">
         {[
           { label: 'Total Mountains', value: mountains.length, color: 'text-[#1D2930]' },
-          { label: 'Live', value: liveCount, color: 'text-[#2e7d32]' },
+          { label: 'Active', value: liveCount, color: 'text-[#2e7d32]' },
           { label: 'In Pipeline', value: pipelineCount, color: 'text-[#e65100]' },
           { label: 'Contacts', value: contacts.length, color: 'text-[#1565c0]' },
         ].map(s => (
@@ -205,7 +202,7 @@ export function Pipeline() {
     return list;
   }, [mountains, filterStalled, search]);
 
-  const changeStage = (id: string, stage: PipelineStage) => {
+  const changeStage = (id: string, stage: MountainPipelineStage) => {
     const m = mountains.find(m => m.id === id)!;
     updateMountain(id, { pipelineStage: stage });
     logActivity(id, 'stage_changed', `Pipeline stage: ${m.pipelineStage || 'None'} → ${stage}`);

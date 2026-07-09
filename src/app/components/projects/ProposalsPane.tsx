@@ -37,7 +37,7 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
       </div>
 
       {proposals.length === 0 ? (
-        <div className="text-[13px] text-[#6a7282]">No proposals yet. <button onClick={() => setShowNew(true)} className="text-[#307fe2]">Create one</button></div>
+        <div className="text-[13px] text-[#6a7282]">No proposals yet.</div>
       ) : (
         <div className="space-y-2">
           {proposals.map(pr => {

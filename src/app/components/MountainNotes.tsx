@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router';
+import { useUser } from '@clerk/clerk-react';
 import { Plus, Pencil, Trash2, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2 } from 'lucide-react';
 import { useData, getYullrMembers, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
@@ -302,7 +303,7 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
             {note.text.split('\n')[0]}
           </span>
           <span className="text-[#5a8fc7] font-['Inter:Regular',sans-serif] text-[12px] flex-shrink-0">
-            {formatShortDate(note.updatedAt)}
+            {note.authorName ? `${note.authorName} · ` : ''}{formatShortDate(note.updatedAt)}
           </span>
           <button
             onClick={e => { e.stopPropagation(); setIsAddingTo(true); }}
@@ -337,7 +338,7 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
           </p>
           <div className="flex items-center justify-between mt-3 flex-wrap gap-1.5">
             <p className="text-[#5a8fc7] font-['Inter:Regular',sans-serif] text-[12px]">
-              {wasEdited ? 'Edited ' : ''}{formatFullDateTime(note.updatedAt)}
+              {note.authorName ? `${note.authorName} · ` : ''}{wasEdited ? 'Edited ' : ''}{formatFullDateTime(note.updatedAt)}
               {note.assigneeName ? ` · → ${note.assigneeName}` : ''}
             </p>
             <button
@@ -397,7 +398,7 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
             {note.text.split('\n')[0]}
           </span>
           <span className="text-[#5a8fc7] font-['Inter:Regular',sans-serif] text-[12px] flex-shrink-0 ml-1">
-            {formatShortDate(note.updatedAt)}
+            {note.authorName ? `${note.authorName} · ` : ''}{formatShortDate(note.updatedAt)}
           </span>
           <button
             onClick={e => { e.stopPropagation(); setIsAddingTo(true); }}
@@ -495,14 +496,12 @@ interface MountainNotesProps {
 
 export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps) {
   const location = useLocation();
+  const { user } = useUser();
+  const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const { addNote, updateNote, deleteNote, getNotesByMountainId, contacts, organizations } = useData();
   const yullrMembers = getYullrMembers(contacts, organizations);
   const [isAdding, setIsAdding] = useState(false);
   const [newText, setNewText] = useState('');
-  const [newTopic, setNewTopic] = useState<NoteTopic | undefined>();
-  const [newScheduled, setNewScheduled] = useState(false);
-  const [newCompleted, setNewCompleted] = useState(false);
-  const [newInstallProgress, setNewInstallProgress] = useState<number | undefined>();
   const [newAssigneeId, setNewAssigneeId] = useState('');
   const newTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [highlightedTopic, setHighlightedTopic] = useState<NoteTopic | null>(null);
@@ -529,20 +528,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
     const trimmed = newText.trim();
     if (!trimmed) return;
 
-    // Check if a note with this topic already exists
-    if (newTopic && notes.some(n => n.topic === newTopic)) {
-      alert(`A ${newTopic} note already exists. Please edit the existing note instead.`);
-      return;
-    }
-
-    const id = addNote(
-      mountainId,
-      trimmed,
-      newTopic,
-      newTopic && newTopic !== 'Install' ? newScheduled : undefined,
-      newTopic && newTopic !== 'Install' ? newCompleted : undefined,
-      newTopic === 'Install' ? newInstallProgress : undefined
-    );
+    const id = addNote(mountainId, trimmed, undefined, undefined, undefined, undefined, authorName);
 
     if (newAssigneeId) {
       const assignee = yullrMembers.find(m => m.id === newAssigneeId);
@@ -550,20 +536,12 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
     }
 
     setNewText('');
-    setNewTopic(undefined);
-    setNewScheduled(false);
-    setNewCompleted(false);
-    setNewInstallProgress(undefined);
     setNewAssigneeId('');
     setIsAdding(false);
   };
 
   const handleCancelAdd = () => {
     setNewText('');
-    setNewTopic(undefined);
-    setNewScheduled(false);
-    setNewCompleted(false);
-    setNewInstallProgress(undefined);
     setIsAdding(false);
   };
 
@@ -580,9 +558,6 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
   // Separate topic notes from general notes
   const topicNotes = notes.filter(n => n.topic);
   const generalNotes = notes.filter(n => !n.topic);
-
-  // Get available topics (those without existing notes)
-  const availableTopics = TOPICS.filter(t => !notes.some(n => n.topic === t));
 
   return (
     <div className="h-full flex flex-col">
@@ -613,76 +588,6 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
       {/* Add note inline form */}
       {isAdding ? (
         <div className="bg-[#EBF3FF] border border-[#C5DEFF] rounded-[10px] p-4 mb-3">
-          {/* Topic selection */}
-          <div className="mb-3">
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[13px] mb-1.5">
-              Topic (optional)
-            </label>
-            <select
-              value={newTopic || ''}
-              onChange={e => {
-                const val = e.target.value as NoteTopic | '';
-                setNewTopic(val || undefined);
-                if (!val) {
-                  setNewScheduled(false);
-                  setNewCompleted(false);
-                }
-              }}
-              className="w-full bg-white border border-[#307FE2] rounded-[8px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]"
-            >
-              <option value="">General Note</option>
-              {availableTopics.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status controls (only show if topic selected) */}
-          {newTopic && newTopic === 'Install' ? (
-            <div className="mb-3">
-              <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[13px] mb-1.5">
-                Install Progress
-              </label>
-              <select
-                value={newInstallProgress ?? ''}
-                onChange={e => setNewInstallProgress(e.target.value ? Number(e.target.value) : undefined)}
-                className="w-full bg-white border border-[#307FE2] rounded-[8px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]"
-              >
-                <option value="">Not Started</option>
-                <option value="0">Scheduled</option>
-                <option value="25">25%</option>
-                <option value="50">50%</option>
-                <option value="75">75%</option>
-                <option value="100">Completed</option>
-              </select>
-            </div>
-          ) : newTopic ? (
-            <div className="flex gap-3 mb-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newScheduled}
-                  onChange={e => setNewScheduled(e.target.checked)}
-                  className="w-4 h-4 rounded border-[#307FE2] text-[#fbbf24] focus:ring-[#307FE2]"
-                />
-                <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">
-                  {newTopic === 'Proposal' ? 'Submitted' : 'Scheduled'}
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newCompleted}
-                  onChange={e => setNewCompleted(e.target.checked)}
-                  className="w-4 h-4 rounded border-[#307FE2] text-[#22c55e] focus:ring-[#307FE2]"
-                />
-                <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">
-                  {newTopic === 'Proposal' ? 'Signed' : 'Completed'}
-                </span>
-              </label>
-            </div>
-          ) : null}
-
           <textarea
             ref={newTextareaRef}
             value={newText}
