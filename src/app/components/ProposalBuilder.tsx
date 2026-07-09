@@ -231,6 +231,23 @@ export function ProposalBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, proposalId]);
 
+  // Dirty tracking: compare against a baseline snapshot taken on load (not
+  // against an "empty" state), so opening a proposal and backing out without
+  // touching anything never counts as unsaved changes.
+  const savedFormSnapshot = useRef<string | null>(null);
+  const [formIsDirty, setFormIsDirty] = useState(false);
+  useEffect(() => {
+    const current = JSON.stringify(form);
+    if (savedFormSnapshot.current === null) {
+      savedFormSnapshot.current = current;
+      return;
+    }
+    setFormIsDirty(current !== savedFormSnapshot.current);
+  }, [form]);
+  // There's something to save if the form changed since last save, or this
+  // proposal has never been saved/finalized yet.
+  const canSave = formIsDirty || !alreadySaved;
+
   // ── Trail calcs ──
   function trailTotal(t: TrailRow) {
     return (parseFloat(t.capturePoints) || 0) * parseAmt(t.unitPrice);
@@ -297,12 +314,15 @@ export function ProposalBuilder() {
     }
     if (mountainId && form.legalEntity.trim()) updateMountain(mountainId, { legalEntity: form.legalEntity.trim() });
     setIsEditMode(false);
+    savedFormSnapshot.current = JSON.stringify(form);
+    setFormIsDirty(false);
     toast.success('Proposal saved');
   };
 
-  // Unsaved changes protection (only when in edit mode and not fully executed)
+  // Unsaved changes protection — only warn when the form actually changed
+  // from what's saved (not just because it's a brand-new, never-saved proposal).
   const { showPrompt, handleSave: handleSaveDialog, handleDiscard, handleCancel } = useUnsavedChanges({
-    when: isEditMode && !bothSigned,
+    when: isEditMode && !bothSigned && formIsDirty,
     message: 'You have unsaved changes to this proposal. Do you want to save before leaving?',
     onSave: handleSave,
   });
@@ -1274,7 +1294,10 @@ export function ProposalBuilder() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex items-center gap-2 bg-[#ff5c39] text-white rounded-[8px] px-3 py-2 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+                  disabled={!canSave}
+                  className={`flex items-center gap-2 rounded-[8px] px-3 py-2 font-['Inter:Medium',sans-serif] font-medium text-[13px] ${
+                    canSave ? 'bg-[#ff5c39] text-white active:opacity-80' : 'bg-[#ffd9cc] text-white/80 cursor-not-allowed'
+                  }`}
                 >
                   <Save size={15} />
                   Save Proposal
@@ -1626,7 +1649,10 @@ export function ProposalBuilder() {
         {isEditMode ? (
           <button
             onClick={handleSave}
-            className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-4 font-['Inter:Medium',sans-serif] font-bold text-[15px] active:opacity-80 flex items-center justify-center gap-2"
+            disabled={!canSave}
+            className={`w-full rounded-[8px] px-4 py-4 font-['Inter:Medium',sans-serif] font-bold text-[15px] flex items-center justify-center gap-2 ${
+              canSave ? 'bg-[#ff5c39] text-white active:opacity-80' : 'bg-[#ffd9cc] text-white/80 cursor-not-allowed'
+            }`}
           >
             <Save size={18} />
             Save Proposal
