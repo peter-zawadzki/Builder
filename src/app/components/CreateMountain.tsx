@@ -151,11 +151,12 @@ export function CreateMountain() {
     trailNames.forEach(name => addTrail({ mountainId: newId, name }));
     toast.success('Mountain added successfully!');
     setHasUnsavedChanges(false);
+    markSaved();
     navigate('/');
   };
 
   // Unsaved changes protection
-  const { showPrompt, handleSave, handleDiscard, handleCancel } = useUnsavedChanges({
+  const { showPrompt, handleSave, handleDiscard, handleCancel, markSaved } = useUnsavedChanges({
     when: hasUnsavedChanges,
     message: 'You have unsaved changes. Do you want to save this mountain before leaving?',
     onSave: handleSubmit,

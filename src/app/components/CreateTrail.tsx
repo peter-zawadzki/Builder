@@ -23,6 +23,8 @@ export function CreateTrail() {
     setHasUnsavedChanges(hasData);
   }, [name, notes, isNastar]);
 
+  const { showPrompt, handleSave: handleSaveAndProceed, handleDiscard, handleCancel, markSaved } = useUnsavedChanges({ when: hasUnsavedChanges });
+
   const handleSave = () => {
     if (!name.trim()) { toast.error('Trail name is required'); return; }
     addTrail({
@@ -33,10 +35,9 @@ export function CreateTrail() {
     });
     toast.success('Trail added');
     setHasUnsavedChanges(false);
+    markSaved();
     navigate(`/mountains/${mountainId}`);
   };
-
-  const { showPrompt, handleSave: handleSaveAndProceed, handleDiscard, handleCancel } = useUnsavedChanges(hasUnsavedChanges);
 
   const inp = "w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none";
 

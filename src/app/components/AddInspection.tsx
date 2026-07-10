@@ -102,6 +102,7 @@ export function AddInspection() {
 
       toast.success('Inspection added');
       setHasUnsavedChanges(false);
+      markSaved();
       navigate(`/mountains/${mountainId}/locations/${locationId}`);
     } catch (err) {
       console.error('Save error:', err);
@@ -112,7 +113,7 @@ export function AddInspection() {
   };
 
   // Unsaved changes protection
-  const { showPrompt, handleSave: handleSaveDialog, handleDiscard, handleCancel } = useUnsavedChanges({
+  const { showPrompt, handleSave: handleSaveDialog, handleDiscard, handleCancel, markSaved } = useUnsavedChanges({
     when: hasUnsavedChanges,
     message: 'You have unsaved changes. Do you want to save this inspection before leaving?',
     onSave: handleSave,

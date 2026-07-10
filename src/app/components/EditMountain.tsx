@@ -254,11 +254,12 @@ export function EditMountain() {
     });
     toast.success('Mountain updated successfully!');
     setHasUnsavedChanges(false);
+    markSaved();
     navigate(`/mountains/${mountainId}`);
   };
 
   // Unsaved changes protection
-  const { showPrompt, handleSave, handleDiscard, handleCancel } = useUnsavedChanges({
+  const { showPrompt, handleSave, handleDiscard, handleCancel, markSaved } = useUnsavedChanges({
     when: hasUnsavedChanges,
     message: 'You have unsaved changes to this mountain. Do you want to save before leaving?',
     onSave: handleSubmit,

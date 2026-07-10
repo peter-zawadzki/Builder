@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useBlocker } from 'react-router';
 
 interface UseUnsavedChangesOptions {
@@ -15,11 +15,28 @@ export function useUnsavedChanges({ when, message, onSave }: UseUnsavedChangesOp
   const [showPrompt, setShowPrompt] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
 
+  // Latches true once a save completes, so the resulting `navigate()` is never
+  // blocked — without this, a direct Save-button click that does
+  // `setHasUnsavedChanges(false)` immediately followed by `navigate()` (or
+  // even after an `await`) can still get blocked: React batches the state
+  // update, so the blocker (registered on the last completed render) still
+  // sees the old `when`. A ref sidesteps that entirely since `.current` is
+  // read fresh at call time regardless of which render's closure holds it.
+  // Deliberately NOT re-synced from `when` on every render — once a save
+  // pushes it true, only the next mount (a fresh instance) resets it.
+  const savedRef = useRef(false);
+
   // Block React Router navigation
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      when && currentLocation.pathname !== nextLocation.pathname
+      !savedRef.current && when && currentLocation.pathname !== nextLocation.pathname
   );
+
+  // Call as soon as a save starts (or right before navigating, for a
+  // synchronous save) so nothing in between can trip the blocker.
+  const markSaved = useCallback(() => {
+    savedRef.current = true;
+  }, []);
 
   // Block browser navigation (refresh, close tab, etc.)
   useEffect(() => {
@@ -84,5 +101,6 @@ export function useUnsavedChanges({ when, message, onSave }: UseUnsavedChangesOp
     handleSave,
     handleDiscard,
     handleCancel,
+    markSaved,
   };
 }
