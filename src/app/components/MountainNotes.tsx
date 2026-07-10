@@ -2,9 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import { Plus, Pencil, Trash2, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2 } from 'lucide-react';
-import { useData, getYullrMembers, MountainNote, NoteTopic } from '../context/DataContext';
+import { useData, getYullrMembers, getMountainRollupActivities, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { MountainActivityRollup } from './MountainActivityRollup';
+import { RollupNoteRow, RollupEmptyState } from './MountainActivityRollup';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -499,7 +499,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
   const location = useLocation();
   const { user } = useUser();
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
-  const { addNote, updateNote, deleteNote, getNotesByMountainId, contacts, organizations } = useData();
+  const { addNote, updateNote, deleteNote, getNotesByMountainId, contacts, organizations, mountains, teams, projects, locations } = useData();
   const yullrMembers = getYullrMembers(contacts, organizations);
   const [isAdding, setIsAdding] = useState(false);
   const [newText, setNewText] = useState('');
@@ -559,6 +559,16 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
   // Separate topic notes from general notes
   const topicNotes = notes.filter(n => n.topic);
   const generalNotes = notes.filter(n => !n.topic);
+
+  // Rolled-up notes — from associated contacts/teams/projects/inspections, or
+  // assigned to a person associated with this mountain. Created at their
+  // source, not here. Merged into the same flat feed as general notes (no
+  // separate section), matching how Next Actions merges everything together.
+  const rollupNotes = getMountainRollupActivities(mountainId, { mountains, contacts, teams, projects, locations }).filter(a => a.type === 'note');
+  const generalFeed = [
+    ...generalNotes.map(note => ({ kind: 'own' as const, note, date: new Date(note.updatedAt).getTime() })),
+    ...rollupNotes.map(entry => ({ kind: 'rollup' as const, entry, date: new Date(entry.createdAt).getTime() })),
+  ].sort((a, b) => b.date - a.date);
 
   return (
     <div className="h-full flex flex-col">
@@ -629,13 +639,8 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
 
       {/* Notes list */}
       <div className="flex-1 overflow-y-auto max-h-[600px]">
-        {notes.length === 0 && !isAdding ? (
-          <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-8 text-center">
-            <StickyNote className="mx-auto mb-4 text-[#6a7282]" size={48} />
-            <p className="text-[#6a7282] font-['Inter:Regular',sans-serif]">
-              No notes yet. Add a note to capture important details.
-            </p>
-          </div>
+        {topicNotes.length === 0 && generalFeed.length === 0 && !isAdding ? (
+          <RollupEmptyState icon={StickyNote} message="No notes yet. Add a note to capture important details." />
         ) : (
           <div className="space-y-4">
             {/* Topic notes */}
@@ -656,36 +661,24 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
               </div>
             )}
 
-            {/* General notes */}
-            {generalNotes.length > 0 && (
+            {/* General notes — the mountain's own topic-less notes, interleaved
+                with rolled-up notes from associated contacts/teams/projects/
+                inspections, all in one flat feed (no separate section). */}
+            {generalFeed.length > 0 && (
               <div className="space-y-2">
                 {topicNotes.length > 0 && (
                   <h3 className="text-[#6a7282] font-['Inter:Medium',sans-serif] text-[12px] uppercase tracking-wider">
                     General
                   </h3>
                 )}
-                {generalNotes.map(note => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    onUpdate={handleUpdate}
-                    onDelete={deleteNote}
-                  />
-                ))}
+                {generalFeed.map(item => item.kind === 'own'
+                  ? <NoteCard key={item.note.id} note={item.note} onUpdate={handleUpdate} onDelete={deleteNote} />
+                  : <RollupNoteRow key={item.entry.id} entry={item.entry} />
+                )}
               </div>
             )}
           </div>
         )}
-
-        {/* Rolled-up notes — from associated contacts/teams/projects/inspections,
-            or assigned to a person/team associated with this mountain. Created
-            at their source, not here. */}
-        <div className="mt-4 pt-3 border-t border-[rgba(0,0,0,0.08)]">
-          <h3 className="text-[#6a7282] font-['Inter:Medium',sans-serif] text-[12px] uppercase tracking-wider mb-2">
-            Team &amp; Contact Notes
-          </h3>
-          <MountainActivityRollup mountainId={mountainId} type="note" />
-        </div>
       </div>
     </div>
   );

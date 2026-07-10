@@ -385,7 +385,7 @@ export function MountainDetail() {
                     </button>
                   </div>
                 )}
-                <MountainActivityRollup mountainId={mountainId!} type="action" />
+                <MountainActivityRollup mountainId={mountainId!} />
               </div>
             </div>
 
