@@ -187,9 +187,6 @@ export function MountainDetail() {
     return acc;
   }, {});
 
-  const inventoryTotalCost = inventoryAssets.reduce((sum, a) => sum + (a.cost || 0), 0);
-  const fmtCost = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-
   // At-a-glance summary for the Status pane.
   const linkedOrg = mountain.organizationId ? organizations.find(o => o.id === mountain.organizationId) : undefined;
 
@@ -676,9 +673,6 @@ export function MountainDetail() {
                     <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({inventoryAssets.length})</span>
                   )}
                 </h2>
-                {inventoryTotalCost > 0 && (
-                  <p className="text-[#6a7282] text-[12px] mt-0.5">{fmtCost(inventoryTotalCost)} total value</p>
-                )}
                 {(trackedCount > 0 || expensedCount > 0) && (
                   <p className="text-[#8992a0] text-[11px] mt-0.5">{trackedCount} tracked · {expensedCount} expensed</p>
                 )}
@@ -713,7 +707,7 @@ export function MountainDetail() {
                         className={`flex items-center gap-1.5 text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full ${ASSET_TYPE_COLORS[type] || 'bg-[#f3f3f5] text-[#6a7282]'}`}
                       >
                         <Icon size={11} />
-                        {count} {type}
+                        Quantity: {count}
                       </span>
                     );
                   })}
