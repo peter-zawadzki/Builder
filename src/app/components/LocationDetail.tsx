@@ -3,17 +3,18 @@ import * as cloudLocSync from '../utils/cloudLocationSync';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
-import { useData, SiteInspectionItem, Annotation, ContactActivity } from '../context/DataContext';
+import { useData, SiteInspectionItem, Annotation, ContactActivity, Inspection } from '../context/DataContext';
 import {
   ArrowLeft, Plus, MapPin, Trash2,
   ClipboardList, Pencil, Image as ImageIcon, Video as VideoIcon,
-  ChevronLeft, ChevronRight, X, Edit3,
+  ChevronLeft, ChevronRight, X, Edit3, LayoutGrid, List as ListIcon, Film,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { ActivitySection } from './ActivitySection';
 import { ImageAnnotator } from './ImageAnnotator';
 import { MountainMapView } from './MountainMapView';
+import { InspectionForm } from './InspectionForm';
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
@@ -86,17 +87,39 @@ function ItemChip({ item }: { item: SiteInspectionItem }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+// Also usable embedded inside TrailDetailModal (via mountainIdProp/
+// locationIdProp/onBack) so drilling into a location from a trail stays in
+// the same modal instead of navigating to a full page.
 
-export function LocationDetail() {
-  const { mountainId, locationId } = useParams();
+export function LocationDetail({
+  mountainIdProp, locationIdProp, onBack, embedded,
+}: {
+  mountainIdProp?: string;
+  locationIdProp?: string;
+  onBack?: () => void;
+  embedded?: boolean;
+} = {}) {
+  const params = useParams();
+  const mountainId = mountainIdProp || params.mountainId;
+  const locationId = locationIdProp || params.locationId;
   const navigate = useNavigate();
   const {
     getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById, updateLocation,
   } = useData();
 
+  // When embedded, "back" returns to the trail view inside the same modal
+  // instead of navigating away from it.
+  const goBack = (fallbackTrailId?: string) => {
+    if (onBack) { onBack(); return; }
+    if (fallbackTrailId) navigate(`/mountains/${mountainId}/trails/${fallbackTrailId}`);
+    else navigate(`/mountains/${mountainId}`);
+  };
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [showInspectionForm, setShowInspectionForm] = useState<'new' | Inspection | null>(null);
+  const [photoView, setPhotoView] = useState<'grid' | 'list' | null>(null);
 
   // All media (consolidated location + inspection)
   const [locMedia, setLocMedia] = useState<{ photos: string[]; videos: string[] }>({ photos: [], videos: [] });
@@ -148,6 +171,8 @@ export function LocationDetail() {
         photos: mergedPhotos,
         videos: mergedVideos,
       });
+      // Default to list view when there's existing media to browse.
+      setPhotoView(mergedPhotos.length > 0 || mergedVideos.length > 0 ? 'list' : 'grid');
 
       // Load annotation counts for all photos
       const counts: Record<string, number> = {};
@@ -167,14 +192,10 @@ export function LocationDetail() {
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
+      const trailId = location?.trailId;
       await deleteLocation(locationId!);
       toast.success(`"${location?.name}" deleted`);
-      // Navigate back to trail if this location was on a trail, otherwise mountain
-      if (location?.trailId) {
-        navigate(`/mountains/${mountainId}/trails/${location.trailId}`);
-      } else {
-        navigate(`/mountains/${mountainId}`);
-      }
+      goBack(trailId);
     } catch {
       toast.error('Failed to delete. Please try again.');
       setIsDeleting(false);
@@ -201,10 +222,10 @@ export function LocationDetail() {
 
   if (!location || !mountain) {
     return (
-      <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center">
+      <div className={embedded ? 'flex items-center justify-center p-8' : 'min-h-screen bg-[#f9fafb] flex items-center justify-center'}>
         <div className="text-center">
           <p className="text-[#6a7282] font-['Inter:Regular',sans-serif]">Location not found</p>
-          <button onClick={() => navigate(`/mountains/${mountainId}`)}
+          <button onClick={() => goBack()}
             className="mt-4 text-[#307fe2] font-['Inter:Medium',sans-serif]">
             Go back
           </button>
@@ -230,7 +251,7 @@ export function LocationDetail() {
   const fmtInspDate = (iso?: string) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 
   return (
-    <div className="min-h-screen bg-[#f9fafb] pb-20">
+    <div className={embedded ? 'pb-6' : 'min-h-screen bg-[#f9fafb] pb-20'}>
       {/* Lightbox */}
       {lightbox && (
         <MediaLightbox
@@ -287,15 +308,9 @@ export function LocationDetail() {
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
+      <div className={`bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 ${embedded ? '' : 'sticky top-0 z-10'}`}>
         <div className="flex items-center gap-3 mb-2">
-          <button onClick={() => {
-            if (location?.trailId) {
-              navigate(`/mountains/${mountainId}/trails/${location.trailId}`);
-            } else {
-              navigate(`/mountains/${mountainId}`);
-            }
-          }} className="p-1 active:opacity-60">
+          <button onClick={() => goBack(location?.trailId)} className="p-1 active:opacity-60">
             <ArrowLeft size={24} className="text-[#0a0a0a]" />
           </button>
           <div className="flex-1">
@@ -317,6 +332,20 @@ export function LocationDetail() {
               <Pencil size={20} className="text-[#0a0a0a]" />
             </button>
           </Link>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {location.locationType && (
+            <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{location.locationType}</span>
+          )}
+          {mediaLoaded && locMedia.photos.length > 0 && (
+            <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full flex items-center gap-1"><ImageIcon size={10} /> {locMedia.photos.length}</span>
+          )}
+          {mediaLoaded && locMedia.videos.length > 0 && (
+            <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full flex items-center gap-1"><Film size={10} /> {locMedia.videos.length}</span>
+          )}
+          {inspections.length > 0 && (
+            <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full flex items-center gap-1"><ClipboardList size={10} /> {inspections.length}</span>
+          )}
         </div>
       </div>
 
@@ -400,28 +429,53 @@ export function LocationDetail() {
         {/* ── Photos ── */}
         {mediaLoaded && locMedia.photos.length > 0 && (
           <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <ImageIcon size={16} className="text-[#6a7282]" />
-              <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px]">Photos</h2>
-              <span className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">{locMedia.photos.length}</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon size={16} className="text-[#6a7282]" />
+                <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px]">Photos</h2>
+                <span className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">{locMedia.photos.length}</span>
+              </div>
+              <div className="flex gap-1 bg-[#f3f3f5] rounded-[6px] p-0.5">
+                <button onClick={() => setPhotoView('list')} className={`p-1.5 rounded-[4px] ${photoView === 'list' ? 'bg-white shadow-sm' : ''}`} aria-label="List view"><ListIcon size={13} className="text-[#6a7282]" /></button>
+                <button onClick={() => setPhotoView('grid')} className={`p-1.5 rounded-[4px] ${photoView === 'grid' ? 'bg-white shadow-sm' : ''}`} aria-label="Grid view"><LayoutGrid size={13} className="text-[#6a7282]" /></button>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {locMedia.photos.map((src, i) => {
-                const imageId = `loc-${locationId}-photo-${i}`;
-                return (
-                  <button key={i} type="button"
-                    onClick={() => setLightbox({ items: locMedia.photos, index: i, type: 'photo', imageId })}
-                    className="aspect-square overflow-hidden rounded-[8px] active:opacity-80 relative">
-                    <img src={src} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                    {annotationCounts[imageId] && (
-                      <div className="absolute top-1 right-1 bg-[#307FE2] text-white text-[10px] font-['Inter:Medium',sans-serif] px-1.5 py-0.5 rounded-full">
-                        {annotationCounts[imageId]}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {photoView === 'list' ? (
+              <div className="space-y-2">
+                {locMedia.photos.map((src, i) => {
+                  const imageId = `loc-${locationId}-photo-${i}`;
+                  return (
+                    <button key={i} type="button"
+                      onClick={() => setLightbox({ items: locMedia.photos, index: i, type: 'photo', imageId })}
+                      className="w-full flex items-center gap-3 bg-[#f9fafb] rounded-[8px] p-2 active:bg-[#f3f3f5]">
+                      <img src={src} alt={`Photo ${i + 1}`} className="w-12 h-12 rounded-[6px] object-cover shrink-0" />
+                      <span className="flex-1 text-left text-[13px] text-[#0a0a0a]">Photo {i + 1}</span>
+                      {annotationCounts[imageId] && (
+                        <span className="bg-[#307FE2] text-white text-[10px] font-['Inter:Medium',sans-serif] px-1.5 py-0.5 rounded-full shrink-0">{annotationCounts[imageId]}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {locMedia.photos.map((src, i) => {
+                  const imageId = `loc-${locationId}-photo-${i}`;
+                  return (
+                    <button key={i} type="button"
+                      onClick={() => setLightbox({ items: locMedia.photos, index: i, type: 'photo', imageId })}
+                      className="aspect-square overflow-hidden rounded-[8px] active:opacity-80 relative">
+                      <img src={src} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                      {annotationCounts[imageId] && (
+                        <div className="absolute top-1 right-1 bg-[#307FE2] text-white text-[10px] font-['Inter:Medium',sans-serif] px-1.5 py-0.5 rounded-full">
+                          {annotationCounts[imageId]}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -456,11 +510,9 @@ export function LocationDetail() {
             <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
               Inspections{inspections.length > 0 && <span className="ml-2 text-[#6a7282] text-[14px] font-normal">({inspections.length})</span>}
             </h2>
-            <Link to={`/mountains/${mountainId}/locations/${locationId}/inspection`}>
-              <button className="bg-[#0a0a0a] text-white rounded-[8px] px-3 py-2 flex items-center gap-1.5 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80">
-                <Plus size={15} /> Add
-              </button>
-            </Link>
+            <button onClick={() => setShowInspectionForm('new')} className="bg-[#0a0a0a] text-white rounded-[8px] px-3 py-2 flex items-center gap-1.5 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80">
+              <Plus size={15} /> Add
+            </button>
           </div>
 
           {inspections.length === 0 ? (
@@ -483,9 +535,14 @@ export function LocationDetail() {
                         {insp.difficulty && <span className="bg-[#fff3f0] text-[#ff5c39] text-[12px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">Difficulty {insp.difficulty}</span>}
                         {insp.projectId && (() => { const p = getProjectById(insp.projectId!); return p ? <span className="bg-[#eef3fb] text-[#307fe2] text-[12px] px-2 py-0.5 rounded-full">{p.name}</span> : null; })()}
                       </div>
-                      <span className="text-[#6a7282] text-[12px]">
-                        {insp.createdBy ? `${insp.createdBy} · ` : ''}{fmtInspDate(insp.createdAt)}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[#6a7282] text-[12px]">
+                          {insp.createdBy ? `${insp.createdBy} · ` : ''}{fmtInspDate(insp.createdAt)}
+                        </span>
+                        <button onClick={() => setShowInspectionForm(insp)} className="p-1 rounded-[6px] bg-[#f3f3f5] active:bg-[#e8e8ea]" aria-label="Edit inspection">
+                          <Pencil size={13} className="text-[#6a7282]" />
+                        </button>
+                      </div>
                     </div>
                     {insp.items.length > 0 && (
                       <div className="flex flex-wrap gap-2">
@@ -523,6 +580,15 @@ export function LocationDetail() {
         </div>
 
       </div>
+
+      {showInspectionForm && (
+        <InspectionForm
+          mountainId={mountainId!}
+          location={location}
+          inspection={showInspectionForm === 'new' ? null : showInspectionForm}
+          onClose={() => setShowInspectionForm(null)}
+        />
+      )}
 
     </div>
   );

@@ -24,6 +24,7 @@ import { MountainActivityRollup } from './MountainActivityRollup';
 import { MountainDocuments } from './MountainDocuments';
 import { MountainMapView } from './MountainMapView';
 import { ExportModal } from './ExportModal';
+import { TrailDetailModal } from './TrailDetailModal';
 import { toast } from 'sonner';
 
 const ASSET_TYPE_COLORS: Record<string, string> = {
@@ -140,6 +141,7 @@ export function MountainDetail() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showCheckInOut, setShowCheckInOut] = useState(false);
   const [showAddAction, setShowAddAction] = useState(false);
+  const [openTrailId, setOpenTrailId] = useState<string | null>(null);
   const [newActionText, setNewActionText] = useState('');
   const [newActionAssigneeId, setNewActionAssigneeId] = useState('');
 
@@ -515,7 +517,7 @@ export function MountainDetail() {
                     return (
                       <button
                         key={trail.id}
-                        onClick={() => navigate(`/mountains/${mountainId}/trails/${trail.id}`)}
+                        onClick={() => setOpenTrailId(trail.id)}
                         className="w-full bg-white rounded-[10px] border border-[rgba(0,0,0,0.06)] p-2.5 text-left active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)] transition-colors"
                       >
                         <div className="flex items-center gap-2.5 mb-2">
@@ -776,6 +778,7 @@ export function MountainDetail() {
         />
       )}
       {showCheckInOut && <AssignInventoryModal mountainId={mountainId!} onClose={() => setShowCheckInOut(false)} />}
+      {openTrailId && <TrailDetailModal mountainId={mountainId!} trailId={openTrailId} onClose={() => setOpenTrailId(null)} />}
       {showAddAction && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowAddAction(false); }}>
           <div className="bg-white rounded-[16px] w-full max-w-sm p-5">
