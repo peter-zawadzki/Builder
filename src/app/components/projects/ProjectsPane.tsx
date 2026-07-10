@@ -40,13 +40,13 @@ function useAuthor() {
 
 const STAGE_STATUS_DOT: Record<StageStatus, string> = {
   not_started: 'bg-white border-[#d1d5db]',
-  blocked: 'bg-[#ef4444] border-[#ef4444]',
+  blocked: 'bg-[#f97316] border-[#f97316]',
   in_progress: 'bg-[#eab308] border-[#eab308]',
   done: 'bg-[#22c55e] border-[#22c55e]',
 };
 const STAGE_STATUS_LABEL_COLOR: Record<StageStatus, string> = {
   not_started: 'text-[#8992a0]',
-  blocked: 'text-[#dc2626]',
+  blocked: 'text-[#c2410c]',
   in_progress: 'text-[#a16207]',
   done: 'text-[#3f7a5c] font-medium',
 };
@@ -78,36 +78,52 @@ export function StageChecklist({
   readOnly?: boolean;
   lockedTitle?: string;
 }) {
+  const gridStyle = { gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` };
+  const hasAnyDate = onDateChange || stages.some(s => stageDates?.[s]);
   return (
-    <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
-      {stages.map(s => {
-        const status = stageStatus[s] || 'not_started';
-        const date = stageDates?.[s];
-        const label = <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>;
-        const dateLabel = date && <span className="text-[8px] text-[#8992a0] text-center leading-tight">{new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>;
-        if (readOnly || !onToggle) {
+    <div className="space-y-1.5">
+      {/* Row 1: status dot + label per stage */}
+      <div className="grid gap-1" style={gridStyle}>
+        {stages.map(s => {
+          const status = stageStatus[s] || 'not_started';
+          const label = <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>;
+          if (readOnly || !onToggle) {
+            return (
+              <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
+                <StageStatusDot status={status} />{label}
+              </div>
+            );
+          }
           return (
-            <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
-              <StageStatusDot status={status} />{label}{dateLabel}
-            </div>
-          );
-        }
-        return (
-          <div key={s} className="flex flex-col items-center gap-1 py-1">
-            <button type="button" onClick={e => { e.stopPropagation(); onToggle(s); }} className="flex flex-col items-center gap-1 active:opacity-70">
+            <button key={s} type="button" onClick={e => { e.stopPropagation(); onToggle(s); }} className="flex flex-col items-center gap-1 py-1 active:opacity-70">
               <StageStatusDot status={status} />{label}
             </button>
-            {onDateChange ? (
+          );
+        })}
+      </div>
+
+      {/* Row 2: optional date per stage — kept as its own row so it doesn't
+          crowd the status row above. */}
+      {hasAnyDate && (
+        <div className="grid gap-1" style={gridStyle}>
+          {stages.map(s => {
+            const date = stageDates?.[s];
+            return onDateChange ? (
               <input
+                key={s}
                 type="date"
                 value={date || ''}
                 onChange={e => onDateChange(s, e.target.value)}
                 className="w-full text-[8px] text-[#8992a0] bg-transparent outline-none text-center"
               />
-            ) : dateLabel}
-          </div>
-        );
-      })}
+            ) : (
+              <span key={s} className="text-[8px] text-[#8992a0] text-center leading-tight">
+                {date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -193,11 +209,9 @@ function ProjectCard({ project, onOpen, viaTeamName }: { project: Project; onOpe
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{project.name}</span>
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide shrink-0 ${TYPE_BADGE[project.type]}`}>{project.type}</span>
+          {project.isStalled && <span className="text-[10px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"><AlertTriangle size={9} /> Stalled</span>}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {project.isStalled && <span className="text-[10px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full flex items-center gap-1"><AlertTriangle size={9} /> Stalled</span>}
-          <ChevronRight size={14} className="text-[#c0c4cc]" />
-        </div>
+        <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
       </div>
       <div className="h-1.5 rounded-full bg-[#f0f1f3] overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: stageBarColor(pct) }} />
