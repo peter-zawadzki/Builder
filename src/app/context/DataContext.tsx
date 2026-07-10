@@ -423,6 +423,7 @@ export interface CRMOrganization {
   archived?: boolean;
   notes?: string;
   activities?: ContactActivity[];
+  logo?: string;   // base64 data URL
   createdAt: string;
   updatedAt: string;
 }
@@ -441,6 +442,7 @@ export interface CRMTeam {
   archived?: boolean;
   notes?: string;
   activities?: ContactActivity[];
+  logo?: string;           // base64 data URL
   createdBy?: string;      // name of the user who created the team
   createdAt: string;
   updatedAt: string;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import type { Contact } from '../context/DataContext';
 import { ArrowLeft, Plus, X, MapPin, Check } from 'lucide-react';
+import { LogoUploader } from './LogoUploader';
 import { toast } from 'sonner';
 import { formatPhone } from '../utils/formatPhone';
 import { ContactForm } from './ContactForm';
@@ -42,6 +43,7 @@ export function CreateMountain() {
     slackEmail: '',
     region: '',
     additionalContacts: [] as Contact[],
+    mountainLogo: undefined as string | undefined,
   });
 
   const [billingSameAsMain, setBillingSameAsMain] = useState(false);
@@ -183,6 +185,8 @@ export function CreateMountain() {
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
               placeholder="e.g., Whistler Mountain" autoFocus />
           </div>
+
+          <LogoUploader value={formData.mountainLogo} onChange={v => setFormData(prev => ({ ...prev, mountainLogo: v }))} />
 
           <div>
             <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Address *</label>

@@ -18,6 +18,7 @@ import { DeleteConfirmModal } from '../DeleteConfirmModal';
 import { useMyContact } from '../../hooks/useMyContact';
 import { ActivitySection } from '../ActivitySection';
 import { ProjectsPane } from '../projects/ProjectsPane';
+import { LogoUploader } from '../LogoUploader';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1020,6 +1021,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
     agreementDetails: org?.agreementDetails || '',
     keyDates: org?.keyDates || [] as { label: string; date: string }[],
     notes: org?.notes || '',
+    logo: org?.logo || undefined as string | undefined,
   });
 
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
@@ -1050,6 +1052,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
             <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
             <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
           </div>
+          <LogoUploader value={form.logo} onChange={v => set('logo', v)} />
           <div>
             <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
             <select value={form.type} onChange={e => set('type', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] appearance-none">
@@ -1193,6 +1196,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
     phone: team?.phone || '',
     email: team?.email || '',
     notes: team?.notes || '',
+    logo: team?.logo || undefined as string | undefined,
   });
 
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
@@ -1248,6 +1252,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
                   <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className={inputCls} />
                 </div>
               )}
+              <LogoUploader value={form.logo} onChange={v => { set('logo', v); if (team) editField({ logo: v }); }} />
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Associated Mountains</label>
                 <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-32 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
@@ -1284,6 +1289,9 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
             </>
           ) : (
             <>
+              {team.logo && (
+                <img src={team.logo} alt={`${team.name} logo`} className="h-14 object-contain" />
+              )}
               {(team.website || team.address || team.phone || team.email) && (
                 <div className="space-y-1.5">
                   {team.website && <div className="text-[13px] text-[#307fe2]">{team.website}</div>}

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import type { Contact, TechAdmin, Annotation } from '../context/DataContext';
 import { ArrowLeft, Plus, X, Trash2, Upload, ZoomIn, ExternalLink, ImageIcon, Edit3, Check } from 'lucide-react';
+import { LogoUploader } from './LogoUploader';
 import { toast } from 'sonner';
 import { formatPhone } from '../utils/formatPhone';
 import { ContactForm } from './ContactForm';
@@ -92,6 +93,7 @@ export function EditMountain() {
     verticalDrop: mountain?.verticalDrop?.toString() || '',
     slackEmail: mountain?.slackEmail || '',
     region: mountain?.region || '',
+    mountainLogo: mountain?.mountainLogo || undefined as string | undefined,
     adminContact: { ...emptyContact(), ...(mountain?.adminContact || {}) } as Contact,
     technicalContact: { ...emptyContact(), ...(mountain?.technicalContact || {}) } as Contact,
     additionalContacts: (mountain?.additionalContacts || []).map(c => ({ ...emptyContact(), ...c })) as Contact[],
@@ -354,6 +356,8 @@ export function EditMountain() {
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
               placeholder="e.g., Whistler Mountain" />
           </div>
+
+          <LogoUploader value={formData.mountainLogo} onChange={v => setFormData(prev => ({ ...prev, mountainLogo: v }))} />
 
           <div>
             <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Address *</label>
