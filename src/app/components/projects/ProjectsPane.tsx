@@ -202,7 +202,7 @@ function ProjectCard({ project, onOpen, viaTeamName }: { project: Project; onOpe
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{project.name}</span>
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide shrink-0 ${TYPE_BADGE[project.type]}`}>{project.type}</span>
-          {project.isStalled && <span className="text-[10px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"><AlertTriangle size={9} /> Stalled</span>}
+          {project.isStalled && <span className="text-[10px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"><AlertTriangle size={9} /> Stalled{project.stallReason ? `-${project.stallReason}` : ''}</span>}
         </div>
         <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
       </div>
@@ -239,7 +239,7 @@ export function ProjectMiniBar({ project }: { project: Project }) {
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{project.name}</span>
           <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide shrink-0 ${TYPE_BADGE[project.type]}`}>{project.type}</span>
-          {project.isStalled && <span className="text-[9px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full shrink-0">Stalled</span>}
+          {project.isStalled && <span className="text-[9px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full shrink-0">Stalled{project.stallReason ? `-${project.stallReason}` : ''}</span>}
         </div>
         {project.ownerName && <span className="text-[10px] text-[#8992a0] shrink-0 truncate max-w-[40%]">{project.ownerName}</span>}
       </div>

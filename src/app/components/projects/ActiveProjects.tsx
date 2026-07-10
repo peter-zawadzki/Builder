@@ -104,7 +104,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{p.name}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wide shrink-0 ${TYPE_BADGE[p.type]}`}>{p.type}</span>
-                  {p.isStalled && <span className="text-[10px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"><AlertTriangle size={9} /> Stalled</span>}
+                  {p.isStalled && <span className="text-[10px] bg-[#fff4f1] text-[#F95C39] px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"><AlertTriangle size={9} /> Stalled{p.stallReason ? `-${p.stallReason}` : ''}</span>}
                 </div>
                 <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
               </div>
