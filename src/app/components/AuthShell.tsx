@@ -1,50 +1,33 @@
 import { ReactNode } from "react";
+import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
 
-// Shared branded wrapper for the Clerk sign-in / sign-up screens, plus the
-// Clerk appearance tokens so both screens match the dark BUILDER look.
+// Shared branded wrapper for the Clerk sign-in / sign-up screens, matching the
+// light theme used across the rest of the app (BUILDER's chrome is light, not
+// dark — only the pre-auth loading spinner uses the dark shell).
 
 export const clerkAppearance = {
   layout: { logoPlacement: "none" as const },
   variables: {
-    colorPrimary: "#F95C39",
-    colorBackground: "#243139",
-    colorText: "#F2F3F5",
-    colorTextSecondary: "rgba(242,243,245,0.6)",
-    colorInputBackground: "rgba(255,255,255,0.06)",
-    colorInputText: "#F2F3F5",
+    colorPrimary: "#ff5c39",
+    colorBackground: "#ffffff",
+    colorText: "#0a0a0a",
+    colorTextSecondary: "#6a7282",
+    colorInputBackground: "#f3f3f5",
+    colorInputText: "#0a0a0a",
     fontFamily: "Inter, sans-serif",
   },
   elements: {
-    card: { boxShadow: "none", border: "1px solid rgba(255,255,255,0.08)" },
-    headerTitle: { color: "#F2F3F5" },
-    headerSubtitle: { color: "rgba(242,243,245,0.6)" },
+    card: { boxShadow: "none", border: "1px solid rgba(0,0,0,0.1)" },
+    headerTitle: { color: "#0a0a0a" },
+    headerSubtitle: { color: "#6a7282" },
   },
 } as const;
 
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
-      style={{ backgroundColor: "#1D2930" }}
-    >
-      {/* Logo / wordmark */}
+    <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center px-6 py-12">
       <div className="mb-8 text-center">
-        <div
-          className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
-          style={{ backgroundColor: "#F95C39" }}
-        >
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="6" y="14" width="20" height="14" rx="2" fill="white" />
-            <path d="M10 14V10a6 6 0 1 1 12 0v4" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-            <circle cx="16" cy="21" r="2" fill="#F95C39" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#F2F3F5", fontFamily: "Inter, sans-serif" }}>
-          BUILDER
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "#F2F3F5", opacity: 0.5, fontFamily: "Inter, sans-serif" }}>
-          Yullr Field App
-        </p>
+        <img src={imgImageYullrLogo} alt="Yullr" className="h-10 mx-auto" />
       </div>
       {children}
     </div>

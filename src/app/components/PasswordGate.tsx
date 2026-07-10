@@ -23,13 +23,13 @@ export function useAuth() {
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#1D2930" }}>
+    <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div
           className="w-10 h-10 rounded-full border-4 border-t-transparent animate-spin"
-          style={{ borderColor: "#F95C39", borderTopColor: "transparent" }}
+          style={{ borderColor: "#ff5c39", borderTopColor: "transparent" }}
         />
-        <p className="text-sm font-medium" style={{ color: "#F2F3F5", opacity: 0.6 }}>
+        <p className="text-sm font-medium text-[#6a7282]">
           Loading…
         </p>
       </div>
