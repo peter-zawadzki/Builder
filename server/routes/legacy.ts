@@ -17,6 +17,9 @@ const ARRAY_KEY: Record<string, string> = {
   "site-inspections": "siteInspections",
   projects: "projects",
   proposals: "proposals",
+  contacts: "contacts",
+  organizations: "organizations",
+  teams: "teams",
 };
 const SINGLETON_KEY: Record<string, string> = {
   options: "options",

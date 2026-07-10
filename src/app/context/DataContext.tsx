@@ -898,6 +898,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let localTrails: Trail[] = [];
         let localProjects: Project[] = [];
         let localProposals: Proposal[] = [];
+        let localContacts: CRMContact[] = [];
+        let localOrganizations: CRMOrganization[] = [];
+        let localTeams: CRMTeam[] = [];
         try { localMountains = JSON.parse(localStorage.getItem(STORAGE_KEYS.MOUNTAINS) || '[]'); } catch {}
         try { localLocations = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATIONS) || '[]'); } catch {}
         try { localAssets = JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSETS) || '[]'); } catch {}
@@ -905,6 +908,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         try { localTrails = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]'); } catch {}
         try { localProjects = JSON.parse(localStorage.getItem(STORAGE_KEYS.PROJECTS) || '[]'); } catch {}
         try { localProposals = JSON.parse(localStorage.getItem(STORAGE_KEYS.PROPOSALS) || '[]'); } catch {}
+        try { localContacts = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || '[]'); } catch {}
+        try { localOrganizations = JSON.parse(localStorage.getItem(STORAGE_KEYS.ORGANIZATIONS) || '[]'); } catch {}
+        try { localTeams = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEAMS) || '[]'); } catch {}
 
         // Fetch local photos first (IndexedDB — no network cost)
         const photoLookup = await photoDB.getAllPhotos().catch(() => ({}));
@@ -926,11 +932,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
 
         // Batch 2: large collections
-        const [assetsRes, notesRes, projectsRes, proposalsRes] = await Promise.all([
+        const [assetsRes, notesRes, projectsRes, proposalsRes, contactsRes, organizationsRes, teamsRes] = await Promise.all([
           apiCall('/assets').catch(() => silent()),
           apiCall('/notes').catch(() => silent()),
           apiCall('/projects').catch(() => silent()),
           apiCall('/proposals').catch(() => silent()),
+          apiCall('/contacts').catch(() => silent()),
+          apiCall('/organizations').catch(() => silent()),
+          apiCall('/teams').catch(() => silent()),
         ]);
 
         // Merge helper: server is authoritative for items it knows about;
@@ -980,6 +989,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (notesRes) setNotes(mergeById(notesRes.notes || [], localNotes, 'notes'));
         if (projectsRes) setProjects(mergeById(projectsRes.projects || [], localProjects, 'projects'));
         if (proposalsRes) setProposals(mergeById(proposalsRes.proposals || [], localProposals, 'proposals'));
+        if (contactsRes) setContacts(mergeById(contactsRes.contacts || [], localContacts, 'contacts'));
+        if (organizationsRes) setOrganizations(mergeById(organizationsRes.organizations || [], localOrganizations, 'organizations'));
+        if (teamsRes) setTeams(mergeById(teamsRes.teams || [], localTeams, 'teams'));
         if (optionsRes?.options) {
           // Merge server options with any locally-added options
           setOptions(prev => {
@@ -996,7 +1008,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (pricesRes?.prices) {
           setItemPrices(prev => ({ ...prev, ...pricesRes.prices }));
         }
-        console.log('Data loaded successfully (mountains, locations, trails, assets, notes, options, prices)');
+        console.log('Data loaded successfully (mountains, locations, trails, assets, notes, projects, proposals, contacts, organizations, teams, options, prices)');
       } catch (error) {
         console.warn('Backend load failed — running from local cache:', (error as Error)?.message);
       } finally {
@@ -1731,15 +1743,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
     const newContact: CRMContact = { ...contact, id, createdAt: now, updatedAt: now };
     setContacts(prev => [...prev, newContact]);
+    syncOrQueue('/contacts', 'POST', JSON.stringify(newContact))
+      .catch(e => console.error('Contact sync error:', e));
     return id;
   };
 
   const updateContact = (id: string, updates: Partial<CRMContact>) => {
     setContacts(prev => prev.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c));
+    syncOrQueue(`/contacts/${id}`, 'PUT', JSON.stringify(updates))
+      .catch(e => console.error('Contact update sync error:', e));
   };
 
   const deleteContact = (id: string) => {
     setContacts(prev => prev.filter(c => c.id !== id));
+    addTombstone('contacts', id);
+    syncOrQueue(`/contacts/${id}`, 'DELETE', null)
+      .catch(e => console.error('Contact delete sync error:', e));
   };
 
   const addOrganization = (org: Omit<CRMOrganization, 'id' | 'createdAt' | 'updatedAt'>): string => {
@@ -1747,15 +1766,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
     const newOrg: CRMOrganization = { ...org, id, createdAt: now, updatedAt: now };
     setOrganizations(prev => [...prev, newOrg]);
+    syncOrQueue('/organizations', 'POST', JSON.stringify(newOrg))
+      .catch(e => console.error('Organization sync error:', e));
     return id;
   };
 
   const updateOrganization = (id: string, updates: Partial<CRMOrganization>) => {
     setOrganizations(prev => prev.map(o => o.id === id ? { ...o, ...updates, updatedAt: new Date().toISOString() } : o));
+    syncOrQueue(`/organizations/${id}`, 'PUT', JSON.stringify(updates))
+      .catch(e => console.error('Organization update sync error:', e));
   };
 
   const deleteOrganization = (id: string) => {
     setOrganizations(prev => prev.filter(o => o.id !== id));
+    addTombstone('organizations', id);
+    syncOrQueue(`/organizations/${id}`, 'DELETE', null)
+      .catch(e => console.error('Organization delete sync error:', e));
   };
 
   const addTeam = (team: Omit<CRMTeam, 'id' | 'createdAt' | 'updatedAt'>): string => {
@@ -1763,6 +1789,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
     const newTeam: CRMTeam = { ...team, id, createdAt: now, updatedAt: now };
     setTeams(prev => [...prev, newTeam]);
+    syncOrQueue('/teams', 'POST', JSON.stringify(newTeam))
+      .catch(e => console.error('Team sync error:', e));
     (newTeam.mountainIds || []).forEach(mid =>
       logActivity(mid, 'team_added', `Team "${newTeam.name}" added${newTeam.createdBy ? ` by ${newTeam.createdBy}` : ''}`)
     );
@@ -1771,11 +1799,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const updateTeam = (id: string, updates: Partial<CRMTeam>) => {
     setTeams(prev => prev.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t));
+    syncOrQueue(`/teams/${id}`, 'PUT', JSON.stringify(updates))
+      .catch(e => console.error('Team update sync error:', e));
   };
 
   const deleteTeam = (id: string) => {
     setTeams(prev => prev.filter(t => t.id !== id));
     setProjects(prev => prev.filter(p => p.teamId !== id));
+    addTombstone('teams', id);
+    syncOrQueue(`/teams/${id}`, 'DELETE', null)
+      .catch(e => console.error('Team delete sync error:', e));
   };
 
   // Auto-import contacts from all mountains (called on first CRM visit)
