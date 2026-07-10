@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
+import { Search, AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
 import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted } from '../../context/DataContext';
 import { useMyContact, useCanSeeAll } from '../../hooks/useMyContact';
 import { stageBarColor, StageChecklist } from './ProjectsPane';
@@ -20,6 +20,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
   const { projects, mountains, teams } = useData();
   const navigate = useNavigate();
   const me = useMyContact();
+  const [search, setSearch] = useState('');
 
   // Ambassadors are always locked to their own; no contact → can't compute mine.
   const canSeeAll = useCanSeeAll();
@@ -53,14 +54,38 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
     return combined.sort((a, b) => new Date(b.p.updatedAt).getTime() - new Date(a.p.updatedAt).getTime());
   }, [projects, mountains, teams, effective, me]);
 
+  // Search across region, mountain name, and current status (stage label or
+  // "stalled") — a single box covers all three since they're all just text.
+  const visibleRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(({ p, m }) => {
+      const stages = PROJECT_STAGES_BY_TYPE[p.type];
+      const furthestIndex = furthestCompletedStageIndex(p);
+      const stageLabel = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
+      const haystack = [m?.name, m?.region, stageLabel, p.isStalled ? 'Stalled' : ''].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [rows, search]);
+
   return (
     <div className="space-y-2">
-      {rows.length === 0 ? (
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by region, status, or mountain…"
+          className="w-full bg-[#f3f3f5] rounded-[8px] pl-9 pr-3 py-2.5 text-[#0a0a0a] text-[13px] outline-none"
+        />
+      </div>
+      {visibleRows.length === 0 ? (
         <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
-          {effective === 'mine' ? 'No active projects owned by you.' : 'No active projects.'}
+          {search.trim() ? 'No projects match your search.' : effective === 'mine' ? 'No active projects owned by you.' : 'No active projects.'}
         </div>
       ) : (
-        rows.map(({ p, m }) => {
+        visibleRows.map(({ p, m }) => {
           const stages = PROJECT_STAGES_BY_TYPE[p.type];
           const furthestIndex = furthestCompletedStageIndex(p);
           const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
