@@ -65,7 +65,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
           const furthestIndex = furthestCompletedStageIndex(p);
           const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
           const label = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
-          const completedStages = p.completedStages || [];
+          const stageStatus = p.stageStatus || {};
           return (
             <div
               key={`${p.id}-${m?.id}`}
@@ -93,7 +93,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
                 </span>
                 {p.ownerName && <span className="flex items-center gap-1 text-[#8992a0] shrink-0"><UserCircle2 size={11} /> {p.ownerName}</span>}
               </div>
-              <StageChecklist stages={stages} completedStages={completedStages} readOnly lockedTitle="Status can only be updated on the mountain detail page" />
+              <StageChecklist stages={stages} stageStatus={stageStatus} stageDates={p.stageDates} readOnly lockedTitle="Status can only be updated by opening the project" />
             </div>
           );
         })

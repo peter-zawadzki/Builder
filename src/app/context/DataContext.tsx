@@ -299,31 +299,45 @@ export type ProjectType = 'Install' | 'Repair' | 'Upgrade' | 'Initial Onboarding
 
 export type ProjectStage =
   | 'Site Inspection' | 'Proposal Sent' | 'Proposal Signed' | 'Install Scheduled' | 'Install In-Progress' | 'Commissioning'
+  | 'Proposal' | 'Contract' | 'Install'
   | 'Prospect' | 'Kickoff Scheduled' | 'Training Scheduled' | 'Training In-Progress'
   | 'Training Requested'
   | 'Event Requested' | 'Event Scheduled' | 'Event In-Progress'
   | 'Completed';
 
-const INSTALL_LIKE_STAGES: ProjectStage[] = ['Site Inspection', 'Proposal Sent', 'Proposal Signed', 'Install Scheduled', 'Install In-Progress', 'Commissioning', 'Completed'];
+// Each stage cycles through 4 states independently — a status can be skipped
+// without blocking later ones. Order clicking cycles through:
+// not started (grey/X) -> blocked (red) -> in progress (yellow) -> done (green).
+export type StageStatus = 'not_started' | 'blocked' | 'in_progress' | 'done';
+export const STAGE_STATUS_ORDER: StageStatus[] = ['not_started', 'blocked', 'in_progress', 'done'];
+export function nextStageStatus(current: StageStatus | undefined): StageStatus {
+  const idx = STAGE_STATUS_ORDER.indexOf(current || 'not_started');
+  return STAGE_STATUS_ORDER[(idx + 1) % STAGE_STATUS_ORDER.length];
+}
+
+const INSTALL_UPGRADE_STAGES: ProjectStage[] = ['Site Inspection', 'Proposal', 'Contract', 'Install', 'Commissioning', 'Completed'];
+const REPAIR_STAGES: ProjectStage[] = ['Site Inspection', 'Proposal Sent', 'Proposal Signed', 'Install Scheduled', 'Install In-Progress', 'Commissioning', 'Completed'];
 
 export const PROJECT_STAGES_BY_TYPE: Record<ProjectType, ProjectStage[]> = {
-  Install: INSTALL_LIKE_STAGES,
-  Repair: INSTALL_LIKE_STAGES,
-  Upgrade: INSTALL_LIKE_STAGES,
+  Install: INSTALL_UPGRADE_STAGES,
+  Upgrade: INSTALL_UPGRADE_STAGES,
+  Repair: REPAIR_STAGES,
   'Initial Onboarding': ['Prospect', 'Kickoff Scheduled', 'Training Scheduled', 'Training In-Progress', 'Completed'],
   'Followup Training': ['Training Requested', 'Training Scheduled', 'Training In-Progress', 'Completed'],
   'Special Event': ['Event Requested', 'Proposal Sent', 'Proposal Signed', 'Event Scheduled', 'Event In-Progress', 'Completed'],
 };
 
-// The progress bar reflects the furthest-along checked status, not a single
-// linear "current stage" — earlier statuses can be skipped without blocking it.
-export function furthestCompletedStageIndex(project: { type: ProjectType; completedStages?: ProjectStage[] }): number {
+// The progress bar reflects the furthest-along "done" stage, not a single
+// linear "current stage" — earlier stages can be skipped without blocking it.
+export function furthestCompletedStageIndex(project: { type: ProjectType; stageStatus?: Partial<Record<ProjectStage, StageStatus>> }): number {
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
-  return (project.completedStages || []).reduce((max, s) => Math.max(max, stages.indexOf(s)), -1);
+  let max = -1;
+  stages.forEach((s, i) => { if (project.stageStatus?.[s] === 'done') max = Math.max(max, i); });
+  return max;
 }
 
-export function isProjectCompleted(project: { type: ProjectType; completedStages?: ProjectStage[] }): boolean {
-  return (project.completedStages || []).includes('Completed');
+export function isProjectCompleted(project: { type: ProjectType; stageStatus?: Partial<Record<ProjectStage, StageStatus>> }): boolean {
+  return project.stageStatus?.['Completed'] === 'done';
 }
 
 export interface Project {
@@ -333,9 +347,10 @@ export interface Project {
   name: string;
   notes?: string;               // free-text project notes
   type: ProjectType;
-  // Each stage in PROJECT_STAGES_BY_TYPE[type] is independently checkable —
-  // a status can be skipped without blocking later ones from being marked.
-  completedStages?: ProjectStage[];
+  // Each stage in PROJECT_STAGES_BY_TYPE[type] cycles independently through
+  // StageStatus — a status can be skipped without blocking later ones.
+  stageStatus?: Partial<Record<ProjectStage, StageStatus>>;
+  stageDates?: Partial<Record<ProjectStage, string>>;  // optional date per stage (any type/status)
   ownerContactId?: string;      // the owning YULLR contact (employee)
   ownerName?: string;           // display name of the current owner
   ownerUserId?: string;         // legacy: Clerk user id, if owner was a login

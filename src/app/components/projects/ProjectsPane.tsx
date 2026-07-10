@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
 import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2, Check } from 'lucide-react';
-import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted, getMountainProjects } from '../../context/DataContext';
-import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity } from '../../context/DataContext';
+import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted, getMountainProjects, nextStageStatus } from '../../context/DataContext';
+import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity, StageStatus } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
 import { useMyContact } from '../../hooks/useMyContact';
@@ -38,45 +38,74 @@ function useAuthor() {
   return user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
 }
 
-// Each status is its own checkbox — any can be checked/unchecked independent
-// of the others, so a status can be skipped without blocking later ones.
+const STAGE_STATUS_DOT: Record<StageStatus, string> = {
+  not_started: 'bg-white border-[#d1d5db]',
+  blocked: 'bg-[#ef4444] border-[#ef4444]',
+  in_progress: 'bg-[#eab308] border-[#eab308]',
+  done: 'bg-[#22c55e] border-[#22c55e]',
+};
+const STAGE_STATUS_LABEL_COLOR: Record<StageStatus, string> = {
+  not_started: 'text-[#8992a0]',
+  blocked: 'text-[#dc2626]',
+  in_progress: 'text-[#a16207]',
+  done: 'text-[#3f7a5c] font-medium',
+};
+
+function StageStatusDot({ status }: { status: StageStatus }) {
+  return (
+    <span className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 ${STAGE_STATUS_DOT[status]}`}>
+      {status === 'not_started' && <X size={9} className="text-[#c0c4cc]" />}
+      {status === 'done' && <Check size={10} className="text-white" />}
+    </span>
+  );
+}
+
+// Each stage cycles independently through 4 states (not started/blocked/in
+// progress/done) — a stage can be skipped without blocking later ones.
 // Equal-width grid columns keep the row evenly spaced regardless of how many
-// statuses a project type has (4 for Followup Training vs 7 for Install).
+// stages a project type has (4 for Followup Training vs 6 for Install).
+// Status can only be changed here when onToggle+dates editing are provided
+// (i.e. inside the project detail modal); everywhere else this renders
+// read-only, per the rule that status is only editable from the modal.
 export function StageChecklist({
-  stages, completedStages, onToggle, readOnly, lockedTitle,
+  stages, stageStatus, stageDates, onToggle, onDateChange, readOnly, lockedTitle,
 }: {
   stages: ProjectStage[];
-  completedStages: ProjectStage[];
+  stageStatus: Partial<Record<ProjectStage, StageStatus>>;
+  stageDates?: Partial<Record<ProjectStage, string>>;
   onToggle?: (stage: ProjectStage) => void;
+  onDateChange?: (stage: ProjectStage, date: string) => void;
   readOnly?: boolean;
   lockedTitle?: string;
 }) {
   return (
     <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
       {stages.map(s => {
-        const checked = completedStages.includes(s);
-        const dot = (
-          <span className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 ${checked ? 'bg-[#22c55e] border-[#22c55e]' : 'bg-white border-[#d1d5db]'}`}>
-            {checked && <Check size={10} className="text-white" />}
-          </span>
-        );
-        const label = <span className={`text-[9px] text-center leading-tight ${checked ? 'text-[#3f7a5c] font-medium' : 'text-[#8992a0]'}`}>{s}</span>;
+        const status = stageStatus[s] || 'not_started';
+        const date = stageDates?.[s];
+        const label = <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>;
+        const dateLabel = date && <span className="text-[8px] text-[#8992a0] text-center leading-tight">{new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>;
         if (readOnly || !onToggle) {
           return (
             <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
-              {dot}{label}
+              <StageStatusDot status={status} />{label}{dateLabel}
             </div>
           );
         }
         return (
-          <button
-            key={s}
-            type="button"
-            onClick={e => { e.stopPropagation(); onToggle(s); }}
-            className="flex flex-col items-center gap-1 py-1 active:opacity-70"
-          >
-            {dot}{label}
-          </button>
+          <div key={s} className="flex flex-col items-center gap-1 py-1">
+            <button type="button" onClick={e => { e.stopPropagation(); onToggle(s); }} className="flex flex-col items-center gap-1 active:opacity-70">
+              <StageStatusDot status={status} />{label}
+            </button>
+            {onDateChange ? (
+              <input
+                type="date"
+                value={date || ''}
+                onChange={e => onDateChange(s, e.target.value)}
+                className="w-full text-[8px] text-[#8992a0] bg-transparent outline-none text-center"
+              />
+            ) : dateLabel}
+          </div>
         );
       })}
     </div>
@@ -146,20 +175,11 @@ export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; team
 // ─── Card (progress bar) ───────────────────────────────────────────────────
 
 function ProjectCard({ project, onOpen, viaTeamName }: { project: Project; onOpen: () => void; viaTeamName?: string }) {
-  const { updateProject } = useData();
-  const me = useMyContact();
-  const isOwner = !!me && project.ownerContactId === me.id;
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
   const furthestIndex = furthestCompletedStageIndex(project);
   const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
   const currentLabel = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
-  const completedStages = project.completedStages || [];
-
-  const toggleStage = (stage: ProjectStage) => {
-    if (!isOwner) return;
-    const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
-    updateProject(project.id, { completedStages: updated });
-  };
+  const stageStatus = project.stageStatus || {};
 
   return (
     <div
@@ -189,10 +209,10 @@ function ProjectCard({ project, onOpen, viaTeamName }: { project: Project; onOpe
       <div className="mt-1.5">
         <StageChecklist
           stages={stages}
-          completedStages={completedStages}
-          onToggle={toggleStage}
-          readOnly={!isOwner}
-          lockedTitle="Only the project owner can update status"
+          stageStatus={stageStatus}
+          stageDates={project.stageDates}
+          readOnly
+          lockedTitle="Status can only be updated by opening the project"
         />
       </div>
     </div>
@@ -268,7 +288,7 @@ function ProjectForm({ mountainId, teamId, availableTypes, onClose }: { mountain
       name: name.trim(),
       notes: notes.trim() || undefined,
       type,
-      completedStages: [],
+      stageStatus: {},
       ownerContactId: owner?.id,
       ownerName: owner?.name,
       createdBy,
@@ -338,19 +358,25 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const isOwner = !!me && project.ownerContactId === me.id;
   const availableTypes = project.teamId ? TEAM_PROJECT_TYPES : MOUNTAIN_PROJECT_TYPES;
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
-  const completedStages = project.completedStages || [];
+  const stageStatus = project.stageStatus || {};
 
   const setType = (t: ProjectType) => {
     // Stage list is entirely different per type — start fresh rather than
-    // carrying over checkmarks that don't correspond to the new sequence.
-    updateProject(project.id, { type: t, completedStages: [] });
+    // carrying over statuses that don't correspond to the new sequence.
+    updateProject(project.id, { type: t, stageStatus: {}, stageDates: {} });
   };
 
-  const toggleStage = (stage: ProjectStage) => {
+  const cycleStage = (stage: ProjectStage) => {
     if (!isOwner) return;
-    const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
-    updateProject(project.id, { completedStages: updated });
-    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}": ${stage} ${updated.includes(stage) ? 'checked' : 'unchecked'}`);
+    const updated = { ...stageStatus, [stage]: nextStageStatus(stageStatus[stage]) };
+    updateProject(project.id, { stageStatus: updated });
+    logActivity(project.mountainId, 'stage_changed', `Project "${project.name}": ${stage} → ${updated[stage]}`);
+  };
+
+  const setStageDate = (stage: ProjectStage, date: string) => {
+    if (!isOwner) return;
+    const updated = { ...(project.stageDates || {}), [stage]: date || undefined };
+    updateProject(project.id, { stageDates: updated });
   };
 
   const applyStall = () => {
@@ -445,15 +471,18 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
                 <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] uppercase tracking-wide ${TYPE_BADGE[project.type]}`}>{project.type}</span>
               </div>
 
-              {/* Stage checklist — quick update, stays in view mode. Each
-                  status is independently checkable so one can be skipped.
-                  Only the project owner can change it. */}
+              {/* Stage status — quick update, stays in view mode. Each stage
+                  cycles independently through grey/red/yellow/green so one
+                  can be skipped. Only the project owner can change it — this
+                  is the only place status can be changed at all. */}
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage{!isOwner && ' (owner only)'}</label>
                 <StageChecklist
                   stages={stages}
-                  completedStages={completedStages}
-                  onToggle={toggleStage}
+                  stageStatus={stageStatus}
+                  stageDates={project.stageDates}
+                  onToggle={isOwner ? cycleStage : undefined}
+                  onDateChange={isOwner ? setStageDate : undefined}
                   readOnly={!isOwner}
                   lockedTitle="Only the project owner can update status"
                 />
