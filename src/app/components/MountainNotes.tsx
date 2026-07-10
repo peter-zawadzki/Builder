@@ -285,12 +285,12 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
   // ── Expanded view ──────────────────────────────────────────────────────────
   if (isExpanded) {
     return (
-      <div className="bg-[#EBF3FF] border border-[#C5DEFF] rounded-[10px]">
+      <div className="bg-white border border-[rgba(0,0,0,0.06)] rounded-[10px]">
         {/* Collapsed-style header — tap to collapse */}
         <div
           role="button"
           tabIndex={0}
-          className="w-full flex items-center gap-2 px-3 py-3 active:bg-[#daeaff] rounded-t-[10px] transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-3 active:bg-[#f9fafb] rounded-t-[10px] transition-colors cursor-pointer"
           onClick={() => setIsExpanded(false)}
           onKeyDown={e => e.key === 'Enter' && setIsExpanded(false)}
         >
@@ -333,7 +333,7 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
         </div>
 
         {/* Expanded body */}
-        <div className="px-4 pb-4 pt-1 border-t border-[#C5DEFF]">
+        <div className="px-4 pb-4 pt-1 border-t border-[rgba(0,0,0,0.06)]">
           <p className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] leading-relaxed whitespace-pre-wrap">
             {note.text}
           </p>
@@ -344,7 +344,7 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
             </p>
             <button
               onClick={() => { setIsExpanded(false); setIsAddingTo(true); }}
-              className="flex items-center gap-1 text-[#307FE2] font-['Inter:Medium',sans-serif] text-[12px] px-2 py-1 rounded-[6px] active:bg-[#C5DEFF]"
+              className="flex items-center gap-1 text-[#307FE2] font-['Inter:Medium',sans-serif] text-[12px] px-2 py-1 rounded-[6px] active:bg-[#f9fafb]"
             >
               <PlusCircle size={13} />
               Add to Note
@@ -353,9 +353,9 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
 
           {/* Additional entries */}
           {note.entries && note.entries.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-[#C5DEFF]/50 space-y-2">
+            <div className="mt-4 pt-3 border-t border-[rgba(0,0,0,0.06)] space-y-2">
               {note.entries.map((entry) => (
-                <div key={entry.id} className="bg-white/50 rounded-[6px] p-2.5 border border-[#C5DEFF]/30 group relative">
+                <div key={entry.id} className="bg-[#f9fafb] rounded-[6px] p-2.5 border border-[rgba(0,0,0,0.06)] group relative">
                   <p className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] leading-relaxed whitespace-pre-wrap mb-1 pr-6">
                     {entry.text}
                   </p>
@@ -381,11 +381,11 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
   // ── Collapsed view (default) ───────────────────────────────────────────────
   return (
     <>
-      <div className="bg-[#EBF3FF] border border-[#C5DEFF] rounded-[10px]">
+      <div className="bg-white border border-[rgba(0,0,0,0.06)] rounded-[10px]">
         <div
           role="button"
           tabIndex={0}
-          className="w-full flex items-center gap-2 px-3 py-3 active:bg-[#daeaff] rounded-[10px] transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-3 active:bg-[#f9fafb] rounded-[10px] transition-colors cursor-pointer"
           onClick={() => setIsExpanded(true)}
           onKeyDown={e => e.key === 'Enter' && setIsExpanded(true)}
         >

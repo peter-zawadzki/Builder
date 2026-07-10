@@ -85,9 +85,9 @@ function ExpandableSection({ children }: { children: (openModal: () => void) => 
   const [open, setOpen] = useState(false);
   const openModal = () => setOpen(true);
   return (
-    <div>
-      <div className="h-[360px] overflow-hidden relative rounded-[12px]">
-        <div className="pb-10">{children(openModal)}</div>
+    <div className="h-full flex flex-col">
+      <div className="flex-1 min-h-[360px] overflow-hidden relative rounded-[12px]">
+        <div className="h-full pb-10">{children(openModal)}</div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
       </div>
 
@@ -466,7 +466,7 @@ export function MountainDetail() {
           {/* ── Trails Pane ── */}
           <ExpandableSection>
           {(openModal) => (
-          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 h-full flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <button onClick={openModal} className="flex items-center gap-2 active:opacity-70">
                 <Maximize2 size={15} className="text-[#6a7282]" />
@@ -504,7 +504,7 @@ export function MountainDetail() {
                       <button
                         key={trail.id}
                         onClick={() => navigate(`/mountains/${mountainId}/trails/${trail.id}`)}
-                        className="w-full bg-[#f9fafb] rounded-[8px] border border-[rgba(0,0,0,0.08)] p-3 text-left active:bg-[#f3f3f5] transition-colors"
+                        className="w-full bg-white rounded-[10px] border border-[rgba(0,0,0,0.06)] p-2.5 text-left active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)] transition-colors"
                       >
                         <div className="flex items-center gap-2.5 mb-2">
                           <div className="w-8 h-8 bg-[#fff3f0] rounded-[6px] flex items-center justify-center flex-shrink-0">
@@ -523,7 +523,7 @@ export function MountainDetail() {
                           <ChevronRight size={16} className="text-[#d1d5db] flex-shrink-0" />
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          <span className="bg-white text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                          <span className="bg-[#f3f3f5] text-[#6a7282] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
                             {trailLocations.length} location{trailLocations.length !== 1 ? 's' : ''}
                           </span>
                           {assetCount > 0 && (
@@ -532,7 +532,7 @@ export function MountainDetail() {
                             </span>
                           )}
                           {inspCount > 0 && (
-                            <span className="bg-white text-[#0a0a0a] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="bg-[#f3f3f5] text-[#0a0a0a] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
                               <ClipboardList size={9} />
                               {inspCount} insp.
                             </span>
@@ -630,7 +630,7 @@ export function MountainDetail() {
           {/* ── Notes Pane ── */}
           <ExpandableSection>
             {(openModal) => (
-            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 h-full flex flex-col">
               <MountainNotes mountainId={mountainId!} onExpandClick={openModal} />
             </div>
             )}
@@ -644,7 +644,7 @@ export function MountainDetail() {
           {/* Inventory */}
           <ExpandableSection>
           {(openModal) => (
-          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 h-full flex flex-col">
           <div className="flex items-center justify-between mb-3">
             <button onClick={openModal} className="flex items-start gap-2 active:opacity-70 text-left">
               <Maximize2 size={15} className="text-[#6a7282] mt-0.5 shrink-0" />
@@ -716,7 +716,7 @@ export function MountainDetail() {
                           navigate(`/mountains/${mountainId}/locations/${asset.locationId}/assets/${asset.id}`);
                         }
                       }}
-                      className="bg-[#f9fafb] rounded-[8px] border border-[rgba(0,0,0,0.08)] p-3 text-left active:bg-[#f3f3f5] transition-colors"
+                      className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.06)] p-2.5 text-left active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)] transition-colors"
                     >
                       <div className="flex items-start gap-2 mb-2">
                         <div className={`w-7 h-7 rounded-[6px] flex items-center justify-center flex-shrink-0 ${ASSET_TYPE_COLORS[asset.type] || 'bg-[#f3f3f5] text-[#6a7282]'}`}>
@@ -730,7 +730,7 @@ export function MountainDetail() {
                         </div>
                       </div>
                       {assignedLoc && (
-                        <span className="text-[10px] bg-white text-[#ff5c39] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] inline-block">
+                        <span className="text-[10px] bg-[#f3f3f5] text-[#ff5c39] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] inline-block">
                           {assignedLoc.name}
                         </span>
                       )}
@@ -747,7 +747,7 @@ export function MountainDetail() {
           {/* Documents */}
           <ExpandableSection>
             {(openModal) => (
-            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
+            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 h-full flex flex-col">
               <MountainDocuments mountainId={mountainId!} onExpandClick={openModal} />
             </div>
             )}
