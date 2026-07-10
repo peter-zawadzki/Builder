@@ -1045,7 +1045,10 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
       <div className="bg-white rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
           <h2 className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org ? 'Edit Organization' : 'New Organization'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+          <div className="flex items-center gap-2 shrink-0">
+            {org?.logo && <img src={org.logo} alt={`${org.name} logo`} className="h-9 object-contain" />}
+            <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+          </div>
         </div>
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
           <div>
@@ -1233,6 +1236,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
             )}
             {team?.createdBy && <p className="text-[11px] text-[#8992a0] mt-0.5">Created by {team.createdBy}</p>}
           </div>
+          {team?.logo && <img src={team.logo} alt={`${team.name} logo`} className="h-9 object-contain shrink-0" />}
           <div className="flex items-center gap-1.5 shrink-0">
             {team && (
               <button onClick={() => setIsEditMode(v => !v)} className={`p-1.5 rounded-full active:opacity-70 ${isEditMode ? 'bg-[#1D2930]' : 'bg-[#eef3fb]'}`} title={isEditMode ? 'Done editing' : 'Edit'}>
@@ -1289,9 +1293,6 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
             </>
           ) : (
             <>
-              {team.logo && (
-                <img src={team.logo} alt={`${team.name} logo`} className="h-14 object-contain" />
-              )}
               {(team.website || team.address || team.phone || team.email) && (
                 <div className="space-y-1.5">
                   {team.website && <div className="text-[13px] text-[#307fe2]">{team.website}</div>}

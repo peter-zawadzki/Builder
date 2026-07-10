@@ -230,57 +230,62 @@ export function MountainDetail() {
 
       {/* Header */}
       <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-3 sticky top-0 z-10">
-        <div className="flex items-center gap-2 mb-2">
-          <button onClick={() => navigate('/')} className="p-1.5 active:opacity-60">
-            <ArrowLeft size={22} className="text-[#0a0a0a]" />
-          </button>
-          <h1 className="min-w-0">
-            <span className="inline-block max-w-full truncate bg-[#f3f3f5] text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px] px-3 py-1 rounded-full">
-              {mountain.name}
-            </span>
-          </h1>
-          <button
-            onClick={() => navigate(`/mountains/${mountainId}/edit`)}
-            className="p-1 active:opacity-60 shrink-0"
-            aria-label="Edit mountain details"
-            title="Edit mountain details"
-          >
-            <Pencil size={16} className="text-[#6a7282]" />
-          </button>
-        </div>
-        <div className="pl-8 flex items-center gap-2 min-w-0">
-          <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] truncate min-w-0">
-            {mountain.address}
-          </p>
-          {(linkedOrg?.name || mountain.parentOrganization) && (
-            <span className="shrink-0 flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full">
-              <Building2 size={11} />
-              {linkedOrg?.name || mountain.parentOrganization}
-            </span>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <button onClick={() => navigate('/')} className="p-1.5 active:opacity-60 shrink-0">
+                <ArrowLeft size={22} className="text-[#0a0a0a]" />
+              </button>
+              <h1 className="min-w-0 truncate text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
+                {mountain.name}
+              </h1>
+              <button
+                onClick={() => navigate(`/mountains/${mountainId}/edit`)}
+                className="p-1 active:opacity-60 shrink-0"
+                aria-label="Edit mountain details"
+                title="Edit mountain details"
+              >
+                <Pencil size={16} className="text-[#6a7282]" />
+              </button>
+            </div>
+            <div className="pl-8 flex items-center gap-2 min-w-0">
+              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] truncate min-w-0">
+                {mountain.address}
+              </p>
+              {(linkedOrg?.name || mountain.parentOrganization) && (
+                <span className="shrink-0 flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full">
+                  <Building2 size={11} />
+                  {linkedOrg?.name || mountain.parentOrganization}
+                </span>
+              )}
+              {teamNames.length > 0 && (
+                <span className="shrink-0 flex items-center gap-1 bg-[#eef3fb] text-[#307fe2] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full">
+                  <Users size={11} />
+                  {teamNames.join(', ')}
+                </span>
+              )}
+            </div>
+            {/* Secondary actions — deliberately distinct from the global nav icons above */}
+            <div className="pl-8 mt-2 flex items-center gap-2">
+              <button
+                onClick={() => setShowExport(true)}
+                className="flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#1e3a5f] active:bg-[#f3f3f5]"
+              >
+                <Download size={13} />
+                Reports
+              </button>
+              <button
+                onClick={() => setShowMap(true)}
+                className="flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] active:bg-[#f3f3f5]"
+              >
+                <Map size={13} />
+                Map
+              </button>
+            </div>
+          </div>
+          {mountain.mountainLogo && (
+            <img src={mountain.mountainLogo} alt={`${mountain.name} logo`} className="h-10 object-contain shrink-0" />
           )}
-          {teamNames.length > 0 && (
-            <span className="shrink-0 flex items-center gap-1 bg-[#eef3fb] text-[#307fe2] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2.5 py-1 rounded-full">
-              <Users size={11} />
-              {teamNames.join(', ')}
-            </span>
-          )}
-        </div>
-        {/* Secondary actions — deliberately distinct from the global nav icons above */}
-        <div className="pl-8 mt-2 flex items-center gap-2">
-          <button
-            onClick={() => setShowExport(true)}
-            className="flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#1e3a5f] active:bg-[#f3f3f5]"
-          >
-            <Download size={13} />
-            Reports
-          </button>
-          <button
-            onClick={() => setShowMap(true)}
-            className="flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] active:bg-[#f3f3f5]"
-          >
-            <Map size={13} />
-            Map
-          </button>
         </div>
       </div>
 
