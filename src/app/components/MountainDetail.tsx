@@ -237,7 +237,11 @@ export function MountainDetail() {
                 <ArrowLeft size={22} className="text-[#0a0a0a]" />
               </button>
               <h1 className="min-w-0 truncate text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
-                {mountain.name}
+                {mountain.mountainLogo ? (
+                  <img src={mountain.mountainLogo} alt={mountain.name} className="h-8 object-contain" />
+                ) : (
+                  mountain.name
+                )}
               </h1>
               <button
                 onClick={() => navigate(`/mountains/${mountainId}/edit`)}
@@ -295,9 +299,6 @@ export function MountainDetail() {
               </div>
             </div>
           </div>
-          {mountain.mountainLogo && (
-            <img src={mountain.mountainLogo} alt={`${mountain.name} logo`} className="h-10 object-contain shrink-0" />
-          )}
         </div>
       </div>
 

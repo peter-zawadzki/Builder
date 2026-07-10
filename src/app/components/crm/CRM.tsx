@@ -518,12 +518,12 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           ))}
           {mountain && (
             <button onClick={() => navigate(`/mountains/${mountain.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] hover:text-[#307fe2] active:opacity-70">
-              <ExternalLink size={14} />{mountain.name} <StageBadge stage={mountain.pipelineStage} />
+              {mountain.mountainLogo ? <img src={mountain.mountainLogo} alt={mountain.name} className="h-5 object-contain" /> : <><ExternalLink size={14} />{mountain.name}</>} <StageBadge stage={mountain.pipelineStage} />
             </button>
           )}
           {org && (
             <button onClick={() => navigate(`/crm?tab=organizations&open=${org.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] hover:text-[#7c3aed] active:opacity-70">
-              <Building2 size={14} />{org.name}
+              {org.logo ? <img src={org.logo} alt={org.name} className="h-5 object-contain" /> : <><Building2 size={14} />{org.name}</>}
             </button>
           )}
           {contact.tags.length > 0 && (
@@ -1231,12 +1231,13 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
           <div className="min-w-0 pr-3 flex-1">
             {team && isEditMode ? (
               <input value={form.name} onChange={e => { set('name', e.target.value); editField({ name: e.target.value }); }} className="w-full text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] bg-[#f3f3f5] rounded-[8px] px-2.5 py-1.5 outline-none" />
+            ) : team?.logo ? (
+              <img src={team.logo} alt={team.name} className="h-9 object-contain" />
             ) : (
               <p className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{team ? team.name : 'New Team'}</p>
             )}
             {team?.createdBy && <p className="text-[11px] text-[#8992a0] mt-0.5">Created by {team.createdBy}</p>}
           </div>
-          {team?.logo && <img src={team.logo} alt={`${team.name} logo`} className="h-9 object-contain shrink-0" />}
           <div className="flex items-center gap-1.5 shrink-0">
             {team && (
               <button onClick={() => setIsEditMode(v => !v)} className={`p-1.5 rounded-full active:opacity-70 ${isEditMode ? 'bg-[#1D2930]' : 'bg-[#eef3fb]'}`} title={isEditMode ? 'Done editing' : 'Edit'}>
