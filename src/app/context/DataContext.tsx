@@ -370,21 +370,18 @@ export interface ContactActivity {
   completed?: boolean;
   completedAt?: string;
   createdAt: string;
-  assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to (mutually exclusive with assigneeTeamId)
+  assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to
   assigneeName?: string;
-  assigneeTeamId?: string;     // a whole Team this note/action is assigned to instead of one person
-  assigneeTeamName?: string;
   authorContactId?: string;    // CRM contact id of whoever created it — who's allowed to mark it complete
   authorName?: string;
 }
 
-// Only the person who created an item, or the person/team it's assigned to,
-// may mark it complete.
+// Only the person who created an item, or the person it's assigned to, may
+// mark it complete. Tasks can only be assigned to a YULLR person, not a team.
 export function canCompleteActivity(activity: ContactActivity, me: CRMContact | undefined): boolean {
   if (!me) return false;
   if (activity.authorContactId === me.id) return true;
   if (activity.assigneeContactId === me.id) return true;
-  if (activity.assigneeTeamId && me.teamId === activity.assigneeTeamId) return true;
   return false;
 }
 
@@ -482,11 +479,11 @@ export function getMountainRollupActivities(
   const affiliateIds = new Set(mountain.affiliateContactIds || []);
   const linkedTeamIds = new Set(teams.filter(t => t.mountainIds.includes(mountainId)).map(t => t.id));
 
-  // An item lives elsewhere but is relevant here because its assignee (person
-  // or team) is tied to this mountain.
+  // An item lives elsewhere but is relevant here because its assignee (a
+  // person — tasks can only be assigned to people, not teams) is tied to
+  // this mountain.
   const assignedHere = (a: ContactActivity) =>
-    (!!a.assigneeContactId && affiliateIds.has(a.assigneeContactId)) ||
-    (!!a.assigneeTeamId && linkedTeamIds.has(a.assigneeTeamId));
+    !!a.assigneeContactId && affiliateIds.has(a.assigneeContactId);
 
   const out: MountainActivityEntry[] = [];
 

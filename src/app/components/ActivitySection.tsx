@@ -8,9 +8,9 @@ import { useMyContact } from '../hooks/useMyContact';
 
 // Shared "Notes & Action Items" block — used on Contacts, Organizations,
 // Mountains, Teams, Projects, and Inspections so assignment/tracking works the
-// same everywhere. Assignable to either one YULLR person or a whole Team.
-// Every item is stamped with its creator; only the creator or assignee can
-// mark an action item complete.
+// same everywhere. Assignable only to a person in the YULLR organization —
+// not to a whole team. Every item is stamped with its creator; only the
+// creator or assignee can mark an action item complete.
 export function ActivitySection({
   activities,
   onAdd,
@@ -22,14 +22,14 @@ export function ActivitySection({
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
-  const { contacts, organizations, teams } = useData();
+  const { contacts, organizations } = useData();
   const { user } = useUser();
   const me = useMyContact();
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const yullrMembers = getYullrMembers(contacts, organizations);
   const [newText, setNewText] = useState('');
   const [newType, setNewType] = useState<'note' | 'action'>('note');
-  const [assigneeKey, setAssigneeKey] = useState(''); // 'c:<id>' for a person, 't:<id>' for a team
+  const [assigneeId, setAssigneeId] = useState('');
 
   const sorted = [...activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const openActions = sorted.filter(a => a.type === 'action' && !a.completed);
@@ -38,28 +38,24 @@ export function ActivitySection({
 
   const add = () => {
     if (!newText.trim()) return;
-    const [kind, id] = assigneeKey.split(':');
-    const assigneeContact = kind === 'c' ? yullrMembers.find(m => m.id === id) : undefined;
-    const assigneeTeam = kind === 't' ? teams.find(t => t.id === id) : undefined;
+    const assignee = yullrMembers.find(m => m.id === assigneeId);
     onAdd({
       text: newText.trim(),
       type: newType,
       completed: false,
-      assigneeContactId: assigneeContact?.id,
-      assigneeName: assigneeContact?.name,
-      assigneeTeamId: assigneeTeam?.id,
-      assigneeTeamName: assigneeTeam?.name,
+      assigneeContactId: assignee?.id,
+      assigneeName: assignee?.name,
       authorContactId: me?.id,
       authorName,
     });
     setNewText('');
-    setAssigneeKey('');
+    setAssigneeId('');
     toast.success(newType === 'note' ? 'Note added' : 'Action item added');
   };
 
   const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
 
-  const assigneeLabel = (a: ContactActivity) => a.assigneeTeamName ? `→ ${a.assigneeTeamName} (team)` : a.assigneeName ? `→ ${a.assigneeName}` : '';
+  const assigneeLabel = (a: ContactActivity) => a.assigneeName ? `→ ${a.assigneeName}` : '';
 
   return (
     <div className="space-y-4">
@@ -80,19 +76,10 @@ export function ActivitySection({
           />
           <button onClick={add} className="px-4 bg-[#1D2930] text-white rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80 shrink-0">Add</button>
         </div>
-        {(yullrMembers.length > 0 || teams.length > 0) && (
-          <select value={assigneeKey} onChange={e => setAssigneeKey(e.target.value)} className={inputCls}>
+        {yullrMembers.length > 0 && (
+          <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className={inputCls}>
             <option value="">Assign to… (optional)</option>
-            {yullrMembers.length > 0 && (
-              <optgroup label="People">
-                {yullrMembers.map(m => <option key={m.id} value={`c:${m.id}`}>{m.name}</option>)}
-              </optgroup>
-            )}
-            {teams.length > 0 && (
-              <optgroup label="Teams">
-                {teams.map(t => <option key={t.id} value={`t:${t.id}`}>{t.name}</option>)}
-              </optgroup>
-            )}
+            {yullrMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         )}
       </div>

@@ -110,8 +110,8 @@ function MetaLine({ entry }: { entry: MountainActivityEntry }) {
       <span className="text-[11px] text-[#8992a0]">
         {entry.authorName ? `${entry.authorName} · ` : ''}{new Date(entry.createdAt).toLocaleDateString()}
       </span>
-      {(entry.assigneeName || entry.assigneeTeamName) && (
-        <span className="text-[11px] text-[#8992a0]">→ {entry.assigneeTeamName ? `${entry.assigneeTeamName} (team)` : entry.assigneeName}</span>
+      {entry.assigneeName && (
+        <span className="text-[11px] text-[#8992a0]">→ {entry.assigneeName}</span>
       )}
     </div>
   );
