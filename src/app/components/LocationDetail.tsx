@@ -510,6 +510,7 @@ export function LocationDetail() {
                           updateInspectionActivities(insp.id, updated);
                         }}
                         onDelete={(id) => updateInspectionActivities(insp.id, (insp.activities || []).filter(a => a.id !== id))}
+                        onArchive={(id, archived) => updateInspectionActivities(insp.id, (insp.activities || []).map(a => a.id === id ? { ...a, archived } : a))}
                       />
                     </div>
                   </div>

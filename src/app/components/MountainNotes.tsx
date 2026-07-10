@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
-import { Plus, Pencil, Trash2, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2 } from 'lucide-react';
-import { useData, getYullrMembers, getMountainRollupActivities, MountainNote, NoteTopic } from '../context/DataContext';
+import { Plus, Pencil, Trash2, Archive, ArchiveRestore, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2, Lock } from 'lucide-react';
+import { useData, getYullrMembers, getMountainRollupActivities, canCompleteActivity, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { RollupNoteRow, RollupEmptyState } from './MountainActivityRollup';
+import { useMyContact } from '../hooks/useMyContact';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -23,11 +24,13 @@ const TOPICS: NoteTopic[] = ['Demo', 'Site Visit', 'Proposal', 'Install', 'Train
 interface NoteCardProps {
   note: MountainNote;
   onUpdate: (id: string, updates: Partial<MountainNote>) => void;
-  onDelete: (id: string) => void;
   forceExpanded?: boolean;
 }
 
-function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
+function NoteCard({ note, onUpdate, forceExpanded }: NoteCardProps) {
+  const me = useMyContact();
+  const canArchive = canCompleteActivity(note, me);
+  const archiveNote = () => canArchive && onUpdate(note.id, { archived: true });
   const [isExpanded, setIsExpanded] = useState(forceExpanded || false);
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingTo, setIsAddingTo] = useState(false);
@@ -39,7 +42,6 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
   const [draftInstallProgress, setDraftInstallProgress] = useState<number | undefined>(note.installProgress);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const additionTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const [showDeleteNoteModal, setShowDeleteNoteModal] = useState(false);
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -271,11 +273,13 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
             Cancel
           </button>
           <button
-            onClick={() => setShowDeleteNoteModal(true)}
-            className="bg-[#fff0ee] border border-[rgba(255,92,57,0.2)] rounded-[8px] py-2.5 px-3 flex items-center justify-center active:bg-[#ffe0da]"
-            aria-label="Delete note"
+            onClick={archiveNote}
+            disabled={!canArchive}
+            className="bg-[#fff0ee] border border-[rgba(255,92,57,0.2)] rounded-[8px] py-2.5 px-3 flex items-center justify-center active:bg-[#ffe0da] disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Archive note"
+            title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
           >
-            <Trash2 size={16} className="text-[#ff5c39]" />
+            <Archive size={16} className="text-[#ff5c39]" />
           </button>
         </div>
       </div>
@@ -323,12 +327,13 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
             <Pencil size={14} className="text-[#307FE2]" />
           </button>
           <button
-            onClick={e => { e.stopPropagation(); setShowDeleteNoteModal(true); }}
-            className="p-1.5 rounded-[6px] active:bg-[#ffe0da] flex-shrink-0"
-            aria-label="Delete note"
-            title="Delete note"
+            onClick={e => { e.stopPropagation(); archiveNote(); }}
+            disabled={!canArchive}
+            className="p-1.5 rounded-[6px] active:bg-[#ffe0da] flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Archive note"
+            title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
           >
-            <Trash2 size={14} className="text-[#ff5c39]" />
+            {canArchive ? <Archive size={14} className="text-[#ff5c39]" /> : <Lock size={12} className="text-[#ff5c39]" />}
           </button>
         </div>
 
@@ -418,52 +423,16 @@ function NoteCard({ note, onUpdate, onDelete, forceExpanded }: NoteCardProps) {
             <Pencil size={14} className="text-[#307FE2]" />
           </button>
           <button
-            onClick={e => { e.stopPropagation(); setShowDeleteNoteModal(true); }}
-            className="p-1.5 rounded-[6px] active:bg-[#ffe0da] flex-shrink-0"
-            aria-label="Delete note"
-            title="Delete note"
+            onClick={e => { e.stopPropagation(); archiveNote(); }}
+            disabled={!canArchive}
+            className="p-1.5 rounded-[6px] active:bg-[#ffe0da] flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Archive note"
+            title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
           >
-            <Trash2 size={14} className="text-[#ff5c39]" />
+            {canArchive ? <Archive size={14} className="text-[#ff5c39]" /> : <Lock size={12} className="text-[#ff5c39]" />}
           </button>
         </div>
       </div>
-
-      {/* Delete note confirmation */}
-      {showDeleteNoteModal && (
-        <DeleteConfirmModal
-          title="Delete note?"
-          description={
-            <>
-              This will permanently delete{' '}
-              {note.topic ? (
-                <>
-                  the{' '}
-                  <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-                    {note.topic}
-                  </span>{' '}
-                  note
-                </>
-              ) : (
-                <>
-                  the note:{' '}
-                  <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-                    "{note.text.split('\n')[0].substring(0, 50)}{note.text.split('\n')[0].length > 50 ? '...' : ''}"
-                  </span>
-                </>
-              )}
-              {note.entries && note.entries.length > 0 && (
-                <>, including {note.entries.length} additional entr{note.entries.length === 1 ? 'y' : 'ies'}</>
-              )}
-              . This cannot be undone.
-            </>
-          }
-          onConfirm={() => {
-            onDelete(note.id);
-            setShowDeleteNoteModal(false);
-          }}
-          onCancel={() => setShowDeleteNoteModal(false)}
-        />
-      )}
 
       {/* Delete entry confirmation */}
       {deleteEntryId && (() => {
@@ -498,16 +467,20 @@ interface MountainNotesProps {
 export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps) {
   const location = useLocation();
   const { user } = useUser();
+  const me = useMyContact();
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
-  const { addNote, updateNote, deleteNote, getNotesByMountainId, contacts, organizations, mountains, teams, projects, locations } = useData();
+  const { addNote, updateNote, getNotesByMountainId, contacts, organizations, mountains, teams, projects, locations } = useData();
   const yullrMembers = getYullrMembers(contacts, organizations);
   const [isAdding, setIsAdding] = useState(false);
   const [newText, setNewText] = useState('');
   const [newAssigneeId, setNewAssigneeId] = useState('');
   const newTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [highlightedTopic, setHighlightedTopic] = useState<NoteTopic | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
-  const notes = getNotesByMountainId(mountainId);
+  const allNotes = getNotesByMountainId(mountainId);
+  const notes = allNotes.filter(n => !n.archived);
+  const archivedNotes = allNotes.filter(n => n.archived);
 
   // Handle scroll-to-topic from navigation state
   useEffect(() => {
@@ -531,10 +504,11 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
 
     const id = addNote(mountainId, trimmed, undefined, undefined, undefined, undefined, authorName);
 
-    if (newAssigneeId) {
-      const assignee = yullrMembers.find(m => m.id === newAssigneeId);
-      if (assignee) updateNote(id, { assigneeContactId: assignee.id, assigneeName: assignee.name });
-    }
+    const assignee = newAssigneeId ? yullrMembers.find(m => m.id === newAssigneeId) : undefined;
+    updateNote(id, {
+      authorContactId: me?.id,
+      ...(assignee ? { assigneeContactId: assignee.id, assigneeName: assignee.name } : {}),
+    });
 
     setNewText('');
     setNewAssigneeId('');
@@ -585,7 +559,15 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
             Notes
           </h2>
         )}
-        {!isAdding && (
+        <div className="flex items-center gap-2">
+          {archivedNotes.length > 0 && (
+            <button
+              onClick={() => setShowArchived(v => !v)}
+              className={`px-2.5 py-1.5 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] ${showArchived ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}
+            >
+              {showArchived ? 'Hide archived' : `Archived (${archivedNotes.length})`}
+            </button>
+          )}
           <button
             onClick={() => setIsAdding(true)}
             className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
@@ -593,53 +575,69 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
             <Plus size={14} />
             New
           </button>
-        )}
+        </div>
       </div>
 
-      {/* Add note inline form */}
-      {isAdding ? (
-        <div className="bg-[#EBF3FF] border border-[#C5DEFF] rounded-[10px] p-4 mb-3">
-          <textarea
-            ref={newTextareaRef}
-            value={newText}
-            onChange={e => setNewText(e.target.value)}
-            placeholder="Write your note here…"
-            rows={4}
-            className="w-full bg-white border border-[#307FE2] rounded-[8px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-[#307FE2]/30 placeholder:text-[#9ca3af]"
-          />
-          {yullrMembers.length > 0 && (
-            <select
-              value={newAssigneeId}
-              onChange={e => setNewAssigneeId(e.target.value)}
-              className="w-full mt-2 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
-            >
-              <option value="">Assign to… (optional)</option>
-              {yullrMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          )}
-          <div className="flex items-center gap-2 mt-2">
-            <button
-              onClick={handleAdd}
-              disabled={!newText.trim()}
-              className="flex-1 bg-[#307FE2] text-white rounded-[8px] py-2.5 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-40"
-            >
-              <Check size={16} />
-              Add Note
-            </button>
-            <button
-              onClick={handleCancelAdd}
-              className="flex-1 bg-white border border-[rgba(0,0,0,0.12)] text-[#0a0a0a] rounded-[8px] py-2.5 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:bg-[#f3f3f5]"
-            >
-              <X size={16} />
-              Cancel
-            </button>
+      {/* Add note modal */}
+      {isAdding && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) handleCancelAdd(); }}>
+          <div className="bg-white rounded-[16px] w-full max-w-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Add Note</h2>
+              <button onClick={handleCancelAdd} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+            </div>
+            <textarea
+              ref={newTextareaRef}
+              value={newText}
+              onChange={e => setNewText(e.target.value)}
+              placeholder="Write your note here…"
+              rows={4}
+              className="w-full bg-[#f3f3f5] border border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-[#307FE2]/30 placeholder:text-[#9ca3af]"
+            />
+            {yullrMembers.length > 0 && (
+              <select
+                value={newAssigneeId}
+                onChange={e => setNewAssigneeId(e.target.value)}
+                className="w-full mt-2 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+              >
+                <option value="">Assign to… (optional)</option>
+                {yullrMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            )}
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                onClick={handleCancelAdd}
+                className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[8px] py-2.5 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:bg-[#e8e8ea]"
+              >
+                <X size={16} />
+                Cancel
+              </button>
+              <button
+                onClick={handleAdd}
+                disabled={!newText.trim()}
+                className="flex-1 bg-[#307FE2] text-white rounded-[8px] py-2.5 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-40"
+              >
+                <Check size={16} />
+                Add Note
+              </button>
+            </div>
           </div>
         </div>
-      ) : null}
+      )}
 
       {/* Notes list */}
       <div className="flex-1 overflow-y-auto max-h-[600px]">
-        {topicNotes.length === 0 && generalFeed.length === 0 && !isAdding ? (
+        {showArchived ? (
+          archivedNotes.length === 0 ? (
+            <div className="text-[13px] text-[#8992a0] text-center py-6">No archived notes.</div>
+          ) : (
+            <div className="space-y-2">
+              {archivedNotes.map(note => (
+                <ArchivedNoteRow key={note.id} note={note} me={me} onRestore={() => updateNote(note.id, { archived: false })} />
+              ))}
+            </div>
+          )
+        ) : topicNotes.length === 0 && generalFeed.length === 0 && !isAdding ? (
           <RollupEmptyState icon={StickyNote} message="No notes yet. Add a note to capture important details." />
         ) : (
           <div className="space-y-4">
@@ -654,7 +652,6 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
                     key={note.id}
                     note={note}
                     onUpdate={handleUpdate}
-                    onDelete={deleteNote}
                     forceExpanded={highlightedTopic === note.topic}
                   />
                 ))}
@@ -672,13 +669,37 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
                   </h3>
                 )}
                 {generalFeed.map(item => item.kind === 'own'
-                  ? <NoteCard key={item.note.id} note={item.note} onUpdate={handleUpdate} onDelete={deleteNote} />
+                  ? <NoteCard key={item.note.id} note={item.note} onUpdate={handleUpdate} />
                   : <RollupNoteRow key={item.entry.id} entry={item.entry} />
                 )}
               </div>
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Compact read-only row for a soft-archived note, with a Restore action for
+// whoever's allowed to archive it (creator or assignee).
+function ArchivedNoteRow({ note, me, onRestore }: { note: MountainNote; me: ReturnType<typeof useMyContact>; onRestore: () => void }) {
+  const canRestore = canCompleteActivity(note, me);
+  return (
+    <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2.5 opacity-70">
+      <p className="text-[13px] text-[#0a0a0a]">{note.text}</p>
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-[11px] text-[#8992a0]">
+          {note.authorName ? `${note.authorName} · ` : ''}{formatShortDate(note.updatedAt)}
+        </p>
+        <button
+          onClick={() => canRestore && onRestore()}
+          disabled={!canRestore}
+          title={canRestore ? 'Restore' : 'Only the creator or assignee can restore this'}
+          className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ArchiveRestore size={13} className="text-[#307fe2]" />
+        </button>
       </div>
     </div>
   );

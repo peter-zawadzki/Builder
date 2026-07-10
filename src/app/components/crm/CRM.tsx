@@ -635,6 +635,10 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
     updateContact(contact.id, { activities: (contact.activities || []).filter(a => a.id !== id) });
   };
 
+  const archiveActivity = (id: string, archived: boolean) => {
+    updateContact(contact.id, { activities: (contact.activities || []).map(a => a.id === id ? { ...a, archived } : a) });
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Sub-header */}
@@ -793,6 +797,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           onAdd={addActivity}
           onToggle={toggleAction}
           onDelete={deleteActivity}
+          onArchive={archiveActivity}
         />
       </div>
 
@@ -1437,6 +1442,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
                 onAdd={(entry) => updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] })}
                 onToggle={(id) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateOrganization(org.id, { activities: (org.activities || []).filter(a => a.id !== id) })}
+                onArchive={(id, archived) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
               />
             </div>
           )}
@@ -1690,6 +1696,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
                 onAdd={(entry) => updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] })}
                 onToggle={(id) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateTeam(team.id, { activities: (team.activities || []).filter(a => a.id !== id) })}
+                onArchive={(id, archived) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
               />
             </div>
           )}

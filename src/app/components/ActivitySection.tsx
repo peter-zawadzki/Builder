@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { X, Check, MessageSquare, ListTodo, Lock } from 'lucide-react';
+import { X, Check, MessageSquare, ListTodo, Lock, Archive, ArchiveRestore } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData, getYullrMembers, canCompleteActivity } from '../context/DataContext';
 import type { ContactActivity } from '../context/DataContext';
@@ -10,17 +10,19 @@ import { useMyContact } from '../hooks/useMyContact';
 // Mountains, Teams, Projects, and Inspections so assignment/tracking works the
 // same everywhere. Assignable only to a person in the YULLR organization —
 // not to a whole team. Every item is stamped with its creator; only the
-// creator or assignee can mark an action item complete.
+// creator or assignee can mark an action item complete, or archive a note.
 export function ActivitySection({
   activities,
   onAdd,
   onToggle,
   onDelete,
+  onArchive,
 }: {
   activities: ContactActivity[];
   onAdd: (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => void;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onArchive: (id: string, archived: boolean) => void;
 }) {
   const { contacts, organizations } = useData();
   const { user } = useUser();
@@ -30,11 +32,13 @@ export function ActivitySection({
   const [newText, setNewText] = useState('');
   const [newType, setNewType] = useState<'note' | 'action'>('note');
   const [assigneeId, setAssigneeId] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
   const sorted = [...activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const openActions = sorted.filter(a => a.type === 'action' && !a.completed);
   const doneActions = sorted.filter(a => a.type === 'action' && a.completed);
-  const notes = sorted.filter(a => a.type === 'note');
+  const notes = sorted.filter(a => a.type === 'note' && !a.archived);
+  const archivedNotes = sorted.filter(a => a.type === 'note' && a.archived);
 
   const add = () => {
     if (!newText.trim()) return;
@@ -123,26 +127,33 @@ export function ActivitySection({
       )}
 
       {/* Notes timeline */}
-      {notes.length > 0 && (
+      {(notes.length > 0 || archivedNotes.length > 0) && (
         <div>
-          <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2 flex items-center gap-1.5"><MessageSquare size={12} /> Notes</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide flex items-center gap-1.5"><MessageSquare size={12} /> Notes</h3>
+            {archivedNotes.length > 0 && (
+              <button onClick={() => setShowArchived(v => !v)} className="text-[11px] text-[#307fe2] active:opacity-70">
+                {showArchived ? 'Hide archived' : `Archived (${archivedNotes.length})`}
+              </button>
+            )}
+          </div>
           <div className="space-y-2">
-            {notes.map(n => {
-              const canDelete = canCompleteActivity(n, me);
+            {(showArchived ? archivedNotes : notes).map(n => {
+              const canArchive = canCompleteActivity(n, me);
               return (
-                <div key={n.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5">
+                <div key={n.id} className={`bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5 ${n.archived ? 'opacity-60' : ''}`}>
                   <p className="text-[13px] text-[#0a0a0a]">{n.text}</p>
                   <div className="flex items-center justify-between mt-1">
                     <p className="text-[11px] text-[#6a7282]">
                       {n.authorName ? `${n.authorName} · ` : ''}{new Date(n.createdAt).toLocaleString()}{assigneeLabel(n) ? ` · ${assigneeLabel(n)}` : ''}
                     </p>
                     <button
-                      onClick={() => canDelete && onDelete(n.id)}
-                      disabled={!canDelete}
-                      title={canDelete ? 'Delete' : 'Only the creator or assignee can delete this'}
+                      onClick={() => canArchive && onArchive(n.id, !n.archived)}
+                      disabled={!canArchive}
+                      title={canArchive ? (n.archived ? 'Restore' : 'Archive') : `Only the creator or assignee can ${n.archived ? 'restore' : 'archive'} this`}
                       className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                      <X size={12} className="text-[#6a7282]" />
+                      {n.archived ? <ArchiveRestore size={12} className="text-[#6a7282]" /> : <Archive size={12} className="text-[#6a7282]" />}
                     </button>
                   </div>
                 </div>

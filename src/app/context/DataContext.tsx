@@ -376,11 +376,14 @@ export interface ContactActivity {
   assigneeName?: string;
   authorContactId?: string;    // CRM contact id of whoever created it — who's allowed to mark it complete
   authorName?: string;
+  archived?: boolean;          // notes: soft-archived (hidden but recoverable) instead of deleted
 }
 
 // Only the person who created an item, or the person it's assigned to, may
-// mark it complete. Tasks can only be assigned to a YULLR person, not a team.
-export function canCompleteActivity(activity: ContactActivity, me: CRMContact | undefined): boolean {
+// mark it complete (action items) or archive it (notes). Tasks can only be
+// assigned to a YULLR person, not a team. Loosely typed so it also accepts
+// MountainNote, which has the same author/assignee shape.
+export function canCompleteActivity(activity: { authorContactId?: string; assigneeContactId?: string }, me: CRMContact | undefined): boolean {
   if (!me) return false;
   if (activity.authorContactId === me.id) return true;
   if (activity.assigneeContactId === me.id) return true;
@@ -536,6 +539,7 @@ export function getMountainRollupActivities(
 
   const seen = new Set<string>();
   return out
+    .filter(a => !a.archived)
     .filter(a => (seen.has(a.id) ? false : (seen.add(a.id), true)))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -567,6 +571,8 @@ export interface MountainNote {
   assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to
   assigneeName?: string;
   authorName?: string;         // who created the note
+  authorContactId?: string;    // who created the note (for archive/complete permission checks)
+  archived?: boolean;          // soft-archived notes are hidden but recoverable
 }
 
 export interface MiscItem {

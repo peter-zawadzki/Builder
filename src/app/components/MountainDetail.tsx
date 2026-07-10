@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import { useData, MOUNTAIN_PIPELINE_STAGES } from '../context/DataContext';
+import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
+import { useMyContact } from '../hooks/useMyContact';
 import { ContactDetail, ContactForm, ContactAssociationPills } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import { ProposalsPane } from './projects/ProposalsPane';
@@ -140,10 +141,13 @@ export function MountainDetail() {
   const [showCheckInOut, setShowCheckInOut] = useState(false);
   const [showAddAction, setShowAddAction] = useState(false);
   const [newActionText, setNewActionText] = useState('');
+  const [newActionAssigneeId, setNewActionAssigneeId] = useState('');
 
   // Updates feed for the Status pane.
   const { getToken } = useAuth();
   const { user } = useUser();
+  const me = useMyContact();
+  const yullrMembers = getYullrMembers(contacts, organizations);
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const [updates, setUpdates] = useState<Array<{ id: string; type: string; summary: string; actor: string; timestamp: string }>>([]);
   useEffect(() => {
@@ -197,8 +201,18 @@ export function MountainDetail() {
   ));
 
   // Add a general action item directly on the mountain (rolls up as origin 'general').
-  const addActionItem = (text: string) => {
-    const entry = { id: crypto.randomUUID(), text, type: 'action' as const, createdAt: new Date().toISOString() };
+  const addActionItem = (text: string, assigneeId?: string) => {
+    const assignee = assigneeId ? yullrMembers.find(m => m.id === assigneeId) : undefined;
+    const entry = {
+      id: crypto.randomUUID(),
+      text,
+      type: 'action' as const,
+      createdAt: new Date().toISOString(),
+      authorContactId: me?.id,
+      authorName,
+      assigneeContactId: assignee?.id,
+      assigneeName: assignee?.name,
+    };
     updateMountain(mountainId!, { activities: [...(mountain.activities || []), entry] });
   };
 
@@ -351,32 +365,12 @@ export function MountainDetail() {
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide">Next Actions</div>
                   <button
-                    onClick={() => setShowAddAction(v => !v)}
+                    onClick={() => setShowAddAction(true)}
                     className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
                   >
                     <Plus size={14} /> New
                   </button>
                 </div>
-                {showAddAction && (
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      value={newActionText}
-                      onChange={e => setNewActionText(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); setShowAddAction(false); } }}
-                      placeholder="Add an action item…"
-                      autoFocus
-                      className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
-                    />
-                    <button
-                      onClick={() => { if (newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); setShowAddAction(false); } }}
-                      disabled={!newActionText.trim()}
-                      className="bg-[#1D2930] text-white rounded-[8px] px-3 flex items-center justify-center active:opacity-80 disabled:opacity-40"
-                      aria-label="Save action item"
-                    >
-                      <Check size={15} />
-                    </button>
-                  </div>
-                )}
                 <MountainActivityRollup mountainId={mountainId!} />
               </div>
             </div>
@@ -782,6 +776,51 @@ export function MountainDetail() {
         />
       )}
       {showCheckInOut && <AssignInventoryModal mountainId={mountainId!} onClose={() => setShowCheckInOut(false)} />}
+      {showAddAction && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowAddAction(false); }}>
+          <div className="bg-white rounded-[16px] w-full max-w-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Add Action Item</h2>
+              <button onClick={() => setShowAddAction(false)} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+            </div>
+            <textarea
+              autoFocus
+              value={newActionText}
+              onChange={e => setNewActionText(e.target.value)}
+              placeholder="Add an action item…"
+              rows={3}
+              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[13px] text-[#0a0a0a] outline-none resize-none"
+            />
+            {yullrMembers.length > 0 && (
+              <select
+                value={newActionAssigneeId}
+                onChange={e => setNewActionAssigneeId(e.target.value)}
+                className="w-full mt-2 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+              >
+                <option value="">Assign to… (optional)</option>
+                {yullrMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            )}
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                onClick={() => { setShowAddAction(false); setNewActionText(''); setNewActionAssigneeId(''); }}
+                className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[8px] py-2.5 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:bg-[#e8e8ea]"
+              >
+                <X size={16} />
+                Cancel
+              </button>
+              <button
+                onClick={() => { if (newActionText.trim()) { addActionItem(newActionText.trim(), newActionAssigneeId || undefined); setNewActionText(''); setNewActionAssigneeId(''); setShowAddAction(false); } }}
+                disabled={!newActionText.trim()}
+                className="flex-1 bg-[#1D2930] text-white rounded-[8px] py-2.5 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-40"
+              >
+                <Check size={16} />
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showAddContact && (
         <ContactForm
           contact={null}

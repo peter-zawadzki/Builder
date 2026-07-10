@@ -381,6 +381,9 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const deleteActivity = (id: string) => {
     updateProject(project.id, { activities: (project.activities || []).filter(a => a.id !== id) });
   };
+  const archiveActivity = (id: string, archived: boolean) => {
+    updateProject(project.id, { activities: (project.activities || []).map(a => a.id === id ? { ...a, archived } : a) });
+  };
 
   const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
 
@@ -495,6 +498,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
                   onAdd={addActivity}
                   onToggle={toggleActivity}
                   onDelete={deleteActivity}
+                  onArchive={archiveActivity}
                 />
               </div>
             </>
