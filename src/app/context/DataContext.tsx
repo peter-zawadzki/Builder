@@ -544,6 +544,63 @@ export function getMountainRollupActivities(
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+// Everything assigned to a specific person, across every collection that can
+// carry a ContactActivity/MountainNote — for the notification bell. Only
+// open (incomplete) action items and non-archived notes count; a note has no
+// "completed" state, so any assigned-to-me note counts until archived.
+export interface MyNotificationEntry {
+  id: string;
+  text: string;
+  type: 'note' | 'action';
+  createdAt: string;
+  origin: 'mountain' | 'contact' | 'organization' | 'team' | 'project' | 'inspection';
+  originLabel?: string;
+  mountainId?: string;
+  organizationId?: string;
+  teamId?: string;
+  locationId?: string;
+}
+
+export function getMyNotifications(
+  contactId: string | undefined,
+  data: {
+    mountains: Mountain[];
+    contacts: CRMContact[];
+    organizations: CRMOrganization[];
+    teams: CRMTeam[];
+    projects: Project[];
+    locations: Location[];
+    notes: MountainNote[];
+  },
+): MyNotificationEntry[] {
+  if (!contactId) return [];
+  const { mountains, contacts, organizations, teams, projects, locations, notes } = data;
+  const relevant = (a: { type: 'note' | 'action'; completed?: boolean; archived?: boolean; assigneeContactId?: string }) => {
+    if (a.assigneeContactId !== contactId) return false;
+    return a.type === 'action' ? !a.completed : !a.archived;
+  };
+
+  const out: MyNotificationEntry[] = [];
+  const push = (a: ContactActivity, extra: Omit<MyNotificationEntry, 'id' | 'text' | 'type' | 'createdAt'>) => {
+    out.push({ id: a.id, text: a.text, type: a.type, createdAt: a.createdAt, ...extra });
+  };
+
+  mountains.forEach(m => (m.activities || []).filter(relevant).forEach(a => push(a, { origin: 'mountain', originLabel: m.name, mountainId: m.id })));
+  contacts.forEach(c => (c.activities || []).filter(relevant).forEach(a => push(a, { origin: 'contact', originLabel: c.name, mountainId: c.mountainId })));
+  organizations.forEach(o => (o.activities || []).filter(relevant).forEach(a => push(a, { origin: 'organization', originLabel: o.name, organizationId: o.id })));
+  teams.forEach(t => (t.activities || []).filter(relevant).forEach(a => push(a, { origin: 'team', originLabel: t.name, teamId: t.id })));
+  projects.forEach(p => (p.activities || []).filter(relevant).forEach(a => push(a, { origin: 'project', originLabel: p.name, mountainId: p.mountainId, teamId: p.teamId })));
+  locations.forEach(loc => (loc.inspections || []).forEach(insp =>
+    (insp.activities || []).filter(relevant).forEach(a => push(a, { origin: 'inspection', originLabel: loc.name, mountainId: loc.mountainId, locationId: loc.id }))
+  ));
+  notes.filter(relevant).forEach(n => out.push({
+    id: n.id, text: n.text, type: 'note', createdAt: n.createdAt,
+    origin: 'mountain', originLabel: mountains.find(m => m.id === n.mountainId)?.name, mountainId: n.mountainId,
+  }));
+
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 export type NoteTopic = 'Demo' | 'Site Visit' | 'Proposal' | 'Install' | 'Training' | 'Updates' | 'Follow-up';
 
 export interface NoteEntry {
