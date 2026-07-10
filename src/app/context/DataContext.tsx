@@ -517,7 +517,9 @@ export function getMountainRollupActivities(
     });
   });
 
-  projects.filter(p => p.mountainId === mountainId).forEach(p => {
+  // Includes both the mountain's own projects and any Team project rolled up
+  // to it via CRMTeam.mountainIds (same rule as the Projects pane itself).
+  getMountainProjects(mountainId, { projects, teams }).forEach(p => {
     (p.activities || []).forEach(a => out.push({ ...a, origin: 'project', originLabel: p.name, originId: p.id }));
   });
 

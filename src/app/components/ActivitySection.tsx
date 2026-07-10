@@ -107,7 +107,14 @@ export function ActivitySection({
                       {a.authorName ? `${a.authorName} · ` : ''}{new Date(a.createdAt).toLocaleDateString()}{assigneeLabel(a) ? ` · ${assigneeLabel(a)}` : ''}
                     </p>
                   </div>
-                  <button onClick={() => onDelete(a.id)} className="p-1 active:opacity-70"><X size={12} className="text-[#6a7282]" /></button>
+                  <button
+                    onClick={() => canComplete && onDelete(a.id)}
+                    disabled={!canComplete}
+                    title={canComplete ? 'Delete' : 'Only the creator or assignee can delete this'}
+                    className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <X size={12} className="text-[#6a7282]" />
+                  </button>
                 </div>
               );
             })}
@@ -120,17 +127,27 @@ export function ActivitySection({
         <div>
           <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2 flex items-center gap-1.5"><MessageSquare size={12} /> Notes</h3>
           <div className="space-y-2">
-            {notes.map(n => (
-              <div key={n.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5">
-                <p className="text-[13px] text-[#0a0a0a]">{n.text}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-[11px] text-[#6a7282]">
-                    {n.authorName ? `${n.authorName} · ` : ''}{new Date(n.createdAt).toLocaleString()}{assigneeLabel(n) ? ` · ${assigneeLabel(n)}` : ''}
-                  </p>
-                  <button onClick={() => onDelete(n.id)} className="p-1 active:opacity-70"><X size={12} className="text-[#6a7282]" /></button>
+            {notes.map(n => {
+              const canDelete = canCompleteActivity(n, me);
+              return (
+                <div key={n.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5">
+                  <p className="text-[13px] text-[#0a0a0a]">{n.text}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-[11px] text-[#6a7282]">
+                      {n.authorName ? `${n.authorName} · ` : ''}{new Date(n.createdAt).toLocaleString()}{assigneeLabel(n) ? ` · ${assigneeLabel(n)}` : ''}
+                    </p>
+                    <button
+                      onClick={() => canDelete && onDelete(n.id)}
+                      disabled={!canDelete}
+                      title={canDelete ? 'Delete' : 'Only the creator or assignee can delete this'}
+                      className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <X size={12} className="text-[#6a7282]" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
