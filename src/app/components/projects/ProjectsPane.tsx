@@ -62,8 +62,8 @@ function StageStatusDot({ status }: { status: StageStatus }) {
 
 // Each stage cycles independently through 4 states (not started/blocked/in
 // progress/done) — a stage can be skipped without blocking later ones.
-// Equal-width grid columns keep the row evenly spaced regardless of how many
-// stages a project type has (4 for Followup Training vs 6 for Install).
+// Stages wrap across two rows (instead of cramming every stage into one
+// row) so each stage's dot, label, and optional date have room to breathe.
 // Status can only be changed here when onToggle+dates editing are provided
 // (i.e. inside the project detail modal); everywhere else this renders
 // read-only, per the rule that status is only editable from the modal.
@@ -78,52 +78,45 @@ export function StageChecklist({
   readOnly?: boolean;
   lockedTitle?: string;
 }) {
-  const gridStyle = { gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` };
-  const hasAnyDate = onDateChange || stages.some(s => stageDates?.[s]);
+  const cols = Math.max(1, Math.ceil(stages.length / 2));
+  const gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` };
+  const hasAnyDate = !!onDateChange || stages.some(s => stageDates?.[s]);
+
   return (
-    <div className="space-y-1.5">
-      {/* Row 1: status dot + label per stage */}
-      <div className="grid gap-1" style={gridStyle}>
-        {stages.map(s => {
-          const status = stageStatus[s] || 'not_started';
-          const label = <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>;
-          if (readOnly || !onToggle) {
-            return (
-              <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
-                <StageStatusDot status={status} />{label}
-              </div>
-            );
-          }
+    <div className="grid gap-x-2 gap-y-2.5" style={gridStyle}>
+      {stages.map(s => {
+        const status = stageStatus[s] || 'not_started';
+        const date = stageDates?.[s];
+        const label = <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>;
+        const dateNode = !hasAnyDate ? null : onDateChange ? (
+          <input
+            type="date"
+            value={date || ''}
+            onChange={e => onDateChange(s, e.target.value)}
+            className="w-full text-[8px] text-[#8992a0] bg-transparent outline-none text-center"
+          />
+        ) : (
+          <span className="text-[8px] text-[#8992a0] text-center leading-tight">
+            {date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ' '}
+          </span>
+        );
+
+        if (readOnly || !onToggle) {
           return (
-            <button key={s} type="button" onClick={e => { e.stopPropagation(); onToggle(s); }} className="flex flex-col items-center gap-1 py-1 active:opacity-70">
+            <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
+              <StageStatusDot status={status} />{label}{dateNode}
+            </div>
+          );
+        }
+        return (
+          <div key={s} className="flex flex-col items-center gap-1 py-1">
+            <button type="button" onClick={e => { e.stopPropagation(); onToggle(s); }} className="flex flex-col items-center gap-1 active:opacity-70">
               <StageStatusDot status={status} />{label}
             </button>
-          );
-        })}
-      </div>
-
-      {/* Row 2: optional date per stage — kept as its own row so it doesn't
-          crowd the status row above. */}
-      {hasAnyDate && (
-        <div className="grid gap-1" style={gridStyle}>
-          {stages.map(s => {
-            const date = stageDates?.[s];
-            return onDateChange ? (
-              <input
-                key={s}
-                type="date"
-                value={date || ''}
-                onChange={e => onDateChange(s, e.target.value)}
-                className="w-full text-[8px] text-[#8992a0] bg-transparent outline-none text-center"
-              />
-            ) : (
-              <span key={s} className="text-[8px] text-[#8992a0] text-center leading-tight">
-                {date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
-              </span>
-            );
-          })}
-        </div>
-      )}
+            {dateNode}
+          </div>
+        );
+      })}
     </div>
   );
 }
