@@ -7,6 +7,7 @@ export const ORIGIN_LABEL: Record<MountainActivityEntry['origin'], string> = {
   general: 'General',
   person: 'Person',
   team: 'Team',
+  organization: 'Organization',
   project: 'Project',
   inspection: 'Inspection',
 };
@@ -14,6 +15,7 @@ export const ORIGIN_COLOR: Record<MountainActivityEntry['origin'], string> = {
   general: 'bg-[#f3f3f5] text-[#6a7282]',
   person: 'bg-[#eef3fb] text-[#307fe2]',
   team: 'bg-[#f3edfb] text-[#7c3aed]',
+  organization: 'bg-[#f3edfb] text-[#7c3aed]',
   project: 'bg-[#fff3e0] text-[#bf360c]',
   inspection: 'bg-[#eaf5ef] text-[#3f7a5c]',
 };
@@ -35,10 +37,10 @@ export function RollupEmptyState({ icon: Icon, message }: { icon: React.Componen
 // assigned to a person/team associated with it. Items are only ever created
 // at their source; this view exists to see and complete them.
 export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
-  const { mountains, contacts, teams, projects, locations, updateMountain, updateContact, updateTeam, updateProject, updateLocation } = useData();
+  const { mountains, contacts, teams, organizations, projects, locations, updateMountain, updateContact, updateTeam, updateOrganization, updateProject, updateLocation } = useData();
   const me = useMyContact();
 
-  const items = getMountainRollupActivities(mountainId, { mountains, contacts, teams, projects, locations }).filter(a => a.type === 'action');
+  const items = getMountainRollupActivities(mountainId, { mountains, contacts, teams, organizations, projects, locations }).filter(a => a.type === 'action');
 
   const applyUpdate = (entry: MountainActivityEntry, updates: Partial<ContactActivity>) => {
     const apply = (list: ContactActivity[]) => list.map(a => a.id === entry.id ? { ...a, ...updates } : a);
@@ -56,6 +58,11 @@ export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
       case 'team': {
         const t = teams.find(tt => tt.id === entry.originId);
         if (t) updateTeam(t.id, { activities: apply(t.activities || []) });
+        break;
+      }
+      case 'organization': {
+        const o = organizations.find(oo => oo.id === entry.originId);
+        if (o) updateOrganization(o.id, { activities: apply(o.activities || []) });
         break;
       }
       case 'project': {

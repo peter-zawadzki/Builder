@@ -538,7 +538,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
   // assigned to a person associated with this mountain. Created at their
   // source, not here. Merged into the same flat feed as general notes (no
   // separate section), matching how Next Actions merges everything together.
-  const rollupNotes = getMountainRollupActivities(mountainId, { mountains, contacts, teams, projects, locations }).filter(a => a.type === 'note');
+  const rollupNotes = getMountainRollupActivities(mountainId, { mountains, contacts, teams, organizations, projects, locations }).filter(a => a.type === 'note');
   const generalFeed = [
     ...generalNotes.map(note => ({ kind: 'own' as const, note, date: new Date(note.updatedAt).getTime() })),
     ...rollupNotes.map(entry => ({ kind: 'rollup' as const, entry, date: new Date(entry.createdAt).getTime() })),

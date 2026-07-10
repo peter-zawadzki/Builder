@@ -1,17 +1,36 @@
-import { useState } from "react";
-import { TrendingUp, Activity as ActivityIcon, Bell } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router";
+import { TrendingUp, Activity as ActivityIcon, Bell, ListTodo, MessageSquare, ChevronRight } from "lucide-react";
 import { FollowUps } from "./crm/CRM";
 import { ActiveProjects } from "./projects/ActiveProjects";
 import { RecentActivity } from "./RecentActivity";
 import { useMyContact, useCanSeeAll } from "../hooks/useMyContact";
+import { useData, getMyNotifications, getAllOpenActivities } from "../context/DataContext";
+import type { MyNotificationEntry } from "../context/DataContext";
 
 // The landing page after login: one master My/All toggle scopes every section
 // (active projects, follow-ups, recent activity).
 export function HomeDashboard() {
   const me = useMyContact();
+  const navigate = useNavigate();
   const canSeeAll = useCanSeeAll(); // false for Ambassadors
   const [scope, setScope] = useState<'mine' | 'all'>(me ? 'mine' : 'all');
   const effective: 'mine' | 'all' = !me ? 'all' : canSeeAll ? scope : 'mine';
+
+  const { mountains, contacts, organizations, teams, projects, locations, notes } = useData();
+  const activityData = { mountains, contacts, organizations, teams, projects, locations, notes };
+  const activityItems = useMemo(
+    () => effective === 'mine' ? getMyNotifications(me?.id, activityData) : getAllOpenActivities(activityData),
+    [effective, me?.id, mountains, contacts, organizations, teams, projects, locations, notes],
+  );
+
+  const goToActivity = (n: MyNotificationEntry) => {
+    if (n.origin === 'organization' && n.organizationId) navigate(`/crm?tab=organizations&open=${n.organizationId}`);
+    else if (n.origin === 'team' && n.teamId) navigate(`/crm?tab=teams&open=${n.teamId}`);
+    else if (n.origin === 'inspection' && n.mountainId && n.locationId) navigate(`/mountains/${n.mountainId}/locations/${n.locationId}`);
+    else if (n.mountainId) navigate(`/mountains/${n.mountainId}`);
+    else if (n.origin === 'contact') navigate('/crm?tab=contacts');
+  };
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -43,6 +62,33 @@ export function HomeDashboard() {
             <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Active projects</h2>
           </div>
           <ActiveProjects scope={effective} />
+        </section>
+
+        <section>
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <ListTodo size={16} className="text-[#6a7282]" />
+            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Notes &amp; action items</h2>
+          </div>
+          {activityItems.length === 0 ? (
+            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
+              {effective === 'mine' ? 'Nothing assigned to you right now.' : 'No open notes or action items.'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {activityItems.map(n => (
+                <button key={`${n.origin}:${n.id}`} onClick={() => goToActivity(n)} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:bg-[#f9fafb]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#f3f3f5] text-[#6a7282] flex items-center gap-1">
+                      {n.type === 'action' ? <ListTodo size={10} /> : <MessageSquare size={10} />}
+                      {n.originLabel || n.origin}
+                    </span>
+                    <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
+                  </div>
+                  <p className="text-[13px] text-[#0a0a0a] mt-1">{n.text}</p>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         <section>

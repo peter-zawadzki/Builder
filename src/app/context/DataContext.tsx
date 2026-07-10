@@ -494,7 +494,7 @@ export function getYullrMembers(contacts: CRMContact[], organizations: CRMOrgani
 // anything assigned to a person or team associated with it (an affiliate, or
 // a team linked via mountainIds) no matter where that item actually lives.
 
-export type ActivityOrigin = 'general' | 'person' | 'team' | 'project' | 'inspection';
+export type ActivityOrigin = 'general' | 'person' | 'team' | 'organization' | 'project' | 'inspection';
 
 export interface MountainActivityEntry extends ContactActivity {
   origin: ActivityOrigin;
@@ -514,14 +514,15 @@ export function getMountainProjects(mountainId: string, data: { projects: Projec
 
 export function getMountainRollupActivities(
   mountainId: string,
-  data: { mountains: Mountain[]; contacts: CRMContact[]; teams: CRMTeam[]; projects: Project[]; locations: Location[] },
+  data: { mountains: Mountain[]; contacts: CRMContact[]; teams: CRMTeam[]; organizations?: CRMOrganization[]; projects: Project[]; locations: Location[] },
 ): MountainActivityEntry[] {
-  const { mountains, contacts, teams, projects, locations } = data;
+  const { mountains, contacts, teams, projects, locations, organizations = [] } = data;
   const mountain = mountains.find(m => m.id === mountainId);
   if (!mountain) return [];
 
   const affiliateIds = new Set(mountain.affiliateContactIds || []);
   const linkedTeamIds = new Set(teams.filter(t => t.mountainIds.includes(mountainId)).map(t => t.id));
+  const linkedOrgIds = new Set(organizations.filter(o => o.mountainIds.includes(mountainId)).map(o => o.id));
 
   // An item lives elsewhere but is relevant here because its assignee (a
   // person — tasks can only be assigned to people, not teams) is tied to
@@ -545,6 +546,14 @@ export function getMountainRollupActivities(
     (t.activities || []).forEach(a => {
       if (linkedTeamIds.has(t.id) || assignedHere(a)) {
         out.push({ ...a, origin: 'team', originLabel: t.name, originId: t.id });
+      }
+    });
+  });
+
+  organizations.forEach(o => {
+    (o.activities || []).forEach(a => {
+      if (linkedOrgIds.has(o.id) || assignedHere(a)) {
+        out.push({ ...a, origin: 'organization', originLabel: o.name, originId: o.id });
       }
     });
   });
@@ -585,44 +594,55 @@ export interface MyNotificationEntry {
   locationId?: string;
 }
 
-export function getMyNotifications(
-  contactId: string | undefined,
-  data: {
-    mountains: Mountain[];
-    contacts: CRMContact[];
-    organizations: CRMOrganization[];
-    teams: CRMTeam[];
-    projects: Project[];
-    locations: Location[];
-    notes: MountainNote[];
-  },
-): MyNotificationEntry[] {
-  if (!contactId) return [];
-  const { mountains, contacts, organizations, teams, projects, locations, notes } = data;
-  const relevant = (a: { type: 'note' | 'action'; completed?: boolean; archived?: boolean; assigneeContactId?: string }) => {
-    if (a.assigneeContactId !== contactId) return false;
-    return a.type === 'action' ? !a.completed : !a.archived;
-  };
+interface ActivitySweepData {
+  mountains: Mountain[];
+  contacts: CRMContact[];
+  organizations: CRMOrganization[];
+  teams: CRMTeam[];
+  projects: Project[];
+  locations: Location[];
+  notes: MountainNote[];
+}
 
+// Sweeps every collection that can carry a ContactActivity/MountainNote —
+// shared by getMyNotifications (assignee-scoped, for the bell) and
+// getAllOpenActivities (unscoped, for the homepage-wide feed) so both stay
+// in sync with every place a note/action item can live.
+function sweepActivities(data: ActivitySweepData, isRelevant: (a: { type: 'note' | 'action'; completed?: boolean; archived?: boolean; assigneeContactId?: string }) => boolean): MyNotificationEntry[] {
+  const { mountains, contacts, organizations, teams, projects, locations, notes } = data;
   const out: MyNotificationEntry[] = [];
   const push = (a: ContactActivity, extra: Omit<MyNotificationEntry, 'id' | 'text' | 'type' | 'createdAt'>) => {
     out.push({ id: a.id, text: a.text, type: a.type, createdAt: a.createdAt, ...extra });
   };
 
-  mountains.forEach(m => (m.activities || []).filter(relevant).forEach(a => push(a, { origin: 'mountain', originLabel: m.name, mountainId: m.id })));
-  contacts.forEach(c => (c.activities || []).filter(relevant).forEach(a => push(a, { origin: 'contact', originLabel: c.name, mountainId: c.mountainId })));
-  organizations.forEach(o => (o.activities || []).filter(relevant).forEach(a => push(a, { origin: 'organization', originLabel: o.name, organizationId: o.id })));
-  teams.forEach(t => (t.activities || []).filter(relevant).forEach(a => push(a, { origin: 'team', originLabel: t.name, teamId: t.id })));
-  projects.forEach(p => (p.activities || []).filter(relevant).forEach(a => push(a, { origin: 'project', originLabel: p.name, mountainId: p.mountainId, teamId: p.teamId })));
+  mountains.forEach(m => (m.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'mountain', originLabel: m.name, mountainId: m.id })));
+  contacts.forEach(c => (c.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'contact', originLabel: c.name, mountainId: c.mountainId })));
+  organizations.forEach(o => (o.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'organization', originLabel: o.name, organizationId: o.id })));
+  teams.forEach(t => (t.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'team', originLabel: t.name, teamId: t.id })));
+  projects.forEach(p => (p.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'project', originLabel: p.name, mountainId: p.mountainId, teamId: p.teamId })));
   locations.forEach(loc => (loc.inspections || []).forEach(insp =>
-    (insp.activities || []).filter(relevant).forEach(a => push(a, { origin: 'inspection', originLabel: loc.name, mountainId: loc.mountainId, locationId: loc.id }))
+    (insp.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'inspection', originLabel: loc.name, mountainId: loc.mountainId, locationId: loc.id }))
   ));
-  notes.filter(relevant).forEach(n => out.push({
+  notes.filter(isRelevant).forEach(n => out.push({
     id: n.id, text: n.text, type: 'note', createdAt: n.createdAt,
     origin: 'mountain', originLabel: mountains.find(m => m.id === n.mountainId)?.name, mountainId: n.mountainId,
   }));
 
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getMyNotifications(contactId: string | undefined, data: ActivitySweepData): MyNotificationEntry[] {
+  if (!contactId) return [];
+  return sweepActivities(data, a => {
+    if (a.assigneeContactId !== contactId) return false;
+    return a.type === 'action' ? !a.completed : !a.archived;
+  });
+}
+
+// Every open action item and non-archived note across the whole app — the
+// homepage-wide counterpart to a single mountain's rollup.
+export function getAllOpenActivities(data: ActivitySweepData): MyNotificationEntry[] {
+  return sweepActivities(data, a => a.type === 'action' ? !a.completed : !a.archived);
 }
 
 export type NoteTopic = 'Demo' | 'Site Visit' | 'Proposal' | 'Install' | 'Training' | 'Updates' | 'Follow-up';
