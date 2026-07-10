@@ -408,9 +408,14 @@ export function MountainsList() {
                         </div>
                       )}
                     </div>
-                    <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1 line-clamp-2">
-                      {mountain.address}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] line-clamp-2">
+                        {mountain.address}
+                      </p>
+                      {mountain.region && (
+                        <span className="shrink-0 text-[10px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{mountain.region}</span>
+                      )}
+                    </div>
                     <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-2">
                       {mountain.phone}
                     </p>

@@ -115,6 +115,17 @@ export function TeamPage() {
     }
   };
 
+  const handleRoleChange = async (mem: any, newRole: string) => {
+    if (newRole === mem.role) return;
+    try {
+      await mem.update({ role: newRole });
+      toast.success("Role updated");
+      await memberships?.revalidate?.();
+    } catch (err: any) {
+      toast.error(err?.errors?.[0]?.message || "Could not update role");
+    }
+  };
+
   const pendingInvites = (invitations?.data ?? []).filter((i: any) => i.status === "pending");
 
   return (
@@ -199,7 +210,18 @@ export function TeamPage() {
                     </p>
                     <p className="text-[#6a7282] text-[12px] truncate">{u.identifier}</p>
                   </div>
-                  <RoleBadge role={mem.role} />
+                  {isAdmin && !isSelf ? (
+                    <select
+                      value={mem.role}
+                      onChange={(e) => handleRoleChange(mem, e.target.value)}
+                      className="text-[12px] bg-[#f3f3f5] rounded-full px-2.5 py-1 outline-none font-['Inter:Medium',sans-serif]"
+                    >
+                      <option value="org:member">Member</option>
+                      <option value="org:admin">Admin</option>
+                    </select>
+                  ) : (
+                    <RoleBadge role={mem.role} />
+                  )}
                   {isAdmin && !isSelf && (
                     <button
                       onClick={() => handleRemove(mem)}

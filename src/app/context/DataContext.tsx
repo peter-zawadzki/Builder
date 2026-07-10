@@ -300,7 +300,7 @@ export const MOUNTAIN_PIPELINE_STAGES: MountainPipelineStage[] = [
 export type ProjectType = 'Install' | 'Repair' | 'Upgrade' | 'Initial Onboarding' | 'Followup Training' | 'Special Event';
 
 export type ProjectStage =
-  | 'Site Inspection' | 'Proposal Sent' | 'Proposal Signed' | 'Install Scheduled' | 'Install In-Progress' | 'Commissioning'
+  | 'Inspection' | 'Proposal Sent' | 'Proposal Signed' | 'Install Scheduled' | 'Install In-Progress' | 'Commissioning'
   | 'Proposal' | 'Contract' | 'Install'
   | 'Prospect' | 'Kickoff Scheduled' | 'Training Scheduled' | 'Training In-Progress'
   | 'Training Requested'
@@ -317,8 +317,8 @@ export function nextStageStatus(current: StageStatus | undefined): StageStatus {
   return STAGE_STATUS_ORDER[(idx + 1) % STAGE_STATUS_ORDER.length];
 }
 
-const INSTALL_UPGRADE_STAGES: ProjectStage[] = ['Site Inspection', 'Proposal', 'Contract', 'Install', 'Commissioning', 'Completed'];
-const REPAIR_STAGES: ProjectStage[] = ['Site Inspection', 'Proposal Sent', 'Proposal Signed', 'Install Scheduled', 'Install In-Progress', 'Commissioning', 'Completed'];
+const INSTALL_UPGRADE_STAGES: ProjectStage[] = ['Inspection', 'Proposal', 'Contract', 'Install', 'Commissioning', 'Completed'];
+const REPAIR_STAGES: ProjectStage[] = ['Inspection', 'Proposal Sent', 'Proposal Signed', 'Install Scheduled', 'Install In-Progress', 'Commissioning', 'Completed'];
 
 export const PROJECT_STAGES_BY_TYPE: Record<ProjectType, ProjectStage[]> = {
   Install: INSTALL_UPGRADE_STAGES,
@@ -455,9 +455,12 @@ export interface CRMOrganization {
 // A Team — a distinct CRM entity from Organizations. Behaves the same
 // (contacts, notes/action items, archive/delete) but tracks its own projects
 // (Initial Onboarding / Followup Training / Special Event) instead of mountains.
+export type TeamType = 'Middle School' | 'Private' | 'Mountain' | 'High School' | 'College' | 'Public' | 'Academy';
+
 export interface CRMTeam {
   id: string;
   name: string;
+  type?: TeamType;
   mountainIds: string[];   // mountains this team is associated with
   website?: string;
   address?: string;

@@ -10,7 +10,7 @@ import {
 import { useData } from '../../context/DataContext';
 import type {
   CRMContact, CRMOrganization, CRMTeam, ContactType, ContactTag, ContactActivity,
-  OrgType, MountainPipelineStage, StallReason, MountainNote, Mountain as MountainRecord,
+  OrgType, MountainPipelineStage, StallReason, MountainNote, Mountain as MountainRecord, TeamType,
 } from '../../context/DataContext';
 import { MOUNTAIN_PIPELINE_STAGES } from '../../context/DataContext';
 import { toast } from 'sonner';
@@ -39,6 +39,7 @@ const STAGE_COLORS: Record<MountainPipelineStage, string> = {
 const CONTACT_TYPES: ContactType[] = ['Staff', 'Partner', 'Vendor', 'Investor', 'Advisor', 'Coach', 'Team', 'Ambassador', 'General'];
 const CONTACT_TAGS: ContactTag[] = ['Decision Maker', 'Technical', 'Champion', 'Billing', 'Legal'];
 const ORG_TYPES: OrgType[] = ['Mountain Group', 'Partner', 'Vendor', 'Investor Group', 'Advisory', 'Corporate Group'];
+const TEAM_TYPES: TeamType[] = ['Middle School', 'Private', 'Mountain', 'High School', 'College', 'Public', 'Academy'];
 const STALL_REASONS: StallReason[] = ['No response', 'Waiting on legal', 'Budget hold', 'Timing — offseason', 'Other'];
 
 type CRMTab = 'dashboard' | 'pipeline' | 'contacts' | 'organizations' | 'teams' | 'activity' | 'followups' | 'mountains';
@@ -1523,6 +1524,7 @@ function Teams({ openId }: { openId?: string } = {}) {
               <button key={team.id} onClick={() => { setEditTarget(team); setShowForm(true); }} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:opacity-70">
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{team.name}</p>
+                  {team.type && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full shrink-0">{team.type}</span>}
                   {team.archived
                     ? <span onClick={e => { e.stopPropagation(); updateTeam(team.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0">Restore</span>
                     : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
@@ -1549,6 +1551,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
   const [showAddContact, setShowAddContact] = useState(false);
   const [form, setForm] = useState({
     name: team?.name || '',
+    type: team?.type,
     mountainIds: team?.mountainIds || [] as string[],
     website: team?.website || '',
     address: team?.address || '',
@@ -1615,6 +1618,13 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
               )}
               <LogoUploader value={form.logo} onChange={v => { set('logo', v); if (team) editField({ logo: v }); }} />
               <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
+                <select value={form.type || ''} onChange={e => { const v = e.target.value as TeamType | ''; set('type', v || undefined); editField({ type: v || undefined }); }} className={`${inputCls} appearance-none`}>
+                  <option value="">— None —</option>
+                  {TEAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Associated Mountains</label>
                 <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-32 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
                   {mountains.map(m => (
@@ -1650,6 +1660,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
             </>
           ) : (
             <>
+              {team.type && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full inline-block">{team.type}</span>}
               {(team.website || team.address || team.phone || team.email) && (
                 <div className="space-y-1.5">
                   {team.website && <div className="text-[13px] text-[#307fe2]">{team.website}</div>}
