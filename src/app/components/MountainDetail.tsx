@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData, MOUNTAIN_PIPELINE_STAGES } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
-import { ContactDetail, DealDetailsModal, ContactForm } from './crm/CRM';
+import { ContactDetail, ContactForm } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import { ProposalsPane } from './projects/ProposalsPane';
 import { AssignInventoryModal } from './CheckInOutModal';
@@ -11,7 +11,7 @@ import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
-  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Maximize2, Pencil,
+  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Maximize2, Pencil, Check,
 } from 'lucide-react';
 
 type ContactSlot =
@@ -137,8 +137,9 @@ export function MountainDetail() {
   const [contactSlot, setContactSlot] = useState<ContactSlot | null>(null);
   const [crmContact, setCrmContact] = useState<CRMContact | null>(null);
   const [showAddContact, setShowAddContact] = useState(false);
-  const [showNextAction, setShowNextAction] = useState(false);
   const [showCheckInOut, setShowCheckInOut] = useState(false);
+  const [showAddAction, setShowAddAction] = useState(false);
+  const [newActionText, setNewActionText] = useState('');
 
   // Updates feed for the Status pane.
   const { getToken } = useAuth();
@@ -198,10 +199,11 @@ export function MountainDetail() {
       .filter((t): t is string => !!t && t.trim().length > 0)
   ));
 
-  // Affiliates: YULLR people who sell/represent this mountain. Assigned only
-  // when creating/editing the mountain — read-only here.
-  const affiliateIds = mountain.affiliateContactIds || [];
-  const affiliates = affiliateIds.map(id => contacts.find(c => c.id === id)).filter(Boolean) as CRMContact[];
+  // Add a general action item directly on the mountain (rolls up as origin 'general').
+  const addActionItem = (text: string) => {
+    const entry = { id: crypto.randomUUID(), text, type: 'action' as const, createdAt: new Date().toISOString() };
+    updateMountain(mountainId!, { activities: [...(mountain.activities || []), entry] });
+  };
 
   // Inventory class subtotals + inspection reconciliation.
   const mountainAssetsAll = getAssetsByMountainId(mountainId!);
@@ -281,6 +283,18 @@ export function MountainDetail() {
                 <Map size={13} />
                 Map
               </button>
+              <div className="relative flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full pl-3 pr-2 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">
+                <span>{mountain.pipelineStage || 'Stage'}</span>
+                <select
+                  value={mountain.pipelineStage || ''}
+                  onChange={e => updateMountain(mountainId!, { pipelineStage: (e.target.value || undefined) as MountainPipelineStage | undefined })}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  aria-label="Pipeline stage"
+                >
+                  <option value="">Select stage…</option>
+                  {MOUNTAIN_PIPELINE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
             </div>
           </div>
           {mountain.mountainLogo && (
@@ -342,58 +356,37 @@ export function MountainDetail() {
           >
             <div className="space-y-2.5">
               <div>
-                <label className="block text-[12px] text-[#6a7282] mb-1">Pipeline Stage</label>
-                <select
-                  value={mountain.pipelineStage || ''}
-                  onChange={e => updateMountain(mountainId!, { pipelineStage: (e.target.value || undefined) as MountainPipelineStage | undefined })}
-                  className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] outline-none"
-                >
-                  <option value="">Select stage…</option>
-                  {MOUNTAIN_PIPELINE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-
-              <div className="pt-1">
-                <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-1.5">Next Actions</div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide">Next Actions</div>
+                  <button
+                    onClick={() => setShowAddAction(v => !v)}
+                    className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+                  >
+                    <Plus size={14} /> New
+                  </button>
+                </div>
+                {showAddAction && (
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      value={newActionText}
+                      onChange={e => setNewActionText(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); setShowAddAction(false); } }}
+                      placeholder="Add an action item…"
+                      autoFocus
+                      className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+                    />
+                    <button
+                      onClick={() => { if (newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); setShowAddAction(false); } }}
+                      disabled={!newActionText.trim()}
+                      className="bg-[#1D2930] text-white rounded-[8px] px-3 flex items-center justify-center active:opacity-80 disabled:opacity-40"
+                      aria-label="Save action item"
+                    >
+                      <Check size={15} />
+                    </button>
+                  </div>
+                )}
                 <MountainActivityRollup mountainId={mountainId!} type="action" />
               </div>
-            </div>
-            {mountain.phone && (
-              <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
-                <div className="flex items-center gap-2 text-[13px] text-[#0a0a0a]"><Phone size={13} className="text-[#6a7282]" /> {mountain.phone}</div>
-              </div>
-            )}
-
-            {/* Next action */}
-            <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide">Next action</div>
-                <button onClick={() => setShowNextAction(true)} className="text-[12px] text-[#307fe2] active:opacity-60">{mountain.nextAction ? 'Edit' : 'Set'}</button>
-              </div>
-              {mountain.nextAction ? (
-                <div className="text-[13px]">
-                  <div className="text-[#0a0a0a]">{mountain.nextAction}</div>
-                  <div className="text-[#8992a0] text-[12px]">
-                    {mountain.nextActionDate ? `Due ${mountain.nextActionDate}` : 'No date'}{mountain.nextActionBy ? ` · by ${mountain.nextActionBy}` : ''}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-[12px] text-[#8992a0]">None set.</div>
-              )}
-            </div>
-
-            {/* Affiliates — read-only; assigned from Edit/Create Mountain */}
-            <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
-              <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-2">Affiliates</div>
-              {affiliates.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {affiliates.map(a => (
-                    <span key={a.id} className="text-[12px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full">{a.name}</span>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-[12px] text-[#8992a0]">No affiliates. Assign them from Edit Mountain.</div>
-              )}
             </div>
 
             {/* Updates */}
@@ -779,7 +772,6 @@ export function MountainDetail() {
           onClose={() => setSelectedInventoryItem(null)}
         />
       )}
-      {showNextAction && <DealDetailsModal mountainId={mountainId!} onClose={() => setShowNextAction(false)} />}
       {showCheckInOut && <AssignInventoryModal mountainId={mountainId!} onClose={() => setShowCheckInOut(false)} />}
       {showAddContact && (
         <ContactForm
