@@ -483,7 +483,9 @@ export function LocationDetail() {
                         {insp.difficulty && <span className="bg-[#fff3f0] text-[#ff5c39] text-[12px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">Difficulty {insp.difficulty}</span>}
                         {insp.projectId && (() => { const p = getProjectById(insp.projectId!); return p ? <span className="bg-[#eef3fb] text-[#307fe2] text-[12px] px-2 py-0.5 rounded-full">{p.name}</span> : null; })()}
                       </div>
-                      {fmtInspDate(insp.createdAt) && <span className="text-[#6a7282] text-[12px]">{fmtInspDate(insp.createdAt)}</span>}
+                      <span className="text-[#6a7282] text-[12px]">
+                        {insp.createdBy ? `${insp.createdBy} · ` : ''}{fmtInspDate(insp.createdAt)}
+                      </span>
                     </div>
                     {insp.items.length > 0 && (
                       <div className="flex flex-wrap gap-2">

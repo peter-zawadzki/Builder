@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { useUser } from '@clerk/clerk-react';
 import {
   ArrowLeft, Loader2, Check, Plus, Minus,
 } from 'lucide-react';
@@ -7,6 +8,7 @@ import { toast } from 'sonner';
 import { useData, isProjectCompleted } from '../context/DataContext';
 import type { SiteInspectionItem, SiteInspectionItemType } from '../context/DataContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useMyContact } from '../hooks/useMyContact';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 
 const INSPECTION_ITEM_TYPES: SiteInspectionItemType[] = [
@@ -26,6 +28,9 @@ export function AddInspection() {
   const { mountainId, locationId } = useParams();
   const navigate = useNavigate();
   const { getMountainById, getLocationById, updateLocation, getProjectsByMountainId } = useData();
+  const { user } = useUser();
+  const me = useMyContact();
+  const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
 
   const mountain = getMountainById(mountainId!);
   const location = getLocationById(locationId!);
@@ -93,6 +98,8 @@ export function AddInspection() {
         items,
         notes: notes.trim(),
         createdAt: new Date().toISOString(),
+        createdBy,
+        createdByContactId: me?.id,
         projectId: projectId || undefined,
         difficulty: (difficulty || undefined) as (1 | 2 | 3 | 4 | 5 | undefined),
       };

@@ -163,6 +163,8 @@ export interface Inspection {
   items: SiteInspectionItem[];
   notes?: string;
   createdAt: string;
+  createdBy?: string;               // display name of whoever logged this inspection
+  createdByContactId?: string;      // CRM contact id, if resolvable
   projectId?: string;              // the project this inspection is for
   difficulty?: 1 | 2 | 3 | 4 | 5;  // install difficulty (per inspection, not the location)
   activities?: ContactActivity[];  // notes / action items captured during this visit
