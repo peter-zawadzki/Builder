@@ -363,6 +363,7 @@ export interface Project {
   archived?: boolean;
   activities?: ContactActivity[]; // notes / action items, same shape as contacts
   createdBy?: string;           // name of the user who created the project
+  createdByContactId?: string;  // CRM contact id of whoever created it — along with the owner, allowed to manage stage status
   createdAt: string;
   updatedAt: string;
 }

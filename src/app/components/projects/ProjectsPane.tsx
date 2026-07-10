@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
-import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2, Check } from 'lucide-react';
+import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2, Check, Calendar as CalendarIcon } from 'lucide-react';
 import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted, getMountainProjects, nextStageStatus } from '../../context/DataContext';
 import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity, StageStatus } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
@@ -62,13 +62,18 @@ function StageStatusDot({ status }: { status: StageStatus }) {
 
 // Each stage cycles independently through 4 states (not started/blocked/in
 // progress/done) — a stage can be skipped without blocking later ones.
-// Stages wrap across two rows (instead of cramming every stage into one
-// row) so each stage's dot, label, and optional date have room to breathe.
 // Status can only be changed here when onToggle+dates editing are provided
 // (i.e. inside the project detail modal); everywhere else this renders
 // read-only, per the rule that status is only editable from the modal.
+//
+// Two visual modes:
+// - Default (compact status-bar views like the project card / homepage
+//   widget): a single row, dot + label only, no dates, never wraps.
+// - `stacked` (the project detail modal only): wraps across two rows with
+//   room for a calendar icon next to each label; tapping it opens a small
+//   date picker to set/change/clear that stage's date.
 export function StageChecklist({
-  stages, stageStatus, stageDates, onToggle, onDateChange, readOnly, lockedTitle,
+  stages, stageStatus, stageDates, onToggle, onDateChange, readOnly, lockedTitle, stacked,
 }: {
   stages: ProjectStage[];
   stageStatus: Partial<Record<ProjectStage, StageStatus>>;
@@ -77,43 +82,81 @@ export function StageChecklist({
   onDateChange?: (stage: ProjectStage, date: string) => void;
   readOnly?: boolean;
   lockedTitle?: string;
+  stacked?: boolean;
 }) {
+  const [openDateStage, setOpenDateStage] = useState<ProjectStage | null>(null);
+
+  if (!stacked) {
+    return (
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
+        {stages.map(s => {
+          const status = stageStatus[s] || 'not_started';
+          return (
+            <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
+              <StageStatusDot status={status} />
+              <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const cols = Math.max(1, Math.ceil(stages.length / 2));
   const gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` };
-  const hasAnyDate = !!onDateChange || stages.some(s => stageDates?.[s]);
 
   return (
-    <div className="grid gap-x-2 gap-y-2.5" style={gridStyle}>
+    <div className="grid gap-x-2 gap-y-3" style={gridStyle}>
       {stages.map(s => {
         const status = stageStatus[s] || 'not_started';
         const date = stageDates?.[s];
-        const label = <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>;
-        const dateNode = !hasAnyDate ? null : onDateChange ? (
-          <input
-            type="date"
-            value={date || ''}
-            onChange={e => onDateChange(s, e.target.value)}
-            className="w-full text-[8px] text-[#8992a0] bg-transparent outline-none text-center"
-          />
-        ) : (
-          <span className="text-[8px] text-[#8992a0] text-center leading-tight">
-            {date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ' '}
-          </span>
-        );
+        const dot = <StageStatusDot status={status} />;
+        const isOpen = openDateStage === s;
 
-        if (readOnly || !onToggle) {
-          return (
-            <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
-              <StageStatusDot status={status} />{label}{dateNode}
-            </div>
-          );
-        }
         return (
-          <div key={s} className="flex flex-col items-center gap-1 py-1">
-            <button type="button" onClick={e => { e.stopPropagation(); onToggle(s); }} className="flex flex-col items-center gap-1 active:opacity-70">
-              <StageStatusDot status={status} />{label}
-            </button>
-            {dateNode}
+          <div key={s} className="relative flex flex-col items-center gap-1 py-1">
+            {onToggle ? (
+              <button type="button" onClick={e => { e.stopPropagation(); onToggle(s); }} className="active:opacity-70" title={lockedTitle}>{dot}</button>
+            ) : (
+              <div title={lockedTitle}>{dot}</div>
+            )}
+            <div className="flex items-center gap-1">
+              <span className={`text-[9px] text-center leading-tight ${STAGE_STATUS_LABEL_COLOR[status]}`}>{s}</span>
+              {onDateChange && (
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setOpenDateStage(isOpen ? null : s); }}
+                  className="shrink-0 active:opacity-70"
+                  title={date ? 'Change or clear date' : 'Add a date'}
+                >
+                  <CalendarIcon size={10} className={date ? 'text-[#307fe2]' : 'text-[#c0c4cc]'} />
+                </button>
+              )}
+            </div>
+            {date && (
+              <span className="text-[8px] text-[#8992a0] text-center leading-tight">
+                {new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </span>
+            )}
+            {isOpen && onDateChange && (
+              <div
+                className="absolute z-10 top-full mt-1 bg-white rounded-[8px] border border-[rgba(0,0,0,0.1)] shadow-lg p-2 flex flex-col gap-1.5 whitespace-nowrap"
+                onClick={e => e.stopPropagation()}
+              >
+                <input
+                  type="date"
+                  value={date || ''}
+                  onChange={e => { onDateChange(s, e.target.value); setOpenDateStage(null); }}
+                  autoFocus
+                  className="text-[11px] outline-none"
+                />
+                {date && (
+                  <button type="button" onClick={() => { onDateChange(s, ''); setOpenDateStage(null); }} className="text-[10px] text-[#F95C39] text-left">
+                    Clear date
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -281,6 +324,7 @@ function OwnerSelect({ value, onChange, className }: { value: string; onChange: 
 function ProjectForm({ mountainId, teamId, availableTypes, onClose }: { mountainId?: string; teamId?: string; availableTypes: ProjectType[]; onClose: () => void }) {
   const { addProject, contacts } = useData();
   const createdBy = useAuthor();
+  const me = useMyContact();
   const [name, setName] = useState('');
   const [type, setType] = useState<ProjectType>(availableTypes[0]);
   const [notes, setNotes] = useState('');
@@ -299,6 +343,7 @@ function ProjectForm({ mountainId, teamId, availableTypes, onClose }: { mountain
       ownerContactId: owner?.id,
       ownerName: owner?.name,
       createdBy,
+      createdByContactId: me?.id,
     });
     toast.success('Project created');
     onClose();
@@ -363,6 +408,9 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
 
   if (!project) { onClose(); return null; }
   const isOwner = !!me && project.ownerContactId === me.id;
+  // Stage status/date is the one thing both the owner AND the original
+  // creator can manage — everything else stays owner-only.
+  const canManageStage = !!me && (project.ownerContactId === me.id || project.createdByContactId === me.id);
   const availableTypes = project.teamId ? TEAM_PROJECT_TYPES : MOUNTAIN_PROJECT_TYPES;
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
   const stageStatus = project.stageStatus || {};
@@ -374,14 +422,14 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   };
 
   const cycleStage = (stage: ProjectStage) => {
-    if (!isOwner) return;
+    if (!canManageStage) return;
     const updated = { ...stageStatus, [stage]: nextStageStatus(stageStatus[stage]) };
     updateProject(project.id, { stageStatus: updated });
     logActivity(project.mountainId, 'stage_changed', `Project "${project.name}": ${stage} → ${updated[stage]}`);
   };
 
   const setStageDate = (stage: ProjectStage, date: string) => {
-    if (!isOwner) return;
+    if (!canManageStage) return;
     const updated = { ...(project.stageDates || {}), [stage]: date || undefined };
     updateProject(project.id, { stageDates: updated });
   };
@@ -479,19 +527,20 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
               </div>
 
               {/* Stage status — quick update, stays in view mode. Each stage
-                  cycles independently through grey/red/yellow/green so one
-                  can be skipped. Only the project owner can change it — this
-                  is the only place status can be changed at all. */}
+                  cycles independently through grey/orange/yellow/green so
+                  one can be skipped. Only the owner or the original creator
+                  can change it — this is the only place status can change. */}
               <div>
-                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage{!isOwner && ' (owner only)'}</label>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage{!canManageStage && ' (owner/creator only)'}</label>
                 <StageChecklist
                   stages={stages}
                   stageStatus={stageStatus}
                   stageDates={project.stageDates}
-                  onToggle={isOwner ? cycleStage : undefined}
-                  onDateChange={isOwner ? setStageDate : undefined}
-                  readOnly={!isOwner}
-                  lockedTitle="Only the project owner can update status"
+                  onToggle={canManageStage ? cycleStage : undefined}
+                  onDateChange={canManageStage ? setStageDate : undefined}
+                  readOnly={!canManageStage}
+                  lockedTitle="Only the project owner or creator can update status"
+                  stacked
                 />
               </div>
 
