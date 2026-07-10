@@ -387,7 +387,9 @@ export function canCompleteActivity(activity: ContactActivity, me: CRMContact | 
 
 export interface CRMContact {
   id: string;
-  name: string;
+  name: string;              // full name, derived from firstName + lastName
+  firstName?: string;
+  lastName?: string;
   email: string;             // primary email
   emails?: string[];         // additional emails
   phone: string;             // primary phone (mirrors phones[0] for display)

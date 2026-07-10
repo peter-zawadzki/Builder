@@ -722,7 +722,8 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
   const [dupCandidates, setDupCandidates] = useState<CRMContact[] | null>(null);
   type Phone = { number: string; label: 'Mobile' | 'Work' | 'Home' };
   const [form, setForm] = useState({
-    name: contact?.name || '',
+    firstName: contact?.firstName || (contact?.name || '').trim().split(/\s+/)[0] || '',
+    lastName: contact?.lastName || (contact?.name || '').trim().split(/\s+/).slice(1).join(' ') || '',
     email: contact?.email || '',
     emails: contact?.emails || [] as string[],
     phones: (contact?.phones && contact.phones.length ? contact.phones : [
@@ -743,10 +744,15 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
   const toggleTag = (t: ContactTag) => set('tags', form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]);
 
+  const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
+
   const doSave = () => {
     const cleanPhones = form.phones.map(p => ({ number: p.number.trim(), label: p.label })).filter(p => p.number);
     const data = {
       ...form,
+      name: fullName,
+      firstName: form.firstName.trim() || undefined,
+      lastName: form.lastName.trim() || undefined,
       mountainId: form.mountainId || undefined,
       organizationId: form.organizationId || undefined,
       teamId: form.teamId || undefined,
@@ -761,10 +767,10 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
   };
 
   const save = () => {
-    if (!form.name.trim()) { toast.error('Name is required'); return; }
+    if (!fullName) { toast.error('First name is required'); return; }
     // Only warn on new contacts.
     if (!contact) {
-      const dups = findDuplicateContacts(form, contacts);
+      const dups = findDuplicateContacts({ ...form, name: fullName }, contacts);
       if (dups.length > 0) { setDupCandidates(dups); return; }
     }
     doSave();
@@ -779,9 +785,13 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
         </div>
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
-              <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">First Name *</label>
+              <input type="text" value={form.firstName} onChange={e => set('firstName', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+            </div>
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Last Name</label>
+              <input type="text" value={form.lastName} onChange={e => set('lastName', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
             </div>
             <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Email</label>
