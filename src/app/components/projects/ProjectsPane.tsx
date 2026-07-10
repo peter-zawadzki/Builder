@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
 import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2, Check } from 'lucide-react';
-import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted } from '../../context/DataContext';
+import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted, getMountainProjects } from '../../context/DataContext';
 import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
@@ -86,8 +86,10 @@ export function StageChecklist({
 // ─── Pane ────────────────────────────────────────────────────────────────────
 
 export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; teamId?: string }) {
-  const { getProjectsByMountainId, getProjectsByTeamId } = useData();
-  const allProjects = mountainId ? getProjectsByMountainId(mountainId) : getProjectsByTeamId(teamId!);
+  const { getProjectsByTeamId, projects: allProjectsData, teams } = useData();
+  // A mountain's Projects list includes its own directly-owned projects plus
+  // any project created under a Team that's linked to this mountain.
+  const allProjects = mountainId ? getMountainProjects(mountainId, { projects: allProjectsData, teams }) : getProjectsByTeamId(teamId!);
   const availableTypes = mountainId ? MOUNTAIN_PROJECT_TYPES : TEAM_PROJECT_TYPES;
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -125,7 +127,12 @@ export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; team
       ) : (
         <div className="space-y-2.5">
           {[...active, ...closed].map(p => (
-            <ProjectCard key={p.id} project={p} onOpen={() => setEditId(p.id)} />
+            <ProjectCard
+              key={p.id}
+              project={p}
+              onOpen={() => setEditId(p.id)}
+              viaTeamName={mountainId && p.mountainId !== mountainId ? teams.find(t => t.id === p.teamId)?.name : undefined}
+            />
           ))}
         </div>
       )}
@@ -138,7 +145,7 @@ export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; team
 
 // ─── Card (progress bar) ───────────────────────────────────────────────────
 
-function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
+function ProjectCard({ project, onOpen, viaTeamName }: { project: Project; onOpen: () => void; viaTeamName?: string }) {
   const { updateProject } = useData();
   const me = useMyContact();
   const isOwner = !!me && project.ownerContactId === me.id;
@@ -176,7 +183,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: stageBarColor(pct) }} />
       </div>
       <div className="flex items-center justify-between mt-1.5">
-        <span className="text-[11px] text-[#6a7282]">{currentLabel}</span>
+        <span className="text-[11px] text-[#6a7282]">{currentLabel}{viaTeamName ? ` · via ${viaTeamName}` : ''}</span>
         {project.ownerName && <span className="text-[11px] text-[#8992a0] flex items-center gap-1"><UserCircle2 size={11} /> {project.ownerName}</span>}
       </div>
       <div className="mt-1.5">

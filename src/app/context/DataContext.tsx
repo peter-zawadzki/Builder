@@ -468,6 +468,16 @@ export interface MountainActivityEntry extends ContactActivity {
   originId?: string;
 }
 
+// Projects created under a Team also show up on every Mountain that Team is
+// linked to (via CRMTeam.mountainIds), alongside the mountain's own directly-
+// owned projects — a team project isn't reassigned to the mountain, it's
+// just visible there too (same "lives at its source, rolls up for
+// visibility" pattern as note/action items).
+export function getMountainProjects(mountainId: string, data: { projects: Project[]; teams: CRMTeam[] }): Project[] {
+  const linkedTeamIds = new Set(data.teams.filter(t => t.mountainIds.includes(mountainId)).map(t => t.id));
+  return data.projects.filter(p => p.mountainId === mountainId || (!!p.teamId && linkedTeamIds.has(p.teamId)));
+}
+
 export function getMountainRollupActivities(
   mountainId: string,
   data: { mountains: Mountain[]; contacts: CRMContact[]; teams: CRMTeam[]; projects: Project[]; locations: Location[] },

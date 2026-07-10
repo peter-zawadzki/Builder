@@ -17,7 +17,7 @@ const TYPE_BADGE: Record<string, string> = {
 // Dashboard widget — "your pipeline is your projects." Lists active projects
 // across mountains, scoped to Mine (owner) or All (Employees only).
 export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
-  const { projects, mountains } = useData();
+  const { projects, mountains, teams } = useData();
   const navigate = useNavigate();
   const me = useMyContact();
 
@@ -27,19 +27,31 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
 
   const rows = useMemo(() => {
     const byId = Object.fromEntries(mountains.map(m => [m.id, m]));
-    // This widget is scoped to mountain projects — team projects don't have a
-    // mountain to navigate to.
-    let active = projects.filter(p => !!p.mountainId && !isProjectCompleted(p));
+    const active = projects.filter(p => !isProjectCompleted(p));
+
+    // Direct mountain projects, one row each.
+    const directRows = active
+      .filter(p => !!p.mountainId)
+      .map(p => ({ p, m: byId[p.mountainId!] }));
+
+    // Team projects roll up to every mountain their team is linked to — one
+    // row per (project, mountain) pair, same as the mountain detail page.
+    const teamRows = active
+      .filter(p => !!p.teamId)
+      .flatMap(p => {
+        const team = teams.find(t => t.id === p.teamId);
+        return (team?.mountainIds || []).map(mid => ({ p, m: byId[mid] })).filter(row => row.m);
+      });
+
+    let combined = [...directRows, ...teamRows];
     // "Mine" = projects I own OR projects on a mountain where I'm an affiliate.
     if (effective === 'mine') {
-      active = active.filter(p =>
-        me && (p.ownerContactId === me.id || (byId[p.mountainId!] as any)?.affiliateContactIds?.includes(me.id)),
+      combined = combined.filter(({ p, m }) =>
+        me && (p.ownerContactId === me.id || (m as any)?.affiliateContactIds?.includes(me.id)),
       );
     }
-    return active
-      .map(p => ({ p, m: byId[p.mountainId!] }))
-      .sort((a, b) => new Date(b.p.updatedAt).getTime() - new Date(a.p.updatedAt).getTime());
-  }, [projects, mountains, effective, me]);
+    return combined.sort((a, b) => new Date(b.p.updatedAt).getTime() - new Date(a.p.updatedAt).getTime());
+  }, [projects, mountains, teams, effective, me]);
 
   return (
     <div className="space-y-2">
@@ -56,11 +68,11 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
           const completedStages = p.completedStages || [];
           return (
             <div
-              key={p.id}
+              key={`${p.id}-${m?.id}`}
               role="button"
               tabIndex={0}
-              onClick={() => navigate(`/mountains/${p.mountainId}`)}
-              onKeyDown={e => { if (e.key === 'Enter') navigate(`/mountains/${p.mountainId}`); }}
+              onClick={() => navigate(`/mountains/${m?.id}`)}
+              onKeyDown={e => { if (e.key === 'Enter') navigate(`/mountains/${m?.id}`); }}
               className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-3 cursor-pointer active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)]"
             >
               <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -75,7 +87,10 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: stageBarColor(pct) }} />
               </div>
               <div className="flex items-center justify-between text-[11px] text-[#6a7282] mb-1.5">
-                <span className="truncate">{m?.name || 'Unknown mountain'} · {label}</span>
+                <span className="truncate">
+                  {m?.name || 'Unknown mountain'} · {label}
+                  {p.teamId && (() => { const team = teams.find(t => t.id === p.teamId); return team ? ` · via ${team.name}` : ''; })()}
+                </span>
                 {p.ownerName && <span className="flex items-center gap-1 text-[#8992a0] shrink-0"><UserCircle2 size={11} /> {p.ownerName}</span>}
               </div>
               <StageChecklist stages={stages} completedStages={completedStages} readOnly lockedTitle="Status can only be updated on the mountain detail page" />
