@@ -165,6 +165,7 @@ export interface Inspection {
   createdAt: string;
   projectId?: string;              // the project this inspection is for
   difficulty?: 1 | 2 | 3 | 4 | 5;  // install difficulty (per inspection, not the location)
+  activities?: ContactActivity[];  // notes / action items captured during this visit
 }
 
 export interface Location {
@@ -369,8 +370,22 @@ export interface ContactActivity {
   completed?: boolean;
   completedAt?: string;
   createdAt: string;
-  assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to
+  assigneeContactId?: string;  // YULLR-org contact this note/action is assigned to (mutually exclusive with assigneeTeamId)
   assigneeName?: string;
+  assigneeTeamId?: string;     // a whole Team this note/action is assigned to instead of one person
+  assigneeTeamName?: string;
+  authorContactId?: string;    // CRM contact id of whoever created it — who's allowed to mark it complete
+  authorName?: string;
+}
+
+// Only the person who created an item, or the person/team it's assigned to,
+// may mark it complete.
+export function canCompleteActivity(activity: ContactActivity, me: CRMContact | undefined): boolean {
+  if (!me) return false;
+  if (activity.authorContactId === me.id) return true;
+  if (activity.assigneeContactId === me.id) return true;
+  if (activity.assigneeTeamId && me.teamId === activity.assigneeTeamId) return true;
+  return false;
 }
 
 export interface CRMContact {
@@ -437,6 +452,74 @@ export function getYullrMembers(contacts: CRMContact[], organizations: CRMOrgani
   const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
   if (!yullrOrg) return [];
   return contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ─── Mountain activity rollup ─────────────────────────────────────────────────
+// A mountain's Status (Next Actions) and Notes panes show every note/action
+// item relevant to it — not just ones created directly on the mountain, but
+// anything created on a contact/team/project/inspection tied to it, plus
+// anything assigned to a person or team associated with it (an affiliate, or
+// a team linked via mountainIds) no matter where that item actually lives.
+
+export type ActivityOrigin = 'general' | 'person' | 'team' | 'project' | 'inspection';
+
+export interface MountainActivityEntry extends ContactActivity {
+  origin: ActivityOrigin;
+  originLabel?: string;   // name of the contact/team/project/location this came from
+  originId?: string;
+}
+
+export function getMountainRollupActivities(
+  mountainId: string,
+  data: { mountains: Mountain[]; contacts: CRMContact[]; teams: CRMTeam[]; projects: Project[]; locations: Location[] },
+): MountainActivityEntry[] {
+  const { mountains, contacts, teams, projects, locations } = data;
+  const mountain = mountains.find(m => m.id === mountainId);
+  if (!mountain) return [];
+
+  const affiliateIds = new Set(mountain.affiliateContactIds || []);
+  const linkedTeamIds = new Set(teams.filter(t => t.mountainIds.includes(mountainId)).map(t => t.id));
+
+  // An item lives elsewhere but is relevant here because its assignee (person
+  // or team) is tied to this mountain.
+  const assignedHere = (a: ContactActivity) =>
+    (!!a.assigneeContactId && affiliateIds.has(a.assigneeContactId)) ||
+    (!!a.assigneeTeamId && linkedTeamIds.has(a.assigneeTeamId));
+
+  const out: MountainActivityEntry[] = [];
+
+  (mountain.activities || []).forEach(a => out.push({ ...a, origin: 'general' }));
+
+  contacts.forEach(c => {
+    (c.activities || []).forEach(a => {
+      if (c.mountainId === mountainId || assignedHere(a)) {
+        out.push({ ...a, origin: 'person', originLabel: c.name, originId: c.id });
+      }
+    });
+  });
+
+  teams.forEach(t => {
+    (t.activities || []).forEach(a => {
+      if (linkedTeamIds.has(t.id) || assignedHere(a)) {
+        out.push({ ...a, origin: 'team', originLabel: t.name, originId: t.id });
+      }
+    });
+  });
+
+  projects.filter(p => p.mountainId === mountainId).forEach(p => {
+    (p.activities || []).forEach(a => out.push({ ...a, origin: 'project', originLabel: p.name, originId: p.id }));
+  });
+
+  locations.filter(l => l.mountainId === mountainId).forEach(loc => {
+    (loc.inspections || []).forEach(insp => {
+      (insp.activities || []).forEach(a => out.push({ ...a, origin: 'inspection', originLabel: loc.name, originId: insp.id }));
+    });
+  });
+
+  const seen = new Set<string>();
+  return out
+    .filter(a => (seen.has(a.id) ? false : (seen.add(a.id), true)))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export type NoteTopic = 'Demo' | 'Site Visit' | 'Proposal' | 'Install' | 'Training' | 'Updates' | 'Follow-up';

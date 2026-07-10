@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import type { Contact, TechAdmin, Annotation } from '../context/DataContext';
-import { ArrowLeft, Plus, X, Trash2, Upload, ZoomIn, ExternalLink, ImageIcon, Edit3 } from 'lucide-react';
+import { ArrowLeft, Plus, X, Trash2, Upload, ZoomIn, ExternalLink, ImageIcon, Edit3, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPhone } from '../utils/formatPhone';
 import { ContactForm } from './ContactForm';
@@ -81,7 +81,7 @@ export function EditMountain() {
     billingAddress: mountain?.billingAddress || '',
     parentOrganization: mountain?.parentOrganization || '',
     organizationId: mountain?.organizationId || '',
-    ambassadorId: mountain?.affiliateContactIds?.[0] || '',
+    affiliateContactIds: mountain?.affiliateContactIds || [] as string[],
     trailMapUrl: mountain?.trailMapUrl || '',
     legalEntity: mountain?.legalEntity || '',
     phone: mountain?.phone || '',
@@ -247,7 +247,7 @@ export function EditMountain() {
       acreage: formData.acreage ? parseInt(formData.acreage) : undefined,
       verticalDrop: formData.verticalDrop ? parseInt(formData.verticalDrop) : undefined,
       trailMapUrl: formData.trailMapUrl.trim() || undefined,
-      affiliateContactIds: formData.ambassadorId ? [formData.ambassadorId] : undefined,
+      affiliateContactIds: formData.affiliateContactIds.length > 0 ? formData.affiliateContactIds : undefined,
       region: formData.region || undefined,
     });
     toast.success('Mountain updated successfully!');
@@ -276,6 +276,15 @@ export function EditMountain() {
 
   const updateField = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
+  };
+
+  const toggleAffiliate = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      affiliateContactIds: prev.affiliateContactIds.includes(id)
+        ? prev.affiliateContactIds.filter(x => x !== id)
+        : [...prev.affiliateContactIds, id],
+    }));
   };
 
   const addContact = () => {
@@ -610,18 +619,18 @@ export function EditMountain() {
           </div>
 
           <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Ambassador</label>
-            <select
-              value={formData.ambassadorId}
-              onChange={e => updateField('ambassadorId', e.target.value)}
-              className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px]"
-            >
-              <option value="">— None —</option>
-              {ambassadors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Affiliates</label>
+            <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-40 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
+              {ambassadors.map(c => (
+                <button key={c.id} type="button" onClick={() => toggleAffiliate(c.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-[14px] ${formData.affiliateContactIds.includes(c.id) ? 'bg-[#f0fdf4] text-[#1b5e20]' : 'text-[#0a0a0a]'}`}>
+                  {formData.affiliateContactIds.includes(c.id) && <Check size={14} className="text-[#2e7d32]" />}
+                  {c.name}
+                </button>
+              ))}
+            </div>
             {ambassadors.length === 0 && (
               <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-1">
-                Add people to the YULLR organization in the CRM to pick an ambassador.
+                Add people to the YULLR organization in the CRM to assign affiliates.
               </p>
             )}
           </div>

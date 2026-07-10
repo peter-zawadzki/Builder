@@ -3,7 +3,7 @@ import * as cloudLocSync from '../utils/cloudLocationSync';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
-import { useData, SiteInspectionItem, Annotation } from '../context/DataContext';
+import { useData, SiteInspectionItem, Annotation, ContactActivity } from '../context/DataContext';
 import {
   ArrowLeft, Plus, MapPin, Trash2,
   ClipboardList, Pencil, Image as ImageIcon, Video as VideoIcon,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { ActivitySection } from './ActivitySection';
 import { ImageAnnotator } from './ImageAnnotator';
 import { MountainMapView } from './MountainMapView';
 
@@ -90,7 +91,7 @@ export function LocationDetail() {
   const { mountainId, locationId } = useParams();
   const navigate = useNavigate();
   const {
-    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById,
+    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById, updateLocation,
   } = useData();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -211,6 +212,15 @@ export function LocationDetail() {
       </div>
     );
   }
+
+  // Update a single inspection's notes/action items (inspections live nested
+  // inside the location, so this rewrites both the `inspections` array entry
+  // and the `inspection` mirror if it points at the same one).
+  const updateInspectionActivities = (inspId: string, activities: ContactActivity[]) => {
+    const updatedInspections = (location.inspections || []).map(i => i.id === inspId ? { ...i, activities } : i);
+    const updatedInspection = location.inspection?.id === inspId ? { ...location.inspection, activities } : location.inspection;
+    updateLocation(location.id, { inspections: updatedInspections, inspection: updatedInspection });
+  };
 
   const inspection = location.inspection;
   const totalInspItems = inspection?.items.reduce((s, i) => s + i.count, 0) || 0;
@@ -486,6 +496,22 @@ export function LocationDetail() {
                         <p className="text-[#3d3d3d] font-['Inter:Regular',sans-serif] text-[14px] leading-relaxed whitespace-pre-wrap">{insp.notes}</p>
                       </div>
                     )}
+                    <div className="border-t border-[rgba(0,0,0,0.06)] pt-3">
+                      <ActivitySection
+                        activities={insp.activities || []}
+                        onAdd={(entry) => {
+                          const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+                          updateInspectionActivities(insp.id, [...(insp.activities || []), full]);
+                        }}
+                        onToggle={(id) => {
+                          const updated = (insp.activities || []).map(a =>
+                            a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a,
+                          );
+                          updateInspectionActivities(insp.id, updated);
+                        }}
+                        onDelete={(id) => updateInspectionActivities(insp.id, (insp.activities || []).filter(a => a.id !== id))}
+                      />
+                    </div>
                   </div>
                 );
               })}

@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { AlertTriangle, ChevronRight, UserCircle2 } from 'lucide-react';
 import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted } from '../../context/DataContext';
-import type { ProjectStage } from '../../context/DataContext';
 import { useMyContact, useCanSeeAll } from '../../hooks/useMyContact';
 import { stageBarColor, StageChecklist } from './ProjectsPane';
 
@@ -18,7 +17,7 @@ const TYPE_BADGE: Record<string, string> = {
 // Dashboard widget — "your pipeline is your projects." Lists active projects
 // across mountains, scoped to Mine (owner) or All (Employees only).
 export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
-  const { projects, mountains, updateProject } = useData();
+  const { projects, mountains } = useData();
   const navigate = useNavigate();
   const me = useMyContact();
 
@@ -55,10 +54,6 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
           const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
           const label = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
           const completedStages = p.completedStages || [];
-          const toggleStage = (stage: ProjectStage) => {
-            const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
-            updateProject(p.id, { completedStages: updated });
-          };
           return (
             <div
               key={p.id}
@@ -83,7 +78,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
                 <span className="truncate">{m?.name || 'Unknown mountain'} · {label}</span>
                 {p.ownerName && <span className="flex items-center gap-1 text-[#8992a0] shrink-0"><UserCircle2 size={11} /> {p.ownerName}</span>}
               </div>
-              <StageChecklist stages={stages} completedStages={completedStages} onToggle={toggleStage} />
+              <StageChecklist stages={stages} completedStages={completedStages} readOnly lockedTitle="Status can only be updated on the mountain detail page" />
             </div>
           );
         })

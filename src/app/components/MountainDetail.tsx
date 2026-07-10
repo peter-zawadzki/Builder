@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData, MOUNTAIN_PIPELINE_STAGES } from '../context/DataContext';
-import type { Asset, Contact, ContactNote, CRMContact, ContactActivity, MountainPipelineStage } from '../context/DataContext';
+import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
 import { ContactDetail, DealDetailsModal, ContactForm } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import { ProposalsPane } from './projects/ProposalsPane';
@@ -11,7 +11,7 @@ import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
-  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Circle, Maximize2, Pencil,
+  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Maximize2, Pencil,
 } from 'lucide-react';
 
 type ContactSlot =
@@ -19,6 +19,7 @@ type ContactSlot =
   | { type: 'technical' }
   | { type: 'additional'; index: number };
 import { MountainNotes } from './MountainNotes';
+import { MountainActivityRollup } from './MountainActivityRollup';
 import { MountainDocuments } from './MountainDocuments';
 import { MountainMapView } from './MountainMapView';
 import { ExportModal } from './ExportModal';
@@ -138,7 +139,6 @@ export function MountainDetail() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showNextAction, setShowNextAction] = useState(false);
   const [showCheckInOut, setShowCheckInOut] = useState(false);
-  const [newActionText, setNewActionText] = useState('');
 
   // Updates feed for the Status pane.
   const { getToken } = useAuth();
@@ -198,45 +198,10 @@ export function MountainDetail() {
       .filter((t): t is string => !!t && t.trim().length > 0)
   ));
 
-  // Next Actions — the mountain's own open action items, plus a rollup of
-  // open action items from any CRM contact associated with this mountain.
-  const mountainActivities = mountain.activities || [];
-  const mountainContacts = contacts.filter(c => c.mountainId === mountainId);
-  type ActionItem = ContactActivity & { source: 'mountain' | 'contact'; contactId?: string; contactName?: string };
-  const allActionItems: ActionItem[] = [
-    ...mountainActivities.filter(a => a.type === 'action').map(a => ({ ...a, source: 'mountain' as const })),
-    ...mountainContacts.flatMap(c => (c.activities || [])
-      .filter(a => a.type === 'action')
-      .map(a => ({ ...a, source: 'contact' as const, contactId: c.id, contactName: c.name }))),
-  ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const openActionItems = allActionItems.filter(a => !a.completed);
-
-  const toggleActionItem = (item: ActionItem) => {
-    const now = new Date().toISOString();
-    if (item.source === 'mountain') {
-      updateMountain(mountainId!, {
-        activities: mountainActivities.map(a => a.id === item.id ? { ...a, completed: !a.completed, completedAt: !a.completed ? now : undefined } : a),
-      });
-    } else {
-      const c = contacts.find(ct => ct.id === item.contactId);
-      if (!c) return;
-      updateContact(c.id, {
-        activities: (c.activities || []).map(a => a.id === item.id ? { ...a, completed: !a.completed, completedAt: !a.completed ? now : undefined } : a),
-      });
-    }
-  };
-
-  const addActionItem = (text: string) => {
-    const entry: ContactActivity = { id: crypto.randomUUID(), text, type: 'action', createdAt: new Date().toISOString() };
-    updateMountain(mountainId!, { activities: [...mountainActivities, entry] });
-  };
-
-  // Affiliates: YULLR people who sell/represent this mountain.
-  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
-  const yullrMembers = yullrOrg ? contacts.filter(c => c.organizationId === yullrOrg.id) : [];
+  // Affiliates: YULLR people who sell/represent this mountain. Assigned only
+  // when creating/editing the mountain — read-only here.
   const affiliateIds = mountain.affiliateContactIds || [];
   const affiliates = affiliateIds.map(id => contacts.find(c => c.id === id)).filter(Boolean) as CRMContact[];
-  const addableAffiliates = yullrMembers.filter(m => !affiliateIds.includes(m.id));
 
   // Inventory class subtotals + inspection reconciliation.
   const mountainAssetsAll = getAssetsByMountainId(mountainId!);
@@ -385,40 +350,7 @@ export function MountainDetail() {
 
               <div className="pt-1">
                 <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-1.5">Next Actions</div>
-                {openActionItems.length === 0 ? (
-                  <div className="text-[12px] text-[#8992a0] mb-2">No open actions.</div>
-                ) : (
-                  <div className="space-y-1.5 mb-2">
-                    {openActionItems.map(item => (
-                      <div key={item.id} className="flex items-start gap-2">
-                        <button onClick={() => toggleActionItem(item)} className="mt-0.5 shrink-0 active:opacity-60" aria-label="Mark action complete">
-                          <Circle size={15} className="text-[#d1d5db]" />
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] text-[#0a0a0a]">{item.text}</div>
-                          {item.source === 'contact' && <div className="text-[11px] text-[#8992a0]">via {item.contactName}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <input
-                    value={newActionText}
-                    onChange={e => setNewActionText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); } }}
-                    placeholder="Add an action item…"
-                    className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
-                  />
-                  <button
-                    onClick={() => { if (newActionText.trim()) { addActionItem(newActionText.trim()); setNewActionText(''); } }}
-                    disabled={!newActionText.trim()}
-                    className="bg-[#ff5c39] text-white rounded-[8px] px-3 flex items-center justify-center active:opacity-80 disabled:opacity-40"
-                    aria-label="Add action item"
-                  >
-                    <Plus size={15} />
-                  </button>
-                </div>
+                <MountainActivityRollup mountainId={mountainId!} type="action" />
               </div>
             </div>
             {mountain.phone && (
@@ -445,31 +377,18 @@ export function MountainDetail() {
               )}
             </div>
 
-            {/* Affiliates */}
+            {/* Affiliates — read-only; assigned from Edit/Create Mountain */}
             <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
               <div className="text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] uppercase tracking-wide mb-2">Affiliates</div>
-              {affiliates.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
+              {affiliates.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
                   {affiliates.map(a => (
-                    <span key={a.id} className="text-[12px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1">
-                      {a.name}
-                      <button onClick={() => updateMountain(mountainId!, { affiliateContactIds: affiliateIds.filter(id => id !== a.id) })} className="active:opacity-60"><X size={11} /></button>
-                    </span>
+                    <span key={a.id} className="text-[12px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full">{a.name}</span>
                   ))}
                 </div>
+              ) : (
+                <div className="text-[12px] text-[#8992a0]">No affiliates. Assign them from Edit Mountain.</div>
               )}
-              {addableAffiliates.length > 0 ? (
-                <select
-                  value=""
-                  onChange={e => { if (e.target.value) updateMountain(mountainId!, { affiliateContactIds: [...affiliateIds, e.target.value] }); }}
-                  className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
-                >
-                  <option value="">+ Add affiliate…</option>
-                  {addableAffiliates.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              ) : affiliates.length === 0 ? (
-                <div className="text-[12px] text-[#8992a0]">No affiliates. Add YULLR people under the YULLR organization to assign them.</div>
-              ) : null}
             </div>
 
             {/* Updates */}

@@ -6,6 +6,7 @@ import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProject
 import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
+import { useMyContact } from '../../hooks/useMyContact';
 
 // Project types available when creating a project under a Mountain vs. a Team.
 export const MOUNTAIN_PROJECT_TYPES: ProjectType[] = ['Install', 'Repair', 'Upgrade', 'Special Event'];
@@ -42,16 +43,31 @@ function useAuthor() {
 // Equal-width grid columns keep the row evenly spaced regardless of how many
 // statuses a project type has (4 for Followup Training vs 7 for Install).
 export function StageChecklist({
-  stages, completedStages, onToggle,
+  stages, completedStages, onToggle, readOnly, lockedTitle,
 }: {
   stages: ProjectStage[];
   completedStages: ProjectStage[];
-  onToggle: (stage: ProjectStage) => void;
+  onToggle?: (stage: ProjectStage) => void;
+  readOnly?: boolean;
+  lockedTitle?: string;
 }) {
   return (
     <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
       {stages.map(s => {
         const checked = completedStages.includes(s);
+        const dot = (
+          <span className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 ${checked ? 'bg-[#22c55e] border-[#22c55e]' : 'bg-white border-[#d1d5db]'}`}>
+            {checked && <Check size={10} className="text-white" />}
+          </span>
+        );
+        const label = <span className={`text-[9px] text-center leading-tight ${checked ? 'text-[#3f7a5c] font-medium' : 'text-[#8992a0]'}`}>{s}</span>;
+        if (readOnly || !onToggle) {
+          return (
+            <div key={s} title={lockedTitle} className="flex flex-col items-center gap-1 py-1">
+              {dot}{label}
+            </div>
+          );
+        }
         return (
           <button
             key={s}
@@ -59,10 +75,7 @@ export function StageChecklist({
             onClick={e => { e.stopPropagation(); onToggle(s); }}
             className="flex flex-col items-center gap-1 py-1 active:opacity-70"
           >
-            <span className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 ${checked ? 'bg-[#22c55e] border-[#22c55e]' : 'bg-white border-[#d1d5db]'}`}>
-              {checked && <Check size={10} className="text-white" />}
-            </span>
-            <span className={`text-[9px] text-center leading-tight ${checked ? 'text-[#3f7a5c] font-medium' : 'text-[#8992a0]'}`}>{s}</span>
+            {dot}{label}
           </button>
         );
       })}
@@ -127,6 +140,8 @@ export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; team
 
 function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
   const { updateProject } = useData();
+  const me = useMyContact();
+  const isOwner = !!me && project.ownerContactId === me.id;
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
   const furthestIndex = furthestCompletedStageIndex(project);
   const pct = furthestIndex >= 0 ? Math.round(((furthestIndex + 1) / stages.length) * 100) : 0;
@@ -134,6 +149,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
   const completedStages = project.completedStages || [];
 
   const toggleStage = (stage: ProjectStage) => {
+    if (!isOwner) return;
     const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
     updateProject(project.id, { completedStages: updated });
   };
@@ -164,7 +180,13 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         {project.ownerName && <span className="text-[11px] text-[#8992a0] flex items-center gap-1"><UserCircle2 size={11} /> {project.ownerName}</span>}
       </div>
       <div className="mt-1.5">
-        <StageChecklist stages={stages} completedStages={completedStages} onToggle={toggleStage} />
+        <StageChecklist
+          stages={stages}
+          completedStages={completedStages}
+          onToggle={toggleStage}
+          readOnly={!isOwner}
+          lockedTitle="Only the project owner can update status"
+        />
       </div>
     </div>
   );
@@ -298,6 +320,7 @@ function ProjectForm({ mountainId, teamId, availableTypes, onClose }: { mountain
 function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts, logActivity } = useData();
   const project = getProjectById(projectId);
+  const me = useMyContact();
   const [isEditMode, setIsEditMode] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [stallOpen, setStallOpen] = useState(false);
@@ -305,6 +328,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const [stallNote, setStallNote] = useState('');
 
   if (!project) { onClose(); return null; }
+  const isOwner = !!me && project.ownerContactId === me.id;
   const availableTypes = project.teamId ? TEAM_PROJECT_TYPES : MOUNTAIN_PROJECT_TYPES;
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
   const completedStages = project.completedStages || [];
@@ -316,6 +340,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   };
 
   const toggleStage = (stage: ProjectStage) => {
+    if (!isOwner) return;
     const updated = completedStages.includes(stage) ? completedStages.filter(s => s !== stage) : [...completedStages, stage];
     updateProject(project.id, { completedStages: updated });
     logActivity(project.mountainId, 'stage_changed', `Project "${project.name}": ${stage} ${updated.includes(stage) ? 'checked' : 'unchecked'}`);
@@ -404,10 +429,17 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
               </div>
 
               {/* Stage checklist — quick update, stays in view mode. Each
-                  status is independently checkable so one can be skipped. */}
+                  status is independently checkable so one can be skipped.
+                  Only the project owner can change it. */}
               <div>
-                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage</label>
-                <StageChecklist stages={stages} completedStages={completedStages} onToggle={toggleStage} />
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Stage{!isOwner && ' (owner only)'}</label>
+                <StageChecklist
+                  stages={stages}
+                  completedStages={completedStages}
+                  onToggle={toggleStage}
+                  readOnly={!isOwner}
+                  lockedTitle="Only the project owner can update status"
+                />
               </div>
 
               {/* Owner — read-only in view mode */}

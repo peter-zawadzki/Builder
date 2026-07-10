@@ -4,6 +4,7 @@ import { useUser } from '@clerk/clerk-react';
 import { Plus, Pencil, Trash2, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2 } from 'lucide-react';
 import { useData, getYullrMembers, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { MountainActivityRollup } from './MountainActivityRollup';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -675,6 +676,16 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
             )}
           </div>
         )}
+
+        {/* Rolled-up notes — from associated contacts/teams/projects/inspections,
+            or assigned to a person/team associated with this mountain. Created
+            at their source, not here. */}
+        <div className="mt-4 pt-3 border-t border-[rgba(0,0,0,0.08)]">
+          <h3 className="text-[#6a7282] font-['Inter:Medium',sans-serif] text-[12px] uppercase tracking-wider mb-2">
+            Team &amp; Contact Notes
+          </h3>
+          <MountainActivityRollup mountainId={mountainId} type="note" />
+        </div>
       </div>
     </div>
   );
