@@ -120,7 +120,6 @@ export function MountainDetail() {
     assets,
     contacts,
     organizations,
-    getProposalsByMountainId,
     updateLocation,
     updateMountain,
     updateContact,
@@ -209,7 +208,6 @@ export function MountainDetail() {
   const mountainAssetsAll = getAssetsByMountainId(mountainId!);
   const trackedCount = mountainAssetsAll.filter(a => (a.assetClass || 'Asset') === 'Asset').length;
   const expensedCount = mountainAssetsAll.filter(a => a.assetClass === 'Expense').length;
-  const hasProposal = getProposalsByMountainId(mountainId!).some(p => p.proposalCreated);
 
   // Resolve / persist a single contact by its slot in the mountain record.
   const contactForSlot = (slot: ContactSlot): Contact | undefined =>
@@ -348,11 +346,6 @@ export function MountainDetail() {
           <ExpandablePane
             title="Status"
             icon={<Info size={16} className="text-[#6a7282]" />}
-            headerRight={
-              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif] font-medium ${hasProposal ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-                {hasProposal ? 'Customer' : 'Prospect'}
-              </span>
-            }
           >
             <div className="space-y-2.5">
               <div>
