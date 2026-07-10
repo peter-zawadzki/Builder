@@ -4,7 +4,7 @@ import {
   DecodeHintType, BarcodeFormat,
 } from '@zxing/library';
 import {
-  Plus, Search, X, ChevronDown, ChevronRight, Check,
+  Plus, Search, X, ChevronRight, Check,
   Package, Server as ServerIcon, Camera, Wifi, Wrench,
   Pencil, Trash2, Building2, Filter, Scan, Loader2,
   Tag, Hash, Calendar, Truck, FileText, DollarSign,
@@ -1309,9 +1309,12 @@ export function InventoryTab() {
   const [editTarget, setEditTarget] = useState<Asset | null>(null);
   const [viewTargetId, setViewTargetId] = useState<string | null>(null);
   const viewTarget = viewTargetId ? assets.find(a => a.id === viewTargetId) || null : null;
-  const [viewMode, setViewMode] = useState<'list' | 'mountain'>('list');
+  // Mountain -> Category -> Item drill-down is the default browsing mode;
+  // "List View" stays available as a flat alternative.
+  const [viewMode, setViewMode] = useState<'list' | 'mountain'>('mountain');
   const [filters, setFilters] = useState<Filters>({ search: '', category: '', mountain: '' });
-  const [expandedMountains, setExpandedMountains] = useState<Set<string>>(new Set());
+  const [drillMountain, setDrillMountain] = useState<string | null>(null);
+  const [drillCategory, setDrillCategory] = useState<string | null>(null);
 
   // Only show assets that have a yullrInventoryNumber (managed through admin inventory)
   // OR have an inventoryCategory set — this separates admin inventory from location-assigned assets
@@ -1352,16 +1355,20 @@ export function InventoryTab() {
     return map;
   }, [filtered]);
 
-  const toggleMountain = (m: string) => {
-    setExpandedMountains(prev => {
-      const next = new Set(prev);
-      next.has(m) ? next.delete(m) : next.add(m);
-      return next;
-    });
-  };
-
   const componentCountFor = (asset: Asset) =>
     asset.serverComponentIds?.length ?? 0;
+
+  // Categories within a drilled-into mountain, with an "Uncategorized" bucket
+  // for items that have no inventoryCategory set.
+  const categoriesForMountain = (mountain: string): Record<string, Asset[]> => {
+    const map: Record<string, Asset[]> = {};
+    (byMountain[mountain] || []).forEach(a => {
+      const key = a.inventoryCategory || 'Uncategorized';
+      if (!map[key]) map[key] = [];
+      map[key].push(a);
+    });
+    return map;
+  };
 
   return (
     <div className="space-y-4">
@@ -1381,7 +1388,7 @@ export function InventoryTab() {
         ].map(v => (
           <button
             key={v.id}
-            onClick={() => setViewMode(v.id)}
+            onClick={() => { setViewMode(v.id); setDrillMountain(null); setDrillCategory(null); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[6px] text-[11px] font-['Inter:Medium',sans-serif] transition-colors ${
               viewMode === v.id ? 'bg-white text-[#0a0a0a] shadow-sm' : 'text-[#6a7282]'
             }`}
@@ -1419,64 +1426,84 @@ export function InventoryTab() {
           ))}
         </div>
       ) : (
-        /* Mountain grouped view */
+        /* Mountain -> Category -> Item drill-down */
         <div className="space-y-3">
-          {Object.entries(byMountain)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([mountain, items]) => {
-              const expanded = expandedMountains.has(mountain);
-              const subtotal = items.reduce((s, a) => s + (a.cost || 0), 0);
-              return (
-                <div key={mountain} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden">
+          {drillMountain && (
+            <div className="flex items-center gap-1.5 text-[12px] flex-wrap">
+              <button onClick={() => { setDrillMountain(null); setDrillCategory(null); }} className="text-[#307fe2] active:opacity-70">All Mountains</button>
+              <ChevronRight size={12} className="text-[#c0c4cc]" />
+              {drillCategory ? (
+                <>
+                  <button onClick={() => setDrillCategory(null)} className="text-[#307fe2] active:opacity-70">{drillMountain}</button>
+                  <ChevronRight size={12} className="text-[#c0c4cc]" />
+                  <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{drillCategory}</span>
+                </>
+              ) : (
+                <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{drillMountain}</span>
+              )}
+            </div>
+          )}
+
+          {!drillMountain ? (
+            Object.entries(byMountain)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([mountain, items]) => {
+                const subtotal = items.reduce((s, a) => s + (a.cost || 0), 0);
+                return (
                   <button
-                    onClick={() => toggleMountain(mountain)}
-                    className="w-full flex items-center justify-between px-4 py-3"
+                    key={mountain}
+                    onClick={() => setDrillMountain(mountain)}
+                    className="w-full flex items-center justify-between bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:bg-[#f9fafb]"
                   >
                     <div className="flex items-center gap-2.5">
                       <Building2 size={15} className="text-[#1D2930]" />
                       <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[14px]">{mountain}</span>
-                      <span className="text-[11px] text-[#6a7282] bg-[#f3f3f5] px-2 py-0.5 rounded-full">
-                        {items.length}
-                      </span>
+                      <span className="text-[11px] text-[#6a7282] bg-[#f3f3f5] px-2 py-0.5 rounded-full">{items.length}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      {subtotal > 0 && (
-                        <span className="text-[12px] text-[#6a7282]">{fmt(subtotal)}</span>
-                      )}
-                      {expanded ? <ChevronDown size={15} className="text-[#6a7282]" /> : <ChevronRight size={15} className="text-[#6a7282]" />}
+                      {subtotal > 0 && <span className="text-[12px] text-[#6a7282]">{fmt(subtotal)}</span>}
+                      <ChevronRight size={15} className="text-[#6a7282]" />
                     </div>
                   </button>
-
-                  {expanded && (
-                    <div className="border-t border-[rgba(0,0,0,0.06)] divide-y divide-[rgba(0,0,0,0.04)]">
-                      {items.map(a => (
-                        <button key={a.id} onClick={() => setViewTargetId(a.id)} className="w-full px-4 py-3 flex items-center gap-3 text-left active:bg-[#f9fafb]">
-                          <div className="w-7 h-7 rounded-[6px] bg-[#f3f3f5] flex items-center justify-center shrink-0 text-[#6a7282]">
-                            {a.inventoryCategory ? CATEGORY_ICONS[a.inventoryCategory] : <Package size={12} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] text-[#0a0a0a] font-['Inter:Medium',sans-serif] truncate">{assetDisplayName(a)}</p>
-                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                              {a.inventoryCategory && (
-                                <span className="text-[10px] bg-[#f3f3f5] text-[#6a7282] px-1.5 py-0.5 rounded-full">{a.inventoryCategory}</span>
-                              )}
-                              {a.yullrInventoryNumber && <span className="text-[11px] text-[#6a7282]">{a.yullrInventoryNumber}</span>}
-                              {a.serialNumber && <span className="text-[11px] text-[#6a7282] font-mono">{a.serialNumber}</span>}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {a.cost !== undefined && (
-                              <span className="text-[11px] text-[#6a7282]">{fmt(a.cost)}</span>
-                            )}
-                            <ChevronRight size={14} className="text-[#d1d5db]" />
-                          </div>
-                        </button>
-                      ))}
+                );
+              })
+          ) : !drillCategory ? (
+            Object.entries(categoriesForMountain(drillMountain))
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([cat, items]) => {
+                const subtotal = items.reduce((s, a) => s + (a.cost || 0), 0);
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setDrillCategory(cat)}
+                    className="w-full flex items-center justify-between bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:bg-[#f9fafb]"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-[6px] bg-[#f3f3f5] flex items-center justify-center shrink-0 text-[#6a7282]">
+                        {cat !== 'Uncategorized' ? CATEGORY_ICONS[cat as InventoryCategory] : <Package size={14} />}
+                      </div>
+                      <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[14px]">{cat}</span>
+                      <span className="text-[11px] text-[#6a7282] bg-[#f3f3f5] px-2 py-0.5 rounded-full">{items.length}</span>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                    <div className="flex items-center gap-3">
+                      {subtotal > 0 && <span className="text-[12px] text-[#6a7282]">{fmt(subtotal)}</span>}
+                      <ChevronRight size={15} className="text-[#6a7282]" />
+                    </div>
+                  </button>
+                );
+              })
+          ) : (
+            <div className="space-y-2">
+              {(categoriesForMountain(drillMountain)[drillCategory] || []).map(a => (
+                <AssetCard
+                  key={a.id}
+                  asset={a}
+                  componentCount={componentCountFor(a)}
+                  onOpen={() => setViewTargetId(a.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
