@@ -432,6 +432,10 @@ export interface CRMContact {
   archived?: boolean;        // archived contacts drop out of default lists/search
   notes?: string;
   activities?: ContactActivity[];
+  // Auto-logged whenever mountainId/organizationId/teamId change via
+  // updateContact — e.g. "Moved team from X to Y" — so a contact's history
+  // of moving between mountains/teams/orgs is visible on their record.
+  associationHistory?: { id: string; text: string; createdAt: string }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -1850,8 +1854,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return id;
   };
 
+  // Name lookups for the association-history text — "moved team from X to Y".
+  const nameForAssociation = (field: 'mountainId' | 'organizationId' | 'teamId', value?: string): string | undefined => {
+    if (!value) return undefined;
+    if (field === 'mountainId') return mountains.find(m => m.id === value)?.name;
+    if (field === 'organizationId') return organizations.find(o => o.id === value)?.name;
+    return teams.find(t => t.id === value)?.name;
+  };
+
   const updateContact = (id: string, updates: Partial<CRMContact>) => {
-    setContacts(prev => prev.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c));
+    setContacts(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      const historyEntries: { id: string; text: string; createdAt: string }[] = [];
+      (['mountainId', 'organizationId', 'teamId'] as const).forEach(field => {
+        if (!(field in updates) || updates[field] === c[field]) return;
+        const label = field === 'mountainId' ? 'mountain' : field === 'organizationId' ? 'organization' : 'team';
+        const fromName = nameForAssociation(field, c[field]);
+        const toName = nameForAssociation(field, updates[field] as string | undefined);
+        const text = fromName && toName ? `Moved ${label} from ${fromName} to ${toName}`
+          : toName ? `Assigned to ${label} ${toName}`
+          : fromName ? `Removed from ${label} ${fromName}`
+          : '';
+        if (text) historyEntries.push({ id: crypto.randomUUID(), text, createdAt: new Date().toISOString() });
+      });
+      return {
+        ...c, ...updates, updatedAt: new Date().toISOString(),
+        associationHistory: historyEntries.length ? [...(c.associationHistory || []), ...historyEntries] : c.associationHistory,
+      };
+    }));
     syncOrQueue(`/contacts/${id}`, 'PUT', JSON.stringify(updates))
       .catch(e => console.error('Contact update sync error:', e));
   };

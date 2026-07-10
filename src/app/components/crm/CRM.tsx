@@ -790,6 +790,18 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
             </div>
           )}
           {contact.notes && <p className="text-[13px] text-[#6a7282] pt-1">{contact.notes}</p>}
+          {contact.associationHistory && contact.associationHistory.length > 0 && (
+            <details className="pt-1">
+              <summary className="text-[11px] text-[#8992a0] cursor-pointer select-none">History ({contact.associationHistory.length})</summary>
+              <div className="space-y-1 mt-1.5">
+                {[...contact.associationHistory].reverse().map(h => (
+                  <p key={h.id} className="text-[11px] text-[#6a7282]">
+                    {h.text} <span className="text-[#c0c4cc]">· {new Date(h.createdAt).toLocaleDateString()}</span>
+                  </p>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
         )}
 
