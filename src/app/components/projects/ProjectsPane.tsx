@@ -354,11 +354,18 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   };
 
   const applyStall = () => {
+    if (!isOwner) return;
     if (stallReason === 'Other' && !stallNote.trim()) { toast.error('A note is required for "Other".'); return; }
     updateProject(project.id, { isStalled: true, stallReason, stallNote: stallNote.trim() || undefined });
     logActivity(project.mountainId, 'stalled', `Project "${project.name}" stalled: ${stallReason}${stallNote.trim() ? ` — ${stallNote.trim()}` : ''}`);
     setStallOpen(false);
     toast.success('Marked stalled');
+  };
+
+  const clearStall = () => {
+    if (!isOwner) return;
+    updateProject(project.id, { isStalled: false, stallReason: undefined, stallNote: undefined });
+    logActivity(project.mountainId, 'stall_cleared', `Project "${project.name}" stall cleared`);
   };
 
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
@@ -455,14 +462,15 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
                 <span className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{project.ownerName || '—'}</span>
               </div>
 
-              {/* Stall — a quick day-to-day action, stays in view mode */}
+              {/* Stall — a quick day-to-day action, stays in view mode. Only
+                  the project owner can mark or clear a stall. */}
               <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
                 {project.isStalled ? (
                   <div className="flex items-center justify-between">
                     <span className="text-[13px] text-[#F95C39] flex items-center gap-1.5"><AlertTriangle size={13} /> Stalled — {project.stallReason}{project.stallNote ? `: ${project.stallNote}` : ''}</span>
-                    <button onClick={() => { updateProject(project.id, { isStalled: false, stallReason: undefined, stallNote: undefined }); logActivity(project.mountainId, 'stall_cleared', `Project "${project.name}" stall cleared`); }} className="text-[12px] text-[#307fe2]">Clear</button>
+                    {isOwner && <button onClick={clearStall} className="text-[12px] text-[#307fe2]">Clear</button>}
                   </div>
-                ) : !stallOpen ? (
+                ) : !isOwner ? null : !stallOpen ? (
                   <button onClick={() => setStallOpen(true)} className="text-[13px] text-[#F95C39] flex items-center gap-1.5 active:opacity-70"><AlertTriangle size={13} /> Mark stalled</button>
                 ) : (
                   <div className="space-y-2">
