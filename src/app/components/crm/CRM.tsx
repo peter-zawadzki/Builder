@@ -10,7 +10,7 @@ import {
 import { useData } from '../../context/DataContext';
 import type {
   CRMContact, CRMOrganization, CRMTeam, ContactType, ContactTag, ContactActivity,
-  OrgType, MountainPipelineStage, StallReason, MountainNote,
+  OrgType, MountainPipelineStage, StallReason, MountainNote, Mountain as MountainRecord,
 } from '../../context/DataContext';
 import { MOUNTAIN_PIPELINE_STAGES } from '../../context/DataContext';
 import { toast } from 'sonner';
@@ -109,6 +109,148 @@ function LinkPill({
     <button onClick={e => { e.stopPropagation(); onClick(); }} className={`text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 active:opacity-70 ${colorClass}`}>
       {icon} {label} ({count})
     </button>
+  );
+}
+
+// ─── Contact association helpers (mountain / organization / team) ─────────────
+// A contact can be linked to a mountain, an organization, and a team all at
+// once. `primaryAssociation` picks which one drives the avatar logo and the
+// emphasized pill when more than one is linked.
+
+export function contactAvatarLogo(
+  contact: CRMContact,
+  data: { mountains: MountainRecord[]; organizations: CRMOrganization[]; teams: CRMTeam[] },
+): string | undefined {
+  const mountain = contact.mountainId ? data.mountains.find(m => m.id === contact.mountainId) : undefined;
+  const org = contact.organizationId ? data.organizations.find(o => o.id === contact.organizationId) : undefined;
+  const team = contact.teamId ? data.teams.find(t => t.id === contact.teamId) : undefined;
+  const byAssociation: Record<string, string | undefined> = {
+    mountain: mountain?.mountainLogo,
+    organization: org?.logo,
+    team: team?.logo,
+  };
+  if (contact.primaryAssociation && byAssociation[contact.primaryAssociation]) {
+    return byAssociation[contact.primaryAssociation];
+  }
+  return org?.logo || team?.logo || mountain?.mountainLogo;
+}
+
+// Compact org/team pills for a contact card — the primary one (if set) is
+// styled solid, the rest outlined. Pass `hideMountain` on the mountain's own
+// Contacts pane since the mountain link is already implied by context.
+export function ContactAssociationPills({
+  contact, organizations, teams, hideMountain, mountains, onOpenOrg, onOpenTeam,
+}: {
+  contact: CRMContact;
+  organizations: CRMOrganization[];
+  teams: CRMTeam[];
+  mountains?: MountainRecord[];
+  hideMountain?: boolean;
+  onOpenOrg?: (id: string) => void;
+  onOpenTeam?: (id: string) => void;
+}) {
+  const org = contact.organizationId ? organizations.find(o => o.id === contact.organizationId) : undefined;
+  const team = contact.teamId ? teams.find(t => t.id === contact.teamId) : undefined;
+  const mountain = !hideMountain && contact.mountainId ? mountains?.find(m => m.id === contact.mountainId) : undefined;
+  const pills = [
+    mountain && { key: 'mountain' as const, name: mountain.name, icon: <Mountain size={10} />, base: 'bg-[#e3f2fd] text-[#1565c0]', onClick: () => {} },
+    org && { key: 'organization' as const, name: org.name, icon: <Building2 size={10} />, base: 'bg-[#f3edfb] text-[#7c3aed]', onClick: () => onOpenOrg?.(org.id) },
+    team && { key: 'team' as const, name: team.name, icon: <Users2 size={10} />, base: 'bg-[#eef3fb] text-[#307fe2]', onClick: () => onOpenTeam?.(team.id) },
+  ].filter(Boolean) as { key: 'mountain' | 'organization' | 'team'; name: string; icon: React.ReactNode; base: string; onClick: () => void }[];
+  if (pills.length === 0) return null;
+  return (
+    <>
+      {pills.map(p => (
+        <button
+          key={p.key}
+          onClick={e => { e.stopPropagation(); p.onClick(); }}
+          className={`text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1 active:opacity-70 ${p.base} ${contact.primaryAssociation === p.key ? 'ring-1 ring-offset-1 ring-current' : ''}`}
+        >
+          {p.icon} {p.name}
+        </button>
+      ))}
+    </>
+  );
+}
+
+// "Which relationship is primary" picker — only shown once a contact has 2+
+// of {mountain, organization, team} linked, since with only one there's no
+// ambiguity to resolve.
+function PrimaryAssociationPicker({
+  mountainId, organizationId, teamId, mountainName, orgName, teamName, value, onChange,
+}: {
+  mountainId?: string;
+  organizationId?: string;
+  teamId?: string;
+  mountainName?: string;
+  orgName?: string;
+  teamName?: string;
+  value?: 'mountain' | 'organization' | 'team';
+  onChange: (v: 'mountain' | 'organization' | 'team') => void;
+}) {
+  const options: { key: 'mountain' | 'organization' | 'team'; label: string }[] = [
+    ...(mountainId ? [{ key: 'mountain' as const, label: mountainName || 'Mountain' }] : []),
+    ...(organizationId ? [{ key: 'organization' as const, label: orgName || 'Organization' }] : []),
+    ...(teamId ? [{ key: 'team' as const, label: teamName || 'Team' }] : []),
+  ];
+  if (options.length < 2) return null;
+  return (
+    <div>
+      <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1 uppercase tracking-wide">Primary Association</label>
+      <p className="text-[11px] text-[#8992a0] mb-1.5">Picks which logo and pill are highlighted since this contact is linked to more than one.</p>
+      <div className="flex gap-2 flex-wrap">
+        {options.map(o => (
+          <button
+            key={o.key}
+            type="button"
+            onClick={() => onChange(o.key)}
+            className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] border ${value === o.key ? 'bg-[#307fe2] text-white border-[#307fe2]' : 'border-[rgba(0,0,0,0.1)] text-[#6a7282]'}`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Tag multi-select that also lets a user type in and persist a brand new tag
+// (stored via the generic options store so it shows up as a suggestion for
+// every future contact, not just this one).
+function ContactTagPicker({ tags, onChange }: { tags: ContactTag[]; onChange: (tags: ContactTag[]) => void }) {
+  const { getOptions, addOption } = useData();
+  const [newTag, setNewTag] = useState('');
+  const allTags = [...new Set([...CONTACT_TAGS, ...getOptions('crm:contactTags')])];
+
+  const toggle = (t: string) => onChange(tags.includes(t) ? tags.filter(x => x !== t) : [...tags, t]);
+  const addCustom = () => {
+    const trimmed = newTag.trim();
+    if (!trimmed) return;
+    addOption('crm:contactTags', trimmed);
+    if (!tags.includes(trimmed)) onChange([...tags, trimmed]);
+    setNewTag('');
+  };
+
+  return (
+    <div>
+      <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Tags</label>
+      <div className="flex gap-2 flex-wrap mb-2">
+        {allTags.map(t => (
+          <button key={t} type="button" onClick={() => toggle(t)} className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] border ${tags.includes(t) ? 'bg-[#1D2930] text-white border-[#1D2930]' : 'border-[rgba(0,0,0,0.1)] text-[#6a7282]'}`}>{t}</button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newTag}
+          onChange={e => setNewTag(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }}
+          placeholder="Add a custom tag…"
+          className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none"
+        />
+        <button type="button" onClick={addCustom} className="px-3 bg-[#1D2930] text-white rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80 shrink-0">Add</button>
+      </div>
+    </div>
   );
 }
 
@@ -466,11 +608,11 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
     tags: contact.tags || [] as ContactTag[],
     isPrimary: contact.isPrimary || false,
     mountainId: contact.mountainId || '',
+    primaryAssociation: contact.primaryAssociation,
     notes: contact.notes || '',
   });
 
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
-  const toggleTag = (t: ContactTag) => set('tags', form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]);
 
   // Live field edits — same "hit edit, then change things" pattern as Teams.
   const editField = (updates: any) => updateContact(contact.id, updates);
@@ -497,9 +639,16 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
     <div className="flex flex-col h-full">
       {/* Sub-header */}
       <div className="bg-[#f9fafb] border-b border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-[#1D2930] flex items-center justify-center text-white text-[13px] font-['Inter:Medium',sans-serif] shrink-0">
-          {contact.name.charAt(0).toUpperCase()}
-        </div>
+        {(() => {
+          const logo = contactAvatarLogo(contact, { mountains, organizations, teams });
+          return logo ? (
+            <img src={logo} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-[#1D2930] flex items-center justify-center text-white text-[13px] font-['Inter:Medium',sans-serif] shrink-0">
+              {contact.name.charAt(0).toUpperCase()}
+            </div>
+          );
+        })()}
         <div className="flex-1 min-w-0">
           <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{contact.name}</p>
           <p className="text-[11px] text-[#6a7282]">{contact.type}{contact.title ? ` · ${contact.title}` : ''}</p>
@@ -584,14 +733,18 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
               </select>
             </div>
 
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Tags</label>
-              <div className="flex gap-2 flex-wrap">
-                {CONTACT_TAGS.map(t => (
-                  <button key={t} type="button" onClick={() => { toggleTag(t); const tags = form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]; editField({ tags }); }} className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] border ${form.tags.includes(t) ? 'bg-[#1D2930] text-white border-[#1D2930]' : 'border-[rgba(0,0,0,0.1)] text-[#6a7282]'}`}>{t}</button>
-                ))}
-              </div>
-            </div>
+            <PrimaryAssociationPicker
+              mountainId={form.mountainId}
+              organizationId={form.organizationId}
+              teamId={form.teamId}
+              mountainName={mountains.find(m => m.id === form.mountainId)?.name}
+              orgName={organizations.find(o => o.id === form.organizationId)?.name}
+              teamName={teams.find(t => t.id === form.teamId)?.name}
+              value={form.primaryAssociation}
+              onChange={v => { set('primaryAssociation', v); editField({ primaryAssociation: v }); }}
+            />
+
+            <ContactTagPicker tags={form.tags} onChange={tags => { set('tags', tags); editField({ tags }); }} />
 
             <div className="flex items-center gap-2">
               <input type="checkbox" id="primary-edit" checked={form.isPrimary} onChange={e => { set('isPrimary', e.target.checked); editField({ isPrimary: e.target.checked }); }} className="w-4 h-4" />
@@ -753,9 +906,8 @@ function Contacts({
       ) : (
         <div className="space-y-2">
           {filtered.map(c => {
-            const linkedMountain = c.mountainId ? mountains.find(m => m.id === c.mountainId) : undefined;
-            const org = organizations.find(o => o.id === c.organizationId);
             const openActions = (c.activities || []).filter(a => a.type === 'action' && !a.completed).length;
+            const logo = contactAvatarLogo(c, { mountains, organizations, teams });
             return (
               <div
                 key={c.id}
@@ -765,28 +917,35 @@ function Contacts({
                 onKeyDown={e => { if (e.key === 'Enter') setSelectedContact(c); }}
                 className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3 cursor-pointer active:bg-[#f9fafb]"
               >
-                <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
-                  {c.name.charAt(0).toUpperCase()}
-                </div>
+                {logo ? (
+                  <img src={logo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
+                    {c.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{c.name}</p>
                     {c.isPrimary && <Star size={12} className="text-[#e65100]" />}
                     <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{c.type}</span>
-                    {linkedMountain && (
-                      <button onClick={e => { e.stopPropagation(); navigate(`/mountains/${linkedMountain.id}`); }} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-[#cfe6fb] active:opacity-70">
-                        <Mountain size={10} /> {linkedMountain.name}
-                      </button>
-                    )}
-                    {org && (
-                      <button onClick={e => { e.stopPropagation(); navigate(`/crm?tab=organizations&open=${org.id}`); }} className="text-[11px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-[#e6d9f7] active:opacity-70">
-                        <Building2 size={10} /> {org.name}
-                      </button>
-                    )}
+                    <ContactAssociationPills
+                      contact={c}
+                      mountains={mountains}
+                      organizations={organizations}
+                      teams={teams}
+                      onOpenOrg={id => navigate(`/crm?tab=organizations&open=${id}`)}
+                      onOpenTeam={id => navigate(`/crm?tab=teams&open=${id}`)}
+                    />
                     {openActions > 0 && <span className="text-[11px] bg-[#fff3e0] text-[#e65100] px-2 py-0.5 rounded-full">{openActions} action{openActions !== 1 ? 's' : ''}</span>}
                   </div>
                   {c.title && <p className="text-[12px] text-[#6a7282]">{c.title}</p>}
                   {c.email && <p className="text-[11px] text-[#6a7282] mt-0.5">{c.email}</p>}
+                  {c.tags.length > 0 && (
+                    <div className="flex gap-1 flex-wrap mt-1">
+                      {c.tags.map(t => <span key={t} className="text-[10px] bg-[#e3f2fd] text-[#1565c0] px-1.5 py-0.5 rounded-full">{t}</span>)}
+                    </div>
+                  )}
                 </div>
                 {showArchived ? (
                   <button onClick={e => { e.stopPropagation(); updateContact(c.id, { archived: false }); toast.success('Restored'); }} className="shrink-0 self-center text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] px-2 py-1 active:opacity-70">Restore</button>
@@ -870,11 +1029,11 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
     tags: contact?.tags || [] as ContactTag[],
     isPrimary: contact?.isPrimary || false,
     mountainId: contact?.mountainId || defaults?.mountainId || '',
+    primaryAssociation: contact?.primaryAssociation,
     notes: contact?.notes || '',
   });
 
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
-  const toggleTag = (t: ContactTag) => set('tags', form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]);
 
   const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
 
@@ -1002,14 +1161,18 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
             </select>
           </div>
 
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Tags</label>
-            <div className="flex gap-2 flex-wrap">
-              {CONTACT_TAGS.map(t => (
-                <button key={t} type="button" onClick={() => toggleTag(t)} className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] border ${form.tags.includes(t) ? 'bg-[#1D2930] text-white border-[#1D2930]' : 'border-[rgba(0,0,0,0.1)] text-[#6a7282]'}`}>{t}</button>
-              ))}
-            </div>
-          </div>
+          <PrimaryAssociationPicker
+            mountainId={form.mountainId}
+            organizationId={form.organizationId}
+            teamId={form.teamId}
+            mountainName={mountains.find(m => m.id === form.mountainId)?.name}
+            orgName={organizations.find(o => o.id === form.organizationId)?.name}
+            teamName={teams.find(t => t.id === form.teamId)?.name}
+            value={form.primaryAssociation}
+            onChange={v => set('primaryAssociation', v)}
+          />
+
+          <ContactTagPicker tags={form.tags} onChange={tags => set('tags', tags)} />
 
           <div className="flex items-center gap-2">
             <input type="checkbox" id="primary" checked={form.isPrimary} onChange={e => set('isPrimary', e.target.checked)} className="w-4 h-4" />

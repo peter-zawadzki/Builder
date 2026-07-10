@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData, MOUNTAIN_PIPELINE_STAGES } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
-import { ContactDetail, ContactForm } from './crm/CRM';
+import { ContactDetail, ContactForm, ContactAssociationPills } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import { ProposalsPane } from './projects/ProposalsPane';
 import { AssignInventoryModal } from './CheckInOutModal';
@@ -120,6 +120,7 @@ export function MountainDetail() {
     assets,
     contacts,
     organizations,
+    teams,
     updateLocation,
     updateMountain,
     updateContact,
@@ -422,10 +423,13 @@ export function MountainDetail() {
                     const noteCount = c.activities?.filter((a) => a.type === 'note').length || 0;
                     const openActions = c.activities?.filter((a) => a.type === 'action' && !a.completed).length || 0;
                     return (
-                      <button
+                      <div
                         key={c.id}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setCrmContact(c)}
-                        className="w-full text-left border border-[rgba(0,0,0,0.06)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)]"
+                        onKeyDown={e => { if (e.key === 'Enter') setCrmContact(c); }}
+                        className="w-full text-left border border-[rgba(0,0,0,0.06)] rounded-[10px] p-2.5 cursor-pointer active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.12)]"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[14px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] truncate">{c.name}</span>
@@ -441,11 +445,28 @@ export function MountainDetail() {
                           </div>
                         </div>
                         {c.title && <div className="text-[12px] text-[#6a7282]">{c.title}</div>}
+                        {(c.organizationId || c.teamId) && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            <ContactAssociationPills
+                              contact={c}
+                              organizations={organizations}
+                              teams={teams}
+                              hideMountain
+                              onOpenOrg={id => navigate(`/crm?tab=organizations&open=${id}`)}
+                              onOpenTeam={id => navigate(`/crm?tab=teams&open=${id}`)}
+                            />
+                          </div>
+                        )}
                         <div className="flex flex-col gap-0.5 mt-1">
                           {c.email && <span className="flex items-center gap-1.5 text-[12px] text-[#307fe2] truncate"><Mail size={12} className="shrink-0" /> {c.email}</span>}
                           {c.phone && <span className="flex items-center gap-1.5 text-[12px] text-[#6a7282]"><Phone size={12} className="shrink-0" /> {c.phone}</span>}
                         </div>
-                      </button>
+                        {c.tags.length > 0 && (
+                          <div className="flex gap-1 flex-wrap mt-1">
+                            {c.tags.map(t => <span key={t} className="text-[10px] bg-[#e3f2fd] text-[#1565c0] px-1.5 py-0.5 rounded-full">{t}</span>)}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

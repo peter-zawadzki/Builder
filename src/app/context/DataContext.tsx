@@ -272,7 +272,9 @@ export interface Asset {
 // ─── CRM ─────────────────────────────────────────────────────────────────────
 
 export type ContactType = 'Staff' | 'Partner' | 'Vendor' | 'Investor' | 'Advisor' | 'Coach' | 'Team' | 'Ambassador' | 'General';
-export type ContactTag = 'Decision Maker' | 'Technical' | 'Champion' | 'Billing' | 'Legal';
+// A fixed set of suggested tags plus any custom tag text a user has added
+// (persisted via the generic options store under the 'crm:contactTags' key).
+export type ContactTag = string;
 export type OrgType = 'Mountain Group' | 'Partner' | 'Vendor' | 'Investor Group' | 'Advisory' | 'Corporate Group';
 export type PipelineStage =
   | 'Prospect' | 'Contacted' | 'Demo Scheduled' | 'Positive'
@@ -403,6 +405,9 @@ export interface CRMContact {
   isPrimary: boolean;
   mountainId?: string;       // single linked mountain
   teamId?: string;           // single linked team
+  // Which relationship (when more than one is linked) drives the avatar logo
+  // and the emphasized pill in compact contact cards.
+  primaryAssociation?: 'mountain' | 'organization' | 'team';
   affiliation?: 'Employee' | 'Ambassador';  // for YULLR-org people: their role in Builder
   archived?: boolean;        // archived contacts drop out of default lists/search
   notes?: string;
