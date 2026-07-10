@@ -5,7 +5,7 @@ import {
   ArrowLeft, Users, Users2, Building2, Activity, Bell, LayoutDashboard, Mountain,
   Plus, Search, X, ChevronRight, Pencil, Trash2, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Phone, Mail, Star, Calendar,
-  ExternalLink, Check, MessageSquare, ListTodo, ChevronLeft, Archive,
+  ExternalLink, Check, MessageSquare, ListTodo, Archive,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import type {
@@ -440,12 +440,42 @@ export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; 
 // ─── Contact Detail ───────────────────────────────────────────────────────────
 
 export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
-  const { updateContact, deleteContact, getMountainById, organizations } = useData();
+  const { updateContact, deleteContact, getMountainById, organizations, mountains, teams } = useData();
   const navigate = useNavigate();
-  const [showEdit, setShowEdit] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const mountain = contact.mountainId ? getMountainById(contact.mountainId) : undefined;
   const org = contact.organizationId ? organizations.find(o => o.id === contact.organizationId) : undefined;
+  const team = contact.teamId ? teams.find(t => t.id === contact.teamId) : undefined;
+
+  type Phone = { number: string; label: 'Mobile' | 'Work' | 'Home' };
+  const [form, setForm] = useState({
+    firstName: contact.firstName || contact.name.trim().split(/\s+/)[0] || '',
+    lastName: contact.lastName || contact.name.trim().split(/\s+/).slice(1).join(' ') || '',
+    email: contact.email || '',
+    emails: contact.emails || [] as string[],
+    phones: (contact.phones && contact.phones.length ? contact.phones : [
+      ...(contact.phone ? [{ number: contact.phone, label: 'Mobile' }] : []),
+      ...(contact.mobilePhone ? [{ number: contact.mobilePhone, label: 'Mobile' }] : []),
+      ...(contact.workPhone ? [{ number: contact.workPhone, label: 'Work' }] : []),
+    ]) as Phone[],
+    type: contact.type,
+    title: contact.title || '',
+    organizationId: contact.organizationId || '',
+    teamId: contact.teamId || '',
+    tags: contact.tags || [] as ContactTag[],
+    isPrimary: contact.isPrimary || false,
+    mountainId: contact.mountainId || '',
+    notes: contact.notes || '',
+  });
+
+  const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const toggleTag = (t: ContactTag) => set('tags', form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]);
+
+  // Live field edits — same "hit edit, then change things" pattern as Teams.
+  const editField = (updates: any) => updateContact(contact.id, updates);
+
+  const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
 
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
     const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
@@ -467,7 +497,6 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
     <div className="flex flex-col h-full">
       {/* Sub-header */}
       <div className="bg-[#f9fafb] border-b border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-center gap-3">
-        <button onClick={onBack} className="p-1 active:opacity-60"><ChevronLeft size={20} className="text-[#0a0a0a]" /></button>
         <div className="w-8 h-8 rounded-full bg-[#1D2930] flex items-center justify-center text-white text-[13px] font-['Inter:Medium',sans-serif] shrink-0">
           {contact.name.charAt(0).toUpperCase()}
         </div>
@@ -475,36 +504,106 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{contact.name}</p>
           <p className="text-[11px] text-[#6a7282]">{contact.type}{contact.title ? ` · ${contact.title}` : ''}</p>
         </div>
-        <button onClick={() => setShowEdit(true)} className="p-1.5 rounded-[8px] bg-[#eef3fb] active:bg-[#dce8f4]" title="Edit contact">
-          <Pencil size={15} className="text-[#307fe2]" />
+        <button onClick={() => setIsEditMode(v => !v)} className={`p-1.5 rounded-full active:opacity-70 ${isEditMode ? 'bg-[#1D2930]' : 'bg-[#eef3fb]'}`} title={isEditMode ? 'Done editing' : 'Edit'}>
+          <Pencil size={15} className={isEditMode ? 'text-white' : 'text-[#307fe2]'} />
         </button>
-        <button
-          onClick={() => {
-            updateContact(contact.id, { archived: !contact.archived });
-            toast.success(contact.archived ? 'Restored' : 'Archived');
-            if (!contact.archived) onBack();
-          }}
-          className="p-1.5 rounded-[8px] bg-[#f3f3f5] active:bg-[#e8e8ea]"
-          title={contact.archived ? 'Restore' : 'Archive'}
-        >
-          <Archive size={15} className="text-[#6a7282]" />
-        </button>
-        <button onClick={() => setShowDelete(true)} className="p-1.5 rounded-[8px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete contact">
-          <Trash2 size={15} className="text-[#F95C39]" />
-        </button>
+        <button onClick={onBack} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
       </div>
-      {showEdit && <ContactForm contact={contact} onClose={() => setShowEdit(false)} />}
-      {showDelete && (
-        <DeleteConfirmModal
-          title="Delete contact"
-          description={`Remove ${contact.name} from the CRM?`}
-          onConfirm={() => { deleteContact(contact.id); toast.success('Contact deleted'); onBack(); }}
-          onCancel={() => setShowDelete(false)}
-        />
-      )}
 
       <div className="overflow-y-auto flex-1 p-4 space-y-4">
-        {/* Contact info */}
+        {isEditMode ? (
+          <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">First Name *</label>
+                <input type="text" value={form.firstName} onChange={e => { set('firstName', e.target.value); editField({ firstName: e.target.value, name: `${e.target.value.trim()} ${form.lastName.trim()}`.trim() }); }} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Last Name</label>
+                <input type="text" value={form.lastName} onChange={e => { set('lastName', e.target.value); editField({ lastName: e.target.value, name: `${form.firstName.trim()} ${e.target.value.trim()}`.trim() }); }} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Email</label>
+                <input type="email" value={form.email} onChange={e => { set('email', e.target.value); editField({ email: e.target.value }); }} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
+                <select value={form.type} onChange={e => { set('type', e.target.value); editField({ type: e.target.value }); }} className={`${inputCls} appearance-none`}>
+                  {CONTACT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Title</label>
+                <input type="text" value={form.title} onChange={e => { set('title', e.target.value); editField({ title: e.target.value }); }} className={inputCls} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Phone numbers</label>
+              <div className="space-y-2">
+                {form.phones.map((p, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input type="tel" value={p.number} placeholder="(000) 000-0000"
+                      onChange={e => { const phones = form.phones.map((x, j) => j === i ? { ...x, number: e.target.value } : x); set('phones', phones); editField({ phones, phone: phones[0]?.number || '' }); }}
+                      className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+                    <select value={p.label}
+                      onChange={e => { const phones = form.phones.map((x, j) => j === i ? { ...x, label: e.target.value as Phone['label'] } : x); set('phones', phones); editField({ phones, phone: phones[0]?.number || '' }); }}
+                      className="w-24 bg-[#f3f3f5] rounded-[8px] px-2 py-2.5 text-[#0a0a0a] text-[13px] appearance-none">
+                      <option value="Mobile">Mobile</option>
+                      <option value="Work">Work</option>
+                      <option value="Home">Home</option>
+                    </select>
+                    <button type="button" onClick={() => { const phones = form.phones.filter((_, j) => j !== i); set('phones', phones); editField({ phones, phone: phones[0]?.number || '' }); }} className="p-2 rounded-[8px] bg-[#fff0ee] active:bg-[#ffe0da]"><X size={14} className="text-[#F95C39]" /></button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => set('phones', [...form.phones, { number: '', label: 'Mobile' }])} className="text-[12px] text-[#307fe2] flex items-center gap-1 active:opacity-70"><Plus size={13} /> Add phone</button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Organization</label>
+              <select value={form.organizationId} onChange={e => { set('organizationId', e.target.value); editField({ organizationId: e.target.value || undefined }); }} className={`${inputCls} appearance-none`}>
+                <option value="">— None —</option>
+                {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Team</label>
+              <select value={form.teamId} onChange={e => { set('teamId', e.target.value); editField({ teamId: e.target.value || undefined }); }} className={`${inputCls} appearance-none`}>
+                <option value="">— None —</option>
+                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Linked Mountain</label>
+              <select value={form.mountainId} onChange={e => { set('mountainId', e.target.value); editField({ mountainId: e.target.value || undefined }); }} className={`${inputCls} appearance-none`}>
+                <option value="">— None —</option>
+                {mountains.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Tags</label>
+              <div className="flex gap-2 flex-wrap">
+                {CONTACT_TAGS.map(t => (
+                  <button key={t} type="button" onClick={() => { toggleTag(t); const tags = form.tags.includes(t) ? form.tags.filter(x => x !== t) : [...form.tags, t]; editField({ tags }); }} className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] border ${form.tags.includes(t) ? 'bg-[#1D2930] text-white border-[#1D2930]' : 'border-[rgba(0,0,0,0.1)] text-[#6a7282]'}`}>{t}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="primary-edit" checked={form.isPrimary} onChange={e => { set('isPrimary', e.target.checked); editField({ isPrimary: e.target.checked }); }} className="w-4 h-4" />
+              <label htmlFor="primary-edit" className="text-[14px] text-[#0a0a0a]">Mark as primary contact</label>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
+              <textarea value={form.notes} onChange={e => { set('notes', e.target.value); editField({ notes: e.target.value }); }} rows={3} className={`${inputCls} resize-none`} />
+            </div>
+          </div>
+        ) : (
         <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 space-y-2">
           {contact.email && <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-[13px] text-[#1565c0]"><Mail size={14} />{contact.email}</a>}
           {(contact.emails || []).filter(Boolean).map((em, i) => (
@@ -526,6 +625,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
               {org.logo ? <img src={org.logo} alt={org.name} className="h-5 object-contain" /> : <><Building2 size={14} />{org.name}</>}
             </button>
           )}
+          {team && <div className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Users2 size={14} />{team.name}</div>}
           {contact.tags.length > 0 && (
             <div className="flex gap-1 flex-wrap pt-1">
               {contact.tags.map(t => <span key={t} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full">{t}</span>)}
@@ -533,6 +633,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           )}
           {contact.notes && <p className="text-[13px] text-[#6a7282] pt-1">{contact.notes}</p>}
         </div>
+        )}
 
         <ActivitySection
           activities={contact.activities || []}
@@ -541,6 +642,30 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           onDelete={deleteActivity}
         />
       </div>
+
+      {isEditMode && (
+        <div className="px-4 py-3 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center shrink-0">
+          <button
+            onClick={() => { updateContact(contact.id, { archived: !contact.archived }); toast.success(contact.archived ? 'Restored' : 'Archived'); if (!contact.archived) onBack(); }}
+            className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]"
+            title={contact.archived ? 'Restore' : 'Archive'}
+          >
+            <Archive size={16} className="text-[#6a7282]" />
+          </button>
+          <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete contact">
+            <Trash2 size={16} className="text-[#F95C39]" />
+          </button>
+          <span className="flex-1 text-[12px] text-[#8992a0]">Editing — tap the pencil again when done.</span>
+        </div>
+      )}
+      {showDelete && (
+        <DeleteConfirmModal
+          title="Delete contact"
+          description={`Remove ${contact.name} from the CRM?`}
+          onConfirm={() => { deleteContact(contact.id); toast.success('Contact deleted'); onBack(); }}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
     </div>
   );
 }
@@ -597,13 +722,6 @@ function Contacts({
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [contacts, search, filterType, filterMountainId, filterOrgId, filterTeamId, mountains, showArchived]);
 
-  // Show detail view if contact selected
-  if (selectedContact) {
-    // Keep in sync with latest state
-    const live = contacts.find(c => c.id === selectedContact.id) || selectedContact;
-    return <ContactDetail contact={live} onBack={() => setSelectedContact(null)} />;
-  }
-
   return (
     <div className="p-4 space-y-3">
       {filterLabel && (
@@ -639,17 +757,18 @@ function Contacts({
             const org = organizations.find(o => o.id === c.organizationId);
             const openActions = (c.activities || []).filter(a => a.type === 'action' && !a.completed).length;
             return (
-              <div key={c.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3">
-                <button onClick={() => setSelectedContact(c)} className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif] active:opacity-70">
+              <div
+                key={c.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedContact(c)}
+                onKeyDown={e => { if (e.key === 'Enter') setSelectedContact(c); }}
+                className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3 cursor-pointer active:bg-[#f9fafb]"
+              >
+                <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
                   {c.name.charAt(0).toUpperCase()}
-                </button>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedContact(c)}
-                  onKeyDown={e => { if (e.key === 'Enter') setSelectedContact(c); }}
-                  className="flex-1 min-w-0 text-left cursor-pointer active:opacity-70"
-                >
+                </div>
+                <div className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{c.name}</p>
                     {c.isPrimary && <Star size={12} className="text-[#e65100]" />}
@@ -670,9 +789,9 @@ function Contacts({
                   {c.email && <p className="text-[11px] text-[#6a7282] mt-0.5">{c.email}</p>}
                 </div>
                 {showArchived ? (
-                  <button onClick={() => { updateContact(c.id, { archived: false }); toast.success('Restored'); }} className="shrink-0 self-center text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] px-2 py-1 active:opacity-70">Restore</button>
+                  <button onClick={e => { e.stopPropagation(); updateContact(c.id, { archived: false }); toast.success('Restored'); }} className="shrink-0 self-center text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] px-2 py-1 active:opacity-70">Restore</button>
                 ) : (
-                  <button onClick={() => setSelectedContact(c)} className="shrink-0 self-center p-1 active:opacity-70"><ChevronRight size={16} className="text-[#c0c4cc]" /></button>
+                  <ChevronRight size={16} className="shrink-0 self-center text-[#c0c4cc]" />
                 )}
               </div>
             );
@@ -688,6 +807,19 @@ function Contacts({
           onConfirm={() => { deleteContact(deleteTarget.id); setDeleteTarget(null); toast.success('Contact deleted'); }}
           onCancel={() => setDeleteTarget(null)}
         />
+      )}
+      {selectedContact && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"
+          onClick={e => { if (e.target === e.currentTarget) setSelectedContact(null); }}
+        >
+          <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-lg h-[88vh] sm:h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <ContactDetail
+              contact={contacts.find(c => c.id === selectedContact.id) || selectedContact}
+              onBack={() => setSelectedContact(null)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
@@ -973,18 +1105,23 @@ function Organizations({ openId }: { openId?: string } = {}) {
             const linkedContacts = contacts.filter(c => org.contactIds.includes(c.id) || c.organizationId === org.id);
             const linkedTeams = teams.filter(t => linkedContacts.some(c => c.teamId === t.id));
             return (
-              <div key={org.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3">
-                <button onClick={() => { setEditTarget(org); setShowForm(true); }} className="w-full text-left active:opacity-70">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org.name}</p>
-                    <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{org.type}</span>
-                    {org.archived
-                      ? <span onClick={e => { e.stopPropagation(); updateOrganization(org.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0">Restore</span>
-                      : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
-                  </div>
-                  {org.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{org.notes}</p>}
-                </button>
-                <div className="flex gap-1.5 flex-wrap mt-1.5">
+              <div
+                key={org.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => { setEditTarget(org); setShowForm(true); }}
+                onKeyDown={e => { if (e.key === 'Enter') { setEditTarget(org); setShowForm(true); } }}
+                className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 cursor-pointer active:bg-[#f9fafb]"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org.name}</p>
+                  <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{org.type}</span>
+                  {org.archived
+                    ? <button onClick={e => { e.stopPropagation(); updateOrganization(org.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0 active:opacity-70">Restore</button>
+                    : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
+                </div>
+                {org.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{org.notes}</p>}
+                <div className="flex gap-1.5 flex-wrap mt-1.5" onClick={e => e.stopPropagation()}>
                   <AssocPill
                     icon={<Users2 size={10} />} label="Teams" colorClass="bg-[#eef3fb] text-[#307fe2]"
                     items={linkedTeams.map(t => ({ id: t.id, name: t.name }))}
@@ -1022,6 +1159,7 @@ function Organizations({ openId }: { openId?: string } = {}) {
 
 function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () => void }) {
   const { addOrganization, updateOrganization, deleteOrganization, mountains, updateMountain } = useData();
+  const [isEditMode, setIsEditMode] = useState(!org);
   const [showDelete, setShowDelete] = useState(false);
   const [form, setForm] = useState({
     name: org?.name || '',
@@ -1036,64 +1174,100 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
 
   const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
   const toggleMountain = (id: string) => set('mountainIds', form.mountainIds.includes(id) ? form.mountainIds.filter(x => x !== id) : [...form.mountainIds, id]);
+  const linkedMountains = mountains.filter(m => form.mountainIds.includes(m.id));
 
-  const save = () => {
+  const create = () => {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
-    if (org) {
-      updateOrganization(org.id, form);
-      if (form.type === 'Corporate Group') form.mountainIds.forEach(id => updateMountain(id, { corporateGroup: form.name, organizationId: org.id }));
-    } else {
-      const newId = addOrganization(form);
-      if (form.type === 'Corporate Group') form.mountainIds.forEach(id => updateMountain(id, { corporateGroup: form.name, organizationId: newId }));
-    }
-    toast.success(org ? 'Updated' : 'Created');
+    const newId = addOrganization(form);
+    if (form.type === 'Corporate Group') form.mountainIds.forEach(id => updateMountain(id, { corporateGroup: form.name, organizationId: newId }));
+    toast.success('Organization created');
     onClose();
   };
+
+  // Live field edits on an existing org — same pattern as Teams.
+  const editField = (updates: Partial<CRMOrganization>) => {
+    if (!org) return;
+    updateOrganization(org.id, updates);
+    const type = updates.type ?? form.type;
+    const mountainIds = updates.mountainIds ?? form.mountainIds;
+    if (type === 'Corporate Group') mountainIds.forEach(id => updateMountain(id, { corporateGroup: updates.name ?? form.name, organizationId: org.id }));
+  };
+
+  const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
-          <h2 className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org ? 'Edit Organization' : 'New Organization'}</h2>
-          <div className="flex items-center gap-2 shrink-0">
-            {org?.logo && <img src={org.logo} alt={`${org.name} logo`} className="h-9 object-contain" />}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
+          <div className="min-w-0 pr-3 flex-1">
+            {org && isEditMode ? (
+              <input value={form.name} onChange={e => { set('name', e.target.value); editField({ name: e.target.value }); }} className="w-full text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] bg-[#f3f3f5] rounded-[8px] px-2.5 py-1.5 outline-none" />
+            ) : org?.logo ? (
+              <img src={org.logo} alt={org.name} className="h-9 object-contain" />
+            ) : (
+              <p className="text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{org ? org.name : 'New Organization'}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {org && (
+              <button onClick={() => setIsEditMode(v => !v)} className={`p-1.5 rounded-full active:opacity-70 ${isEditMode ? 'bg-[#1D2930]' : 'bg-[#eef3fb]'}`} title={isEditMode ? 'Done editing' : 'Edit'}>
+                <Pencil size={15} className={isEditMode ? 'text-white' : 'text-[#307fe2]'} />
+              </button>
+            )}
             <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
           </div>
         </div>
+
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
-            <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
-          </div>
-          <LogoUploader value={form.logo} onChange={v => set('logo', v)} />
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
-            <select value={form.type} onChange={e => set('type', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] appearance-none">
-              {ORG_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Linked Mountains</label>
-            <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-32 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
-              {mountains.map(m => (
-                <button key={m.id} type="button" onClick={() => toggleMountain(m.id)} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] ${form.mountainIds.includes(m.id) ? 'bg-[#f0fdf4] text-[#1b5e20]' : 'text-[#0a0a0a]'}`}>
-                  {form.mountainIds.includes(m.id) && <Check size={12} className="text-[#2e7d32]" />}
-                  {m.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Agreement Details</label>
-            <textarea value={form.agreementDetails} onChange={e => set('agreementDetails', e.target.value)} rows={2} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none resize-none" />
-          </div>
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none resize-none" />
-          </div>
+          {!org || isEditMode ? (
+            <>
+              {!org && (
+                <div>
+                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Name *</label>
+                  <input type="text" value={form.name} onChange={e => set('name', e.target.value)} className={inputCls} />
+                </div>
+              )}
+              <LogoUploader value={form.logo} onChange={v => { set('logo', v); if (org) editField({ logo: v }); }} />
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
+                <select value={form.type} onChange={e => { set('type', e.target.value); editField({ type: e.target.value as OrgType }); }} className={`${inputCls} appearance-none`}>
+                  {ORG_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Linked Mountains</label>
+                <div className="border border-[rgba(0,0,0,0.08)] rounded-[8px] max-h-32 overflow-y-auto divide-y divide-[rgba(0,0,0,0.05)]">
+                  {mountains.map(m => (
+                    <button key={m.id} type="button" onClick={() => { toggleMountain(m.id); if (org) editField({ mountainIds: form.mountainIds.includes(m.id) ? form.mountainIds.filter(x => x !== m.id) : [...form.mountainIds, m.id] }); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-[13px] ${form.mountainIds.includes(m.id) ? 'bg-[#f0fdf4] text-[#1b5e20]' : 'text-[#0a0a0a]'}`}>
+                      {form.mountainIds.includes(m.id) && <Check size={12} className="text-[#2e7d32]" />}
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Agreement Details</label>
+                <textarea value={form.agreementDetails} onChange={e => { set('agreementDetails', e.target.value); editField({ agreementDetails: e.target.value }); }} rows={2} className={`${inputCls} resize-none`} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
+                <textarea value={form.notes} onChange={e => { set('notes', e.target.value); editField({ notes: e.target.value }); }} rows={3} className={`${inputCls} resize-none`} />
+              </div>
+            </>
+          ) : (
+            <>
+              {org.agreementDetails && <p className="text-[13px] text-[#0a0a0a]">{org.agreementDetails}</p>}
+              {linkedMountains.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {linkedMountains.map(m => <span key={m.id} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full">{m.name}</span>)}
+                </div>
+              )}
+              {org.notes && <p className="text-[13px] text-[#6a7282]">{org.notes}</p>}
+            </>
+          )}
 
           {org && (
-            <div>
+            <div className="pt-3 border-t border-[rgba(0,0,0,0.06)]">
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={org.activities || []}
@@ -1104,16 +1278,19 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
             </div>
           )}
         </div>
-        <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
-          {org && (
-            <button onClick={() => { updateOrganization(org.id, { archived: !org.archived }); toast.success(org.archived ? 'Restored' : 'Archived'); onClose(); }} className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title={org.archived ? 'Restore' : 'Archive'}><Archive size={16} className="text-[#6a7282]" /></button>
-          )}
-          {org && (
+
+        {!org ? (
+          <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)] flex gap-3">
+            <button onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Cancel</button>
+            <button onClick={create} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Create</button>
+          </div>
+        ) : isEditMode && (
+          <div className="px-5 py-3 border-t border-[rgba(0,0,0,0.08)] flex gap-3 items-center">
+            <button onClick={() => { updateOrganization(org.id, { archived: !org.archived }); toast.success(org.archived ? 'Restored' : 'Archived'); if (!org.archived) onClose(); }} className="p-3 rounded-[10px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title={org.archived ? 'Restore' : 'Archive'}><Archive size={16} className="text-[#6a7282]" /></button>
             <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete organization"><Trash2 size={16} className="text-[#F95C39]" /></button>
-          )}
-          <button onClick={onClose} className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Cancel</button>
-          <button onClick={save} className="flex-1 bg-[#1D2930] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]">Save</button>
-        </div>
+            <span className="flex-1 text-[12px] text-[#8992a0]">Editing — tap the pencil again when done.</span>
+          </div>
+        )}
       </div>
       {showDelete && org && (
         <DeleteConfirmModal
