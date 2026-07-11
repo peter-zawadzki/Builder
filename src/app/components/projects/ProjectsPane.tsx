@@ -6,6 +6,7 @@ import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProject
 import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity, StageStatus } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
+import { DiscardChangesModal } from '../DiscardChangesModal';
 import { useMyContact } from '../../hooks/useMyContact';
 
 // Project types available when creating a project under a Mountain vs. a Team.
@@ -401,10 +402,18 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const project = getProjectById(projectId);
   const me = useMyContact();
   const [isEditMode, setIsEditMode] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [stallOpen, setStallOpen] = useState(false);
   const [stallReason, setStallReason] = useState<StallReason>('No response');
   const [stallNote, setStallNote] = useState('');
+  const buildForm = () => ({
+    name: project?.name || '',
+    type: project?.type,
+    ownerContactId: project?.ownerContactId || '',
+  });
+  const [form, setForm] = useState(buildForm);
 
   if (!project) { onClose(); return null; }
   const isOwner = !!me && project.ownerContactId === me.id;
@@ -415,10 +424,40 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
   const stageStatus = project.stageStatus || {};
 
-  const setType = (t: ProjectType) => {
-    // Stage list is entirely different per type — start fresh rather than
-    // carrying over statuses that don't correspond to the new sequence.
-    updateProject(project.id, { type: t, stageStatus: {}, stageDates: {} });
+  // Name/Type/Owner are staged — nothing writes until Apply.
+  const set = (k: string, v: any) => { setForm(prev => ({ ...prev, [k]: v })); setDirty(true); };
+
+  const enterEdit = () => { setForm(buildForm()); setDirty(false); setIsEditMode(true); };
+
+  const applyChanges = () => {
+    const updates: { name?: string; type?: ProjectType; stageStatus?: {}; stageDates?: {} } = {};
+    if (form.name.trim() && form.name.trim() !== project.name) updates.name = form.name.trim();
+    if (form.type && form.type !== project.type) {
+      // Stage list is entirely different per type — start fresh rather than
+      // carrying over statuses that don't correspond to the new sequence.
+      updates.type = form.type;
+      updates.stageStatus = {};
+      updates.stageDates = {};
+    }
+    if (Object.keys(updates).length) updateProject(project.id, updates);
+    if (form.ownerContactId !== (project.ownerContactId || '')) {
+      const c = contacts.find(x => x.id === form.ownerContactId);
+      transferProjectOwner(project.id, form.ownerContactId, c?.name || '');
+    }
+    setIsEditMode(false);
+    setDirty(false);
+    toast.success('Project updated');
+  };
+
+  const discardChanges = () => {
+    setForm(buildForm());
+    setDirty(false);
+    setIsEditMode(false);
+  };
+
+  const handleClose = () => {
+    if (isEditMode && dirty) { setShowDiscardConfirm(true); return; }
+    onClose();
   };
 
   const cycleStage = (stage: ProjectStage) => {
@@ -475,8 +514,8 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
           <div className="min-w-0 pr-3 flex-1">
             {isEditMode ? (
               <input
-                value={project.name}
-                onChange={e => updateProject(project.id, { name: e.target.value })}
+                value={form.name}
+                onChange={e => set('name', e.target.value)}
                 className="w-full text-[17px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] bg-[#f3f3f5] rounded-[8px] px-2.5 py-1.5 outline-none"
               />
             ) : (
@@ -485,10 +524,16 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
             {project.createdBy && <p className="text-[11px] text-[#8992a0] mt-0.5">Created by {project.createdBy}</p>}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={() => setIsEditMode(v => !v)} className={`p-1.5 rounded-full active:opacity-70 ${isEditMode ? 'bg-[#1D2930]' : 'bg-[#eef3fb]'}`} title={isEditMode ? 'Done editing' : 'Edit'}>
-              <Pencil size={15} className={isEditMode ? 'text-white' : 'text-[#307fe2]'} />
-            </button>
-            <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
+            {!isEditMode ? (
+              <button onClick={enterEdit} className="p-1.5 rounded-full bg-[#eef3fb] active:opacity-70" title="Edit">
+                <Pencil size={15} className="text-[#307fe2]" />
+              </button>
+            ) : (
+              <button onClick={applyChanges} className="px-3 py-1.5 rounded-full bg-[#1D2930] text-white text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80">
+                Apply
+              </button>
+            )}
+            <button onClick={handleClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
           </div>
         </div>
 
@@ -500,7 +545,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Type</label>
                 <div className="flex flex-wrap gap-2">
                   {availableTypes.map(t => (
-                    <button key={t} onClick={() => setType(t)} className={`px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${project.type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
+                    <button key={t} onClick={() => set('type', t)} className={`px-3 py-2 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${form.type === t ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{t}</button>
                   ))}
                 </div>
               </div>
@@ -509,11 +554,8 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide flex items-center gap-1.5"><UserCircle2 size={13} /> Owner</label>
                 <OwnerSelect
-                  value={project.ownerContactId || ''}
-                  onChange={(id) => {
-                    const c = contacts.find(x => x.id === id);
-                    transferProjectOwner(project.id, id, c?.name || '');
-                  }}
+                  value={form.ownerContactId}
+                  onChange={(id) => set('ownerContactId', id)}
                   className={inputCls}
                 />
               </div>
@@ -602,7 +644,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
             <button onClick={() => setShowDelete(true)} className="p-3 rounded-[10px] bg-[#fff0ee] active:bg-[#ffe0da]" title="Delete project">
               <Trash2 size={16} className="text-[#F95C39]" />
             </button>
-            <span className="flex-1 text-[12px] text-[#8992a0]">Editing — tap the pencil again when done.</span>
+            <span className="flex-1 text-[12px] text-[#8992a0]">Editing — tap Apply when done.</span>
           </div>
         )}
       </div>
@@ -613,6 +655,13 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
           description={<>Delete <strong>{project.name}</strong>? Linked items are unlinked, not deleted. This cannot be undone.</>}
           onConfirm={() => { deleteProject(project.id); toast.success('Project deleted'); onClose(); }}
           onCancel={() => setShowDelete(false)}
+        />
+      )}
+      {showDiscardConfirm && (
+        <DiscardChangesModal
+          onDiscard={() => { discardChanges(); setShowDiscardConfirm(false); onClose(); }}
+          onSave={() => { applyChanges(); setShowDiscardConfirm(false); onClose(); }}
+          onCancel={() => setShowDiscardConfirm(false)}
         />
       )}
     </div>

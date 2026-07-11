@@ -447,7 +447,8 @@ export interface CRMOrganization {
   type: OrgType;
   contactIds: string[];
   mountainIds: string[];
-  agreementDetails?: string;
+  address?: string;
+  website?: string;
   keyDates: { label: string; date: string }[];
   archived?: boolean;
   notes?: string;
