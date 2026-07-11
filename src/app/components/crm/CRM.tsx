@@ -1341,33 +1341,47 @@ function Organizations({ openId }: { openId?: string } = {}) {
                 tabIndex={0}
                 onClick={() => { setEditTarget(org); setShowForm(true); }}
                 onKeyDown={e => { if (e.key === 'Enter') { setEditTarget(org); setShowForm(true); } }}
-                className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 cursor-pointer active:bg-[#f9fafb]"
+                className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3 cursor-pointer active:bg-[#f9fafb]"
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org.name}</p>
-                  <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{org.type}</span>
-                  {org.archived
-                    ? <button onClick={e => { e.stopPropagation(); updateOrganization(org.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0 active:opacity-70">Restore</button>
-                    : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
+                {org.logo ? (
+                  <img src={org.logo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
+                    {org.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{org.name}</p>
+                    <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{org.type}</span>
+                  </div>
+                  {(org.website || org.address) && (
+                    <p className="text-[12px] text-[#6a7282] mt-0.5 truncate">{[org.website, org.address].filter(Boolean).join(' · ')}</p>
+                  )}
+                  {org.notes && <p className="text-[12px] text-[#6a7282] mt-0.5 line-clamp-2">{org.notes}</p>}
+                  <div className="flex gap-1.5 flex-wrap mt-1.5" onClick={e => e.stopPropagation()}>
+                    <AssocPill
+                      icon={<Users2 size={10} />} label="Teams" colorClass="bg-[#eef3fb] text-[#307fe2]"
+                      items={linkedTeams.map(t => ({ id: t.id, name: t.name }))}
+                      onOpenOne={id => navigate(`/crm?tab=teams&open=${id}`)}
+                    />
+                    <AssocPill
+                      icon={<Mountain size={10} />} label="Mountains" colorClass="bg-[#e3f2fd] text-[#1565c0]"
+                      items={linkedMountains.map(m => ({ id: m.id, name: m.name }))}
+                      onOpenOne={id => navigate(`/mountains/${id}`)}
+                    />
+                    <LinkPill
+                      icon={<Users size={10} />} label="Contacts" colorClass="bg-[#f3edfb] text-[#7c3aed]"
+                      count={linkedContacts.length}
+                      onClick={() => navigate(`/crm?tab=contacts&filterOrgId=${org.id}`)}
+                    />
+                  </div>
                 </div>
-                {org.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{org.notes}</p>}
-                <div className="flex gap-1.5 flex-wrap mt-1.5" onClick={e => e.stopPropagation()}>
-                  <AssocPill
-                    icon={<Users2 size={10} />} label="Teams" colorClass="bg-[#eef3fb] text-[#307fe2]"
-                    items={linkedTeams.map(t => ({ id: t.id, name: t.name }))}
-                    onOpenOne={id => navigate(`/crm?tab=teams&open=${id}`)}
-                  />
-                  <AssocPill
-                    icon={<Mountain size={10} />} label="Mountains" colorClass="bg-[#e3f2fd] text-[#1565c0]"
-                    items={linkedMountains.map(m => ({ id: m.id, name: m.name }))}
-                    onOpenOne={id => navigate(`/mountains/${id}`)}
-                  />
-                  <LinkPill
-                    icon={<Users size={10} />} label="Contacts" colorClass="bg-[#f3edfb] text-[#7c3aed]"
-                    count={linkedContacts.length}
-                    onClick={() => navigate(`/crm?tab=contacts&filterOrgId=${org.id}`)}
-                  />
-                </div>
+                {org.archived ? (
+                  <button onClick={e => { e.stopPropagation(); updateOrganization(org.id, { archived: false }); toast.success('Restored'); }} className="shrink-0 self-center text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] px-2 py-1 active:opacity-70">Restore</button>
+                ) : (
+                  <ChevronRight size={16} className="shrink-0 self-center text-[#c0c4cc]" />
+                )}
               </div>
             );
           })}
@@ -1608,7 +1622,8 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
 // mountains.
 
 function Teams({ openId }: { openId?: string } = {}) {
-  const { teams, contacts, updateTeam } = useData();
+  const { teams, contacts, mountains, updateTeam } = useData();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<CRMTeam | null>(null);
@@ -1648,18 +1663,51 @@ function Teams({ openId }: { openId?: string } = {}) {
         <div className="space-y-2">
           {filtered.map(team => {
             const linkedContacts = contacts.filter(c => c.teamId === team.id);
+            const linkedMountains = mountains.filter(m => team.mountainIds.includes(m.id));
             return (
-              <button key={team.id} onClick={() => { setEditTarget(team); setShowForm(true); }} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:opacity-70">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{team.name}</p>
-                  {team.type && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full shrink-0">{team.type}</span>}
-                  {team.archived
-                    ? <span onClick={e => { e.stopPropagation(); updateTeam(team.id, { archived: false }); toast.success('Restored'); }} className="text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] ml-auto shrink-0">Restore</span>
-                    : <ChevronRight size={16} className="text-[#c0c4cc] ml-auto shrink-0" />}
+              <div
+                key={team.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => { setEditTarget(team); setShowForm(true); }}
+                onKeyDown={e => { if (e.key === 'Enter') { setEditTarget(team); setShowForm(true); } }}
+                className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3 cursor-pointer active:bg-[#f9fafb]"
+              >
+                {team.logo ? (
+                  <img src={team.logo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
+                    {team.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{team.name}</p>
+                    {team.type && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full shrink-0">{team.type}</span>}
+                  </div>
+                  {(team.phone || team.email || team.address) && (
+                    <p className="text-[12px] text-[#6a7282] mt-0.5 truncate">{[team.phone, team.email, team.address].filter(Boolean).join(' · ')}</p>
+                  )}
+                  {team.notes && <p className="text-[12px] text-[#6a7282] mt-0.5 line-clamp-2">{team.notes}</p>}
+                  <div className="flex gap-1.5 flex-wrap mt-1.5" onClick={e => e.stopPropagation()}>
+                    <AssocPill
+                      icon={<Mountain size={10} />} label="Mountains" colorClass="bg-[#e3f2fd] text-[#1565c0]"
+                      items={linkedMountains.map(m => ({ id: m.id, name: m.name }))}
+                      onOpenOne={id => navigate(`/mountains/${id}`)}
+                    />
+                    <LinkPill
+                      icon={<Users size={10} />} label="Contacts" colorClass="bg-[#f3edfb] text-[#7c3aed]"
+                      count={linkedContacts.length}
+                      onClick={() => navigate(`/crm?tab=contacts&filterTeamId=${team.id}`)}
+                    />
+                  </div>
                 </div>
-                {linkedContacts.length > 0 && <p className="text-[12px] text-[#6a7282]">{linkedContacts.length} contact{linkedContacts.length !== 1 ? 's' : ''}</p>}
-                {team.notes && <p className="text-[12px] text-[#6a7282] mt-1 line-clamp-2">{team.notes}</p>}
-              </button>
+                {team.archived ? (
+                  <button onClick={e => { e.stopPropagation(); updateTeam(team.id, { archived: false }); toast.success('Restored'); }} className="shrink-0 self-center text-[12px] text-[#307fe2] font-['Inter:Medium',sans-serif] px-2 py-1 active:opacity-70">Restore</button>
+                ) : (
+                  <ChevronRight size={16} className="shrink-0 self-center text-[#c0c4cc]" />
+                )}
+              </div>
             );
           })}
         </div>
