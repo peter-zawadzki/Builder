@@ -440,12 +440,21 @@ export function Pipeline() {
             <div key={m.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden">
               <div className="px-4 py-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button onClick={() => navigate(`/mountains/${m.id}`)} className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] hover:text-[#F95C39]">{m.name}</button>
-                      {m.isStalled && <span className="flex items-center gap-1 text-[10px] bg-[#fff4f1] text-[#F95C39] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif]"><AlertTriangle size={9} /> Stalled</span>}
+                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    {m.mountainLogo ? (
+                      <img src={m.mountainLogo} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[13px] font-['Inter:Medium',sans-serif]">
+                        {m.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={() => navigate(`/mountains/${m.id}`)} className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] hover:text-[#F95C39]">{m.name}</button>
+                        {m.isStalled && <span className="flex items-center gap-1 text-[10px] bg-[#fff4f1] text-[#F95C39] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif]"><AlertTriangle size={9} /> Stalled</span>}
+                      </div>
+                      {m.isStalled && m.stallReason && <p className="text-[11px] text-[#6a7282] mt-0.5">{m.stallReason}{m.stalledAt ? ` · ${daysAgo(m.stalledAt)}d` : ''}</p>}
                     </div>
-                    {m.isStalled && m.stallReason && <p className="text-[11px] text-[#6a7282] mt-0.5">{m.stallReason}{m.stalledAt ? ` · ${daysAgo(m.stalledAt)}d` : ''}</p>}
                   </div>
                 </div>
 
