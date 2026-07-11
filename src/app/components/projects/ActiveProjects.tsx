@@ -63,7 +63,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
       const stages = PROJECT_STAGES_BY_TYPE[p.type];
       const furthestIndex = furthestCompletedStageIndex(p);
       const stageLabel = furthestIndex >= 0 ? stages[furthestIndex] : 'Not started';
-      const haystack = [m?.name, m?.region, stageLabel, p.isStalled ? 'Stalled' : ''].filter(Boolean).join(' ').toLowerCase();
+      const haystack = [m?.name, m?.region, stageLabel, p.isStalled ? 'Stalled' : '', p.ownerName].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(q);
     });
   }, [rows, search]);
@@ -76,7 +76,7 @@ export function ActiveProjects({ scope = 'all' }: { scope?: 'mine' | 'all' }) {
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search by region, status, or mountain…"
+          placeholder="Search by region, status, mountain, or owner…"
           className="w-full bg-[#f3f3f5] rounded-[8px] pl-9 pr-3 py-2.5 text-[#0a0a0a] text-[13px] outline-none"
         />
       </div>
