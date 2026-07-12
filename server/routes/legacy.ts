@@ -144,6 +144,7 @@ legacy.post("/item-prices", async (c) => {
 const SLACK_MIRROR_TYPES = new Set([
   "project_created", "owner_transferred", "stage_changed", "stalled", "stall_cleared",
   "next_action", "next_action_done", "assigned", "checked_out", "checked_in",
+  "note_added", "action_added",
 ]);
 async function mirrorToSlack(rec: { type: string; summary: string; actor: string }) {
   const url = process.env.SLACK_WEBHOOK_URL;

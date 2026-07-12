@@ -593,7 +593,7 @@ export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; 
 // ─── Contact Detail ───────────────────────────────────────────────────────────
 
 export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
-  const { updateContact, deleteContact, getMountainById, organizations, mountains, teams } = useData();
+  const { updateContact, deleteContact, getMountainById, organizations, mountains, teams, logActivity } = useData();
   const navigate = useNavigate();
   const [isEditMode, setIsEditMode] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -668,6 +668,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
     const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     updateContact(contact.id, { activities: [...(contact.activities || []), full] });
+    logActivity(contact.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', `${entry.type === 'note' ? 'Note' : 'Action item'} added for ${contact.name}: ${entry.text}`);
   };
 
   const toggleAction = (id: string) => {
@@ -1411,7 +1412,7 @@ function Organizations({ openId }: { openId?: string } = {}) {
 }
 
 function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () => void }) {
-  const { addOrganization, updateOrganization, deleteOrganization, mountains, updateMountain, contacts } = useData();
+  const { addOrganization, updateOrganization, deleteOrganization, mountains, updateMountain, contacts, logActivity } = useData();
   const [isEditMode, setIsEditMode] = useState(!org);
   const [dirty, setDirty] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -1581,7 +1582,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={org.activities || []}
-                onAdd={(entry) => updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] })}
+                onAdd={(entry) => { updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', `${entry.type === 'note' ? 'Note' : 'Action item'} added for ${org.name}: ${entry.text}`); }}
                 onToggle={(id) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateOrganization(org.id, { activities: (org.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
@@ -1728,7 +1729,7 @@ function Teams({ openId }: { openId?: string } = {}) {
 }
 
 function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void }) {
-  const { mountains, contacts, addTeam, updateTeam, deleteTeam } = useData();
+  const { mountains, contacts, addTeam, updateTeam, deleteTeam, logActivity } = useData();
   const { user } = useUser();
   const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const [isEditMode, setIsEditMode] = useState(!team);
@@ -1914,7 +1915,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={team.activities || []}
-                onAdd={(entry) => updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] })}
+                onAdd={(entry) => { updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', `${entry.type === 'note' ? 'Note' : 'Action item'} added for ${team.name}: ${entry.text}`); }}
                 onToggle={(id) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateTeam(team.id, { activities: (team.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}

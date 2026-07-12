@@ -104,7 +104,7 @@ export function LocationDetail({
   const locationId = locationIdProp || params.locationId;
   const navigate = useNavigate();
   const {
-    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById, updateLocation,
+    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById, updateLocation, logActivity,
   } = useData();
 
   // When embedded, "back" returns to the trail view inside the same modal
@@ -561,6 +561,7 @@ export function LocationDetail({
                         onAdd={(entry) => {
                           const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
                           updateInspectionActivities(insp.id, [...(insp.activities || []), full]);
+                          logActivity(location.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', `${entry.type === 'note' ? 'Note' : 'Action item'} added for inspection at "${location.name}": ${entry.text}`);
                         }}
                         onToggle={(id) => {
                           const updated = (insp.activities || []).map(a =>

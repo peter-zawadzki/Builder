@@ -748,7 +748,7 @@ interface DataContextType {
   updateTeam: (id: string, updates: Partial<CRMTeam>) => void;
   deleteTeam: (id: string) => void;
   importContactsFromMountains: () => void;
-  logActivity: (mountainId: string, type: string, summary: string) => void;
+  logActivity: (mountainId: string | undefined, type: string, summary: string) => void;
 }
 
 // Persist the context object on globalThis so that Vite's React Fast Refresh
@@ -937,9 +937,11 @@ function removePendingPhoto(assetId: string) {
 
 // Fire-and-forget activity entry for the Updates feed. The server stamps which
 // authenticated user performed the action.
+// Fires even without a mountainId (e.g. a note added to an organization or a
+// team linked to several mountains) — it just won't show up in any single
+// mountain's Updates feed, but the Slack mirror still fires.
 function logActivity(mountainId: string | undefined, type: string, summary: string) {
-  if (!mountainId) return;
-  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId, type, summary }) }).catch(() => {});
+  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId: mountainId ?? null, type, summary }) }).catch(() => {});
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
