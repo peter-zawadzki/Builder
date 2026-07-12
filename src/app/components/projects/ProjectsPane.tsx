@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
-import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2, Check, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, X, AlertTriangle, ChevronRight, UserCircle2, Repeat2, Pencil, Archive, Trash2, Check, Play, Calendar as CalendarIcon } from 'lucide-react';
 import { useData, PROJECT_STAGES_BY_TYPE, furthestCompletedStageIndex, isProjectCompleted, getMountainProjects, nextStageStatus, buildActivitySlackSummary } from '../../context/DataContext';
 import type { Project, ProjectType, ProjectStage, StallReason, ContactActivity, StageStatus } from '../../context/DataContext';
 import { ActivitySection } from '../ActivitySection';
@@ -56,6 +56,8 @@ function StageStatusDot({ status }: { status: StageStatus }) {
   return (
     <span className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 ${STAGE_STATUS_DOT[status]}`}>
       {status === 'not_started' && <X size={9} className="text-[#c0c4cc]" />}
+      {status === 'blocked' && <span className="text-white text-[11px] font-bold leading-none">!</span>}
+      {status === 'in_progress' && <Play size={8} className="text-white fill-white" />}
       {status === 'done' && <Check size={10} className="text-white" />}
     </span>
   );
