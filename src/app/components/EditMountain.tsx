@@ -91,7 +91,6 @@ export function EditMountain() {
     trailCount: mountain?.trailCount?.toString() || '',
     acreage: mountain?.acreage?.toString() || '',
     verticalDrop: mountain?.verticalDrop?.toString() || '',
-    slackEmail: mountain?.slackEmail || '',
     region: mountain?.region || '',
     mountainLogo: mountain?.mountainLogo || undefined as string | undefined,
     adminContact: { ...emptyContact(), ...(mountain?.adminContact || {}) } as Contact,

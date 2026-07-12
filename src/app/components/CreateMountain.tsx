@@ -40,7 +40,6 @@ export function CreateMountain() {
     trailCount: '',
     acreage: '',
     verticalDrop: '',
-    slackEmail: '',
     region: '',
     additionalContacts: [] as Contact[],
     mountainLogo: undefined as string | undefined,
@@ -87,7 +86,6 @@ export function CreateMountain() {
                     formData.trailCount.trim() !== '' ||
                     formData.acreage.trim() !== '' ||
                     formData.verticalDrop.trim() !== '' ||
-                    formData.slackEmail.trim() !== '' ||
                     formData.region.trim() !== '' ||
                     formData.additionalContacts.length > 0 ||
                     trailNames.length > 0 ||

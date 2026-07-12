@@ -79,7 +79,6 @@ export interface Mountain {
   trailCount?: number;
   acreage?: number;
   verticalDrop?: number;
-  slackEmail?: string;
   region?: 'Rocky Mountains' | 'Sierra Nevada' | 'Pacific Northwest' | 'Northeast' | 'Mid-Atlantic' | 'Midwest' | 'Europe' | 'Canada';
   // Portal fields
   mountainLogo?: string;              // base64 — stored in IndexedDB key mountainLogo:{id}
