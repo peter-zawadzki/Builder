@@ -217,7 +217,7 @@ export function MountainDetail() {
       assigneeName: assignee?.name,
     };
     updateMountain(mountainId!, { activities: [...(mountain.activities || []), entry] });
-    logActivity(mountainId, 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts));
+    logActivity(mountainId, 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, [mountain.name]));
   };
 
   // Inventory class subtotals + inspection reconciliation.

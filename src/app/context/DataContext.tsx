@@ -417,16 +417,20 @@ export function buildActivitySlackSummary(
   entry: { text: string; type: 'note' | 'action'; assigneeContactId?: string; assigneeName?: string },
   authorName: string | undefined,
   contacts: CRMContact[],
+  mountainNames?: (string | undefined)[],
 ): string {
   const kind = entry.type === 'note' ? 'note' : 'action item';
   const article = entry.type === 'note' ? 'a' : 'an';
   const author = authorName || 'someone';
+  const mountainSuffix = mountainNames?.filter(Boolean).length
+    ? ` [${[...new Set(mountainNames.filter(Boolean))].join(', ')}]`
+    : '';
   if (entry.assigneeContactId) {
     const assignee = contacts.find(c => c.id === entry.assigneeContactId);
     const who = assignee?.slackUserId ? `<@${assignee.slackUserId}>` : (entry.assigneeName || assignee?.name || 'Someone');
-    return `${who} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"`;
+    return `${who} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"${mountainSuffix}`;
   }
-  return `New ${kind} added by ${author}: "${entry.text}"`;
+  return `New ${kind} added by ${author}: "${entry.text}"${mountainSuffix}`;
 }
 
 export interface CRMContact {
@@ -503,12 +507,16 @@ export interface CRMTeam {
   updatedAt: string;
 }
 
+export function getYullrOrgId(organizations: CRMOrganization[]): string | undefined {
+  return organizations.find(o => o.name.trim().toLowerCase() === 'yullr')?.id;
+}
+
 // People in the YULLR organization — the pool notes/action items can be
 // assigned to, across contacts, organizations, mountains, and projects.
 export function getYullrMembers(contacts: CRMContact[], organizations: CRMOrganization[]): CRMContact[] {
-  const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
-  if (!yullrOrg) return [];
-  return contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name));
+  const yullrOrgId = getYullrOrgId(organizations);
+  if (!yullrOrgId) return [];
+  return contacts.filter(c => c.organizationId === yullrOrgId).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ─── Mountain activity rollup ─────────────────────────────────────────────────

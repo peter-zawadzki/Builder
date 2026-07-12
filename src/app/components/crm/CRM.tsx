@@ -7,7 +7,7 @@ import {
   CheckCircle, Clock, TrendingUp, Phone, Mail, Star, Calendar,
   ExternalLink, Check, MessageSquare, ListTodo, Archive,
 } from 'lucide-react';
-import { useData, buildActivitySlackSummary } from '../../context/DataContext';
+import { useData, buildActivitySlackSummary, getYullrOrgId } from '../../context/DataContext';
 import type {
   CRMContact, CRMOrganization, CRMTeam, ContactType, ContactTag, ContactActivity,
   OrgType, MountainPipelineStage, StallReason, MountainNote, Mountain as MountainRecord, TeamType,
@@ -602,6 +602,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
   const mountain = contact.mountainId ? getMountainById(contact.mountainId) : undefined;
   const org = contact.organizationId ? organizations.find(o => o.id === contact.organizationId) : undefined;
   const team = contact.teamId ? teams.find(t => t.id === contact.teamId) : undefined;
+  const yullrOrgId = getYullrOrgId(organizations);
 
   type Phone = { number: string; label: 'Mobile' | 'Work' | 'Home' };
   const buildForm = () => ({
@@ -670,7 +671,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
     const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     updateContact(contact.id, { activities: [...(contact.activities || []), full] });
-    logActivity(contact.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts), contact.mountainId ? undefined : '/crm?tab=contacts');
+    logActivity(contact.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, [mountain?.name]), contact.mountainId ? undefined : '/crm?tab=contacts');
   };
 
   const toggleAction = (id: string) => {
@@ -768,11 +769,13 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
               </div>
             </div>
 
-            <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Slack Member ID</label>
-              <input type="text" value={form.slackUserId} onChange={e => set('slackUserId', e.target.value)} placeholder="U0123ABCDEF" className={inputCls} />
-              <p className="text-[11px] text-[#8992a0] mt-1">Enables @mentioning them in Slack when assigned a note or action item. Find it in Slack: profile → More → Copy member ID.</p>
-            </div>
+            {form.organizationId && form.organizationId === yullrOrgId && (
+              <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Slack Member ID</label>
+                <input type="text" value={form.slackUserId} onChange={e => set('slackUserId', e.target.value)} placeholder="U0123ABCDEF" className={inputCls} />
+                <p className="text-[11px] text-[#8992a0] mt-1">Enables @mentioning them in Slack when assigned a note or action item. Find it in Slack: profile → More → Copy member ID.</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Organization</label>
@@ -1096,6 +1099,7 @@ function findDuplicateContacts(
 export function ContactForm({ contact, onClose, defaults }: { contact: CRMContact | null; onClose: () => void; defaults?: Partial<CRMContact> }) {
   const { addContact, updateContact, contacts, mountains, organizations, teams } = useData();
   const [dupCandidates, setDupCandidates] = useState<CRMContact[] | null>(null);
+  const yullrOrgId = getYullrOrgId(organizations);
   type Phone = { number: string; label: 'Mobile' | 'Work' | 'Home' };
   const [form, setForm] = useState({
     firstName: contact?.firstName || (contact?.name || '').trim().split(/\s+/)[0] || '',
@@ -1209,11 +1213,13 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
             </div>
           </div>
 
-          <div>
-            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Slack Member ID</label>
-            <input type="text" value={form.slackUserId} onChange={e => set('slackUserId', e.target.value)} placeholder="U0123ABCDEF" className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
-            <p className="text-[11px] text-[#8992a0] mt-1">Enables @mentioning them in Slack when assigned a note or action item. Find it in Slack: profile → More → Copy member ID.</p>
-          </div>
+          {form.organizationId && form.organizationId === yullrOrgId && (
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Slack Member ID</label>
+              <input type="text" value={form.slackUserId} onChange={e => set('slackUserId', e.target.value)} placeholder="U0123ABCDEF" className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+              <p className="text-[11px] text-[#8992a0] mt-1">Enables @mentioning them in Slack when assigned a note or action item. Find it in Slack: profile → More → Copy member ID.</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Additional emails</label>
@@ -1598,7 +1604,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={org.activities || []}
-                onAdd={(entry) => { updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts), `/crm?tab=organizations&open=${org.id}`); }}
+                onAdd={(entry) => { updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, org.mountainIds.map(id => mountains.find(m => m.id === id)?.name)), `/crm?tab=organizations&open=${org.id}`); }}
                 onToggle={(id) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateOrganization(org.id, { activities: (org.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
@@ -1931,7 +1937,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={team.activities || []}
-                onAdd={(entry) => { updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts), `/crm?tab=teams&open=${team.id}`); }}
+                onAdd={(entry) => { updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, team.mountainIds.map(id => mountains.find(m => m.id === id)?.name)), `/crm?tab=teams&open=${team.id}`); }}
                 onToggle={(id) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateTeam(team.id, { activities: (team.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
