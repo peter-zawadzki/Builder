@@ -146,6 +146,10 @@ const SLACK_MIRROR_TYPES = new Set([
   "next_action", "next_action_done", "assigned", "checked_out", "checked_in",
   "note_added", "action_added",
 ]);
+// note_added/action_added summaries are built client-side with full
+// attribution (and an @mention when the assignee has a Slack ID on file),
+// so we don't also append "— actor" for those — it'd be redundant.
+const SELF_ATTRIBUTED_TYPES = new Set(["note_added", "action_added"]);
 // Base URL for links in Slack messages. Defaults to the local dev web app;
 // set APP_BASE_URL once this is deployed so links point at the real domain.
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
@@ -153,12 +157,16 @@ const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
 async function mirrorToSlack(rec: { type: string; summary: string; actor: string; path?: string | null }) {
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url || !SLACK_MIRROR_TYPES.has(rec.type)) return;
-  const link = rec.path ? `<${APP_BASE_URL}${rec.path}|${rec.summary}>` : rec.summary;
+  // Summary may already contain a raw <@USERID> mention, so it can't be
+  // nested inside a Slack link label (<url|label> renders its label as
+  // plain text) — the link is appended separately instead.
+  const link = rec.path ? ` <${APP_BASE_URL}${rec.path}|View in Builder>` : "";
+  const attribution = SELF_ATTRIBUTED_TYPES.has(rec.type) ? "" : ` — ${rec.actor}`;
   try {
     await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `:round_pushpin: ${link} — ${rec.actor}` }),
+      body: JSON.stringify({ text: `:round_pushpin: ${rec.summary}${attribution}${link}` }),
     });
   } catch (e) {
     console.warn("Slack mirror failed:", e);

@@ -407,6 +407,28 @@ export function canCompleteActivity(activity: { authorContactId?: string; assign
   return false;
 }
 
+// Builds the Slack-mirror summary for a newly-added note/action item. When
+// the item is assigned to someone with a slackUserId on file, this becomes a
+// real @mention ("<@U0123ABC> you have been assigned an action item by
+// Peter") instead of a plain description — falls back to their name (no
+// ping) if we don't have their Slack member ID yet, or to a generic
+// "added by" line when there's no assignee at all.
+export function buildActivitySlackSummary(
+  entry: { text: string; type: 'note' | 'action'; assigneeContactId?: string; assigneeName?: string },
+  authorName: string | undefined,
+  contacts: CRMContact[],
+): string {
+  const kind = entry.type === 'note' ? 'note' : 'action item';
+  const article = entry.type === 'note' ? 'a' : 'an';
+  const author = authorName || 'someone';
+  if (entry.assigneeContactId) {
+    const assignee = contacts.find(c => c.id === entry.assigneeContactId);
+    const who = assignee?.slackUserId ? `<@${assignee.slackUserId}>` : (entry.assigneeName || assignee?.name || 'Someone');
+    return `${who} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"`;
+  }
+  return `New ${kind} added by ${author}: "${entry.text}"`;
+}
+
 export interface CRMContact {
   id: string;
   name: string;              // full name, derived from firstName + lastName
@@ -429,6 +451,7 @@ export interface CRMContact {
   // and the emphasized pill in compact contact cards.
   primaryAssociation?: 'mountain' | 'organization' | 'team';
   affiliation?: 'Employee' | 'Ambassador';  // for YULLR-org people: their role in Builder
+  slackUserId?: string;      // Slack member ID (e.g. U0123ABC) — enables @mentions in Slack activity mirror
   archived?: boolean;        // archived contacts drop out of default lists/search
   notes?: string;
   activities?: ContactActivity[];

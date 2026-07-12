@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers } from '../context/DataContext';
+import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers, buildActivitySlackSummary } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
 import { ContactDetail, ContactForm, ContactAssociationPills } from './crm/CRM';
@@ -217,7 +217,7 @@ export function MountainDetail() {
       assigneeName: assignee?.name,
     };
     updateMountain(mountainId!, { activities: [...(mountain.activities || []), entry] });
-    logActivity(mountainId, 'action_added', `Action item added: ${text}`);
+    logActivity(mountainId, 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts));
   };
 
   // Inventory class subtotals + inspection reconciliation.
