@@ -747,7 +747,7 @@ interface DataContextType {
   updateTeam: (id: string, updates: Partial<CRMTeam>) => void;
   deleteTeam: (id: string) => void;
   importContactsFromMountains: () => void;
-  logActivity: (mountainId: string | undefined, type: string, summary: string) => void;
+  logActivity: (mountainId: string | undefined, type: string, summary: string, path?: string) => void;
 }
 
 // Persist the context object on globalThis so that Vite's React Fast Refresh
@@ -939,8 +939,13 @@ function removePendingPhoto(assetId: string) {
 // Fires even without a mountainId (e.g. a note added to an organization or a
 // team linked to several mountains) — it just won't show up in any single
 // mountain's Updates feed, but the Slack mirror still fires.
-function logActivity(mountainId: string | undefined, type: string, summary: string) {
-  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId: mountainId ?? null, type, summary }) }).catch(() => {});
+// `path` is the in-app route to deep-link to from the Slack mirror (e.g.
+// "/mountains/abc123"). Defaults to the mountain page when a mountainId is
+// given and no explicit path is passed — callers only need to override it
+// for things that live somewhere other than a mountain (contacts/orgs/teams).
+function logActivity(mountainId: string | undefined, type: string, summary: string, path?: string) {
+  const resolvedPath = path ?? (mountainId ? `/mountains/${mountainId}` : undefined);
+  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId: mountainId ?? null, type, summary, path: resolvedPath ?? null }) }).catch(() => {});
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {

@@ -491,7 +491,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
     const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     updateProject(project.id, { activities: [...(project.activities || []), full] });
-    logActivity(project.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', `${entry.type === 'note' ? 'Note' : 'Action item'} added for project "${project.name}": ${entry.text}`);
+    logActivity(project.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', `${entry.type === 'note' ? 'Note' : 'Action item'} added for project "${project.name}": ${entry.text}`, project.mountainId ? undefined : project.teamId ? `/crm?tab=teams&open=${project.teamId}` : undefined);
   };
   const toggleActivity = (id: string) => {
     const updated = (project.activities || []).map(a =>

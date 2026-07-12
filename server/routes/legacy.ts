@@ -146,14 +146,19 @@ const SLACK_MIRROR_TYPES = new Set([
   "next_action", "next_action_done", "assigned", "checked_out", "checked_in",
   "note_added", "action_added",
 ]);
-async function mirrorToSlack(rec: { type: string; summary: string; actor: string }) {
+// Base URL for links in Slack messages. Defaults to the local dev web app;
+// set APP_BASE_URL once this is deployed so links point at the real domain.
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
+
+async function mirrorToSlack(rec: { type: string; summary: string; actor: string; path?: string | null }) {
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url || !SLACK_MIRROR_TYPES.has(rec.type)) return;
+  const link = rec.path ? `<${APP_BASE_URL}${rec.path}|${rec.summary}>` : rec.summary;
   try {
     await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `:round_pushpin: ${rec.summary} — ${rec.actor}` }),
+      body: JSON.stringify({ text: `:round_pushpin: ${link} — ${rec.actor}` }),
     });
   } catch (e) {
     console.warn("Slack mirror failed:", e);
@@ -181,6 +186,7 @@ legacy.post("/activity", async (c) => {
     mountainId: b.mountainId ?? null,
     type: b.type ?? "update",
     summary: b.summary ?? "",
+    path: b.path ?? null,
     actor: user.name || user.email || "Someone",
     actorId: user.id,
     timestamp: new Date().toISOString(),
