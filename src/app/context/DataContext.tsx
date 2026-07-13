@@ -413,12 +413,16 @@ export function canCompleteActivity(activity: { authorContactId?: string; assign
 // Peter") instead of a plain description — falls back to their name (no
 // ping) if we don't have their Slack member ID yet, or to a generic
 // "added by" line when there's no assignee at all.
-export function buildActivitySlackSummary(
+// Builds two versions of the same message: `summary` (plain person names —
+// what shows in the app's Updates feed / homepage activity) and `slackText`
+// (identical, except the assignee becomes a real <@SLACKID> mention when
+// they have one on file — Slack-only, never shown in the app itself).
+export function buildActivitySummaries(
   entry: { text: string; type: 'note' | 'action'; assigneeContactId?: string; assigneeName?: string },
   authorName: string | undefined,
   contacts: CRMContact[],
   mountainNames?: (string | undefined)[],
-): string {
+): { summary: string; slackText: string } {
   const kind = entry.type === 'note' ? 'note' : 'action item';
   const article = entry.type === 'note' ? 'a' : 'an';
   const author = authorName || 'someone';
@@ -427,10 +431,15 @@ export function buildActivitySlackSummary(
     : '';
   if (entry.assigneeContactId) {
     const assignee = contacts.find(c => c.id === entry.assigneeContactId);
-    const who = assignee?.slackUserId ? `<@${assignee.slackUserId}>` : (entry.assigneeName || assignee?.name || 'Someone');
-    return `${who} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"${mountainSuffix}`;
+    const name = entry.assigneeName || assignee?.name || 'Someone';
+    const mention = assignee?.slackUserId ? `<@${assignee.slackUserId}>` : name;
+    return {
+      summary: `${name} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"${mountainSuffix}`,
+      slackText: `${mention} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"${mountainSuffix}`,
+    };
   }
-  return `New ${kind} added by ${author}: "${entry.text}"${mountainSuffix}`;
+  const plain = `New ${kind} added by ${author}: "${entry.text}"${mountainSuffix}`;
+  return { summary: plain, slackText: plain };
 }
 
 export interface CRMContact {
@@ -778,7 +787,7 @@ interface DataContextType {
   updateTeam: (id: string, updates: Partial<CRMTeam>) => void;
   deleteTeam: (id: string) => void;
   importContactsFromMountains: () => void;
-  logActivity: (mountainId: string | undefined, type: string, summary: string, path?: string) => void;
+  logActivity: (mountainId: string | undefined, type: string, summary: string, path?: string, slackText?: string) => void;
 }
 
 // Persist the context object on globalThis so that Vite's React Fast Refresh
@@ -974,9 +983,12 @@ function removePendingPhoto(assetId: string) {
 // "/mountains/abc123"). Defaults to the mountain page when a mountainId is
 // given and no explicit path is passed — callers only need to override it
 // for things that live somewhere other than a mountain (contacts/orgs/teams).
-function logActivity(mountainId: string | undefined, type: string, summary: string, path?: string) {
+// `slackText` is optional and only used for the Slack mirror — when it
+// differs from `summary` (e.g. a real @mention instead of a plain name),
+// the app's own Updates feed still only ever shows `summary`.
+function logActivity(mountainId: string | undefined, type: string, summary: string, path?: string, slackText?: string) {
   const resolvedPath = path ?? (mountainId ? `/mountains/${mountainId}` : undefined);
-  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId: mountainId ?? null, type, summary, path: resolvedPath ?? null }) }).catch(() => {});
+  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId: mountainId ?? null, type, summary, path: resolvedPath ?? null, slackText: slackText ?? null }) }).catch(() => {});
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {

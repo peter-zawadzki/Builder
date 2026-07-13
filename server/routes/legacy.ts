@@ -154,19 +154,21 @@ const SELF_ATTRIBUTED_TYPES = new Set(["note_added", "action_added"]);
 // set APP_BASE_URL once this is deployed so links point at the real domain.
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
 
-async function mirrorToSlack(rec: { type: string; summary: string; actor: string; path?: string | null }) {
+async function mirrorToSlack(rec: { type: string; summary: string; actor: string; path?: string | null; slackText?: string | null }) {
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url || !SLACK_MIRROR_TYPES.has(rec.type)) return;
-  // Summary may already contain a raw <@USERID> mention, so it can't be
-  // nested inside a Slack link label (<url|label> renders its label as
-  // plain text) — the link is appended separately instead.
+  // slackText (when provided) carries a real <@USERID> mention instead of a
+  // plain name — Slack-only, never shown in the app's own Updates feed. It
+  // can't be nested inside a Slack link label (<url|label> renders its
+  // label as plain text), so the link is appended separately instead.
+  const text = rec.slackText || rec.summary;
   const link = rec.path ? ` <${APP_BASE_URL}${rec.path}|View in Builder>` : "";
   const attribution = SELF_ATTRIBUTED_TYPES.has(rec.type) ? "" : ` — ${rec.actor}`;
   try {
     await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `:round_pushpin: ${rec.summary}${attribution}${link}` }),
+      body: JSON.stringify({ text: `:round_pushpin: ${text}${attribution}${link}` }),
     });
   } catch (e) {
     console.warn("Slack mirror failed:", e);
@@ -195,6 +197,7 @@ legacy.post("/activity", async (c) => {
     type: b.type ?? "update",
     summary: b.summary ?? "",
     path: b.path ?? null,
+    slackText: b.slackText ?? null,
     actor: user.name || user.email || "Someone",
     actorId: user.id,
     timestamp: new Date().toISOString(),

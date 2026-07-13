@@ -3,7 +3,7 @@ import * as cloudLocSync from '../utils/cloudLocationSync';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
-import { useData, SiteInspectionItem, Annotation, ContactActivity, Inspection, buildActivitySlackSummary } from '../context/DataContext';
+import { useData, SiteInspectionItem, Annotation, ContactActivity, Inspection, buildActivitySummaries } from '../context/DataContext';
 import {
   ArrowLeft, Plus, MapPin, Trash2,
   ClipboardList, Pencil, Image as ImageIcon, Video as VideoIcon,
@@ -561,7 +561,8 @@ export function LocationDetail({
                         onAdd={(entry) => {
                           const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
                           updateInspectionActivities(insp.id, [...(insp.activities || []), full]);
-                          logActivity(location.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, [mountain.name]), `/mountains/${location.mountainId}/locations/${location.id}`);
+                          const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountain.name]);
+                          logActivity(location.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/mountains/${location.mountainId}/locations/${location.id}`, slackText);
                         }}
                         onToggle={(id) => {
                           const updated = (insp.activities || []).map(a =>

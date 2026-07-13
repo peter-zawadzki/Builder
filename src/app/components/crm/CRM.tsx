@@ -7,7 +7,7 @@ import {
   CheckCircle, Clock, TrendingUp, Phone, Mail, Star, Calendar,
   ExternalLink, Check, MessageSquare, ListTodo, Archive, MapPin, ClipboardList, DollarSign,
 } from 'lucide-react';
-import { useData, buildActivitySlackSummary, getYullrOrgId, getMountainProjects } from '../../context/DataContext';
+import { useData, buildActivitySummaries, getYullrOrgId, getMountainProjects } from '../../context/DataContext';
 import type {
   CRMContact, CRMOrganization, CRMTeam, ContactType, ContactTag, ContactActivity,
   OrgType, MountainPipelineStage, StallReason, MountainNote, Mountain as MountainRecord, TeamType,
@@ -671,7 +671,8 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
     const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     updateContact(contact.id, { activities: [...(contact.activities || []), full] });
-    logActivity(contact.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, [mountain?.name]), contact.mountainId ? undefined : '/crm?tab=contacts');
+    const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountain?.name]);
+    logActivity(contact.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, contact.mountainId ? undefined : '/crm?tab=contacts', slackText);
   };
 
   const toggleAction = (id: string) => {
@@ -1604,7 +1605,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={org.activities || []}
-                onAdd={(entry) => { updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, org.mountainIds.map(id => mountains.find(m => m.id === id)?.name)), `/crm?tab=organizations&open=${org.id}`); }}
+                onAdd={(entry) => { updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, org.mountainIds.map(id => mountains.find(m => m.id === id)?.name)); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/crm?tab=organizations&open=${org.id}`, slackText); }}
                 onToggle={(id) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateOrganization(org.id, { activities: (org.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
@@ -1937,7 +1938,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={team.activities || []}
-                onAdd={(entry) => { updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', buildActivitySlackSummary(entry, entry.authorName, contacts, team.mountainIds.map(id => mountains.find(m => m.id === id)?.name)), `/crm?tab=teams&open=${team.id}`); }}
+                onAdd={(entry) => { updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] }); const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, team.mountainIds.map(id => mountains.find(m => m.id === id)?.name)); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/crm?tab=teams&open=${team.id}`, slackText); }}
                 onToggle={(id) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateTeam(team.id, { activities: (team.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
