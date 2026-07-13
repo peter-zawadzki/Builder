@@ -4,7 +4,7 @@ import { useUser } from '@clerk/clerk-react';
 import { Plus, Pencil, Trash2, Archive, ArchiveRestore, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2, Lock } from 'lucide-react';
 import { useData, getYullrMembers, getMountainRollupActivities, canCompleteActivity, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { RollupNoteRow, RollupEmptyState } from './MountainActivityRollup';
+import { RollupNoteRow, RollupEmptyState, useMountainRollupUpdater } from './MountainActivityRollup';
 import { useMyContact } from '../hooks/useMyContact';
 
 function formatShortDate(iso: string): string {
@@ -471,6 +471,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const { addNote, updateNote, getNotesByMountainId, contacts, organizations, mountains, teams, projects, locations } = useData();
   const yullrMembers = getYullrMembers(contacts, organizations);
+  const applyRollupUpdate = useMountainRollupUpdater(mountainId);
   const [isAdding, setIsAdding] = useState(false);
   const [newText, setNewText] = useState('');
   const [newAssigneeId, setNewAssigneeId] = useState('');
@@ -670,7 +671,12 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
                 )}
                 {generalFeed.map(item => item.kind === 'own'
                   ? <NoteCard key={item.note.id} note={item.note} onUpdate={handleUpdate} />
-                  : <RollupNoteRow key={item.entry.id} entry={item.entry} />
+                  : <RollupNoteRow
+                      key={item.entry.id}
+                      entry={item.entry}
+                      canArchive={canCompleteActivity(item.entry, me)}
+                      onArchive={() => applyRollupUpdate(item.entry, { archived: true })}
+                    />
                 )}
               </div>
             )}

@@ -1,4 +1,4 @@
-import { Check, Circle, Lock, ListTodo } from 'lucide-react';
+import { Check, Lock, ListTodo, Archive } from 'lucide-react';
 import { useData, getMountainRollupActivities, canCompleteActivity } from '../context/DataContext';
 import type { ContactActivity, MountainActivityEntry } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
@@ -32,17 +32,15 @@ export function RollupEmptyState({ icon: Icon, message }: { icon: React.Componen
   );
 }
 
-// Read-only rollup of every action item relevant to a mountain — created
-// directly on it, on an associated contact/team/project/inspection, or
-// assigned to a person/team associated with it. Items are only ever created
-// at their source; this view exists to see and complete them.
-export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
+// Shared updater for a rolled-up activity entry — resolves which entity it
+// actually lives on (mountain/contact/team/org/project/inspection) and
+// writes the update back there, since rollup entries are only ever created
+// at their source. Used by both the action-item rollup (toggle complete) and
+// the note rollup (archive).
+export function useMountainRollupUpdater(mountainId: string) {
   const { mountains, contacts, teams, organizations, projects, locations, updateMountain, updateContact, updateTeam, updateOrganization, updateProject, updateLocation } = useData();
-  const me = useMyContact();
 
-  const items = getMountainRollupActivities(mountainId, { mountains, contacts, teams, organizations, projects, locations }).filter(a => a.type === 'action');
-
-  const applyUpdate = (entry: MountainActivityEntry, updates: Partial<ContactActivity>) => {
+  return (entry: MountainActivityEntry, updates: Partial<ContactActivity>) => {
     const apply = (list: ContactActivity[]) => list.map(a => a.id === entry.id ? { ...a, ...updates } : a);
     switch (entry.origin) {
       case 'general': {
@@ -81,6 +79,19 @@ export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
       }
     }
   };
+}
+
+// Read-only rollup of every action item relevant to a mountain — created
+// directly on it, on an associated contact/team/project/inspection, or
+// assigned to a person/team associated with it. Items are only ever created
+// at their source; this view exists to see and complete them.
+export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
+  const { mountains, contacts, teams, organizations, projects, locations } = useData();
+  const me = useMyContact();
+
+  const items = getMountainRollupActivities(mountainId, { mountains, contacts, teams, organizations, projects, locations }).filter(a => a.type === 'action');
+
+  const applyUpdate = useMountainRollupUpdater(mountainId);
 
   const toggle = (entry: MountainActivityEntry) => {
     const now = new Date().toISOString();
@@ -134,33 +145,47 @@ export function MetaLine({ entry }: { entry: MountainActivityEntry }) {
 function ActionRow({ entry, me, onToggle }: { entry: MountainActivityEntry; me: ReturnType<typeof useMyContact>; onToggle: () => void }) {
   const canComplete = canCompleteActivity(entry, me);
   return (
-    <div className="flex items-start gap-2">
-      <button
-        onClick={() => canComplete && onToggle()}
-        disabled={!canComplete}
-        title={canComplete ? (entry.completed ? 'Reopen' : 'Mark complete') : 'Only the creator or assignee can complete this'}
-        className="mt-0.5 shrink-0 active:opacity-60 disabled:cursor-not-allowed"
-      >
-        {entry.completed
-          ? <div className="w-[15px] h-[15px] rounded-full bg-[#22c55e] flex items-center justify-center"><Check size={10} className="text-white" /></div>
-          : canComplete ? <Circle size={15} className="text-[#d1d5db]" /> : <Lock size={13} className="text-[#c0c4cc]" />}
-      </button>
+    <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2 flex items-start gap-3">
       <div className="flex-1 min-w-0">
         <div className={`text-[13px] ${entry.completed ? 'text-[#8992a0] line-through' : 'text-[#0a0a0a]'}`}>{entry.text}</div>
         <MetaLine entry={entry} />
       </div>
+      <button
+        onClick={() => canComplete && onToggle()}
+        disabled={!canComplete}
+        title={canComplete ? (entry.completed ? 'Reopen' : 'Mark complete') : 'Only the creator or assignee can complete this'}
+        className={`mt-0.5 shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center active:opacity-70 disabled:cursor-not-allowed ${entry.completed ? 'bg-[#1D2930] border-[#1D2930]' : 'border-[#1D2930]'}`}
+      >
+        {entry.completed
+          ? <Check size={12} className="text-white" />
+          : !canComplete && <Lock size={10} className="text-[#1D2930]" />}
+      </button>
     </div>
   );
 }
 
-// Read-only row for a rolled-up note — reused by MountainNotes.tsx so notes
-// from associated contacts/teams/projects/inspections can be interleaved
-// directly into the main notes feed instead of living in their own section.
-export function RollupNoteRow({ entry }: { entry: MountainActivityEntry }) {
+// Row for a rolled-up note — reused by MountainNotes.tsx so notes from
+// associated contacts/teams/projects/inspections can be interleaved directly
+// into the main notes feed instead of living in their own section. Archiving
+// writes back to wherever the note actually lives (its origin entity), since
+// it's only ever created there.
+export function RollupNoteRow({ entry, canArchive, onArchive }: { entry: MountainActivityEntry; canArchive?: boolean; onArchive?: () => void }) {
   return (
-    <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2">
-      <div className="text-[13px] text-[#0a0a0a]">{entry.text}</div>
-      <MetaLine entry={entry} />
+    <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] text-[#0a0a0a]">{entry.text}</div>
+        <MetaLine entry={entry} />
+      </div>
+      {onArchive && (
+        <button
+          onClick={() => canArchive && onArchive()}
+          disabled={!canArchive}
+          title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
+          className="mt-0.5 shrink-0 p-1 rounded-[6px] active:bg-[#ffe0da] disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          {canArchive ? <Archive size={13} className="text-[#ff5c39]" /> : <Lock size={11} className="text-[#c0c4cc]" />}
+        </button>
+      )}
     </div>
   );
 }
