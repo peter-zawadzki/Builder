@@ -97,6 +97,7 @@ export function EditMountain() {
     collegePrograms: mountain?.collegePrograms?.toString() || '',
     adultLeagueParticipants: mountain?.adultLeagueParticipants?.toString() || '',
     totalWeeklyJuniorAthletes: mountain?.totalWeeklyJuniorAthletes?.toString() || '',
+    nastar: mountain?.nastar || false,
     mountainLogo: mountain?.mountainLogo || undefined as string | undefined,
     adminContact: { ...emptyContact(), ...(mountain?.adminContact || {}) } as Contact,
     technicalContact: { ...emptyContact(), ...(mountain?.technicalContact || {}) } as Contact,
@@ -109,7 +110,7 @@ export function EditMountain() {
 
   const [timingSystems, setTimingSystems] = useState<string[]>(mountain?.timingSystems || []);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const TIMING_OPTIONS = ['Live Timing', 'VOLA', 'Other'];
+  const TIMING_OPTIONS = ['Live Timing', 'VOLA', 'Brower', 'Other'];
   const toggleTiming = (opt: string) =>
     setTimingSystems(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]);
   const [billingSameAsMain, setBillingSameAsMain] = useState(
@@ -572,6 +573,20 @@ export function EditMountain() {
               </div>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, nastar: !prev.nastar }))}
+            className="flex items-center gap-2 active:opacity-70"
+          >
+            <div className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.nastar ? 'bg-[#ff5c39] border-[#ff5c39]' : 'bg-white border-[#d1d5db]'}`}>
+              {formData.nastar && (
+                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                  <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">NASTAR</span>
+          </button>
         </div>
 
         {/* Trails */}

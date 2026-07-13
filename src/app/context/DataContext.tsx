@@ -117,6 +117,7 @@ export interface Mountain {
   collegePrograms?: number;
   adultLeagueParticipants?: number;
   totalWeeklyJuniorAthletes?: number;
+  nastar?: boolean;
 }
 
 // ─── Inspection item types (shared between Location inspection + AddInspection) ─

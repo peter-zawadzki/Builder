@@ -48,6 +48,7 @@ export function CreateMountain() {
     collegePrograms: '',
     adultLeagueParticipants: '',
     totalWeeklyJuniorAthletes: '',
+    nastar: false,
     additionalContacts: [] as Contact[],
     mountainLogo: undefined as string | undefined,
   });
@@ -56,7 +57,7 @@ export function CreateMountain() {
   const [timingSystems, setTimingSystems] = useState<string[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const TIMING_OPTIONS = ['Live Timing', 'VOLA', 'Other'];
+  const TIMING_OPTIONS = ['Live Timing', 'VOLA', 'Brower', 'Other'];
   const toggleTiming = (opt: string) => {
     setTimingSystems(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]);
     setHasUnsavedChanges(true);
@@ -101,6 +102,7 @@ export function CreateMountain() {
                     formData.collegePrograms.trim() !== '' ||
                     formData.adultLeagueParticipants.trim() !== '' ||
                     formData.totalWeeklyJuniorAthletes.trim() !== '' ||
+                    formData.nastar ||
                     formData.additionalContacts.length > 0 ||
                     trailNames.length > 0 ||
                     timingSystems.length > 0;
@@ -348,6 +350,20 @@ export function CreateMountain() {
               </div>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, nastar: !prev.nastar }))}
+            className="flex items-center gap-2 active:opacity-70"
+          >
+            <div className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.nastar ? 'bg-[#ff5c39] border-[#ff5c39]' : 'bg-white border-[#d1d5db]'}`}>
+              {formData.nastar && (
+                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                  <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">NASTAR</span>
+          </button>
         </div>
 
         {/* Organization & Billing */}
