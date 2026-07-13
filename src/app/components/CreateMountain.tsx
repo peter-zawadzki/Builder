@@ -234,7 +234,7 @@ export function CreateMountain() {
           </div>
 
           <div>
-            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Timing Systems</label>
+            <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">Timing Systems / Race Leagues</label>
             <div className="flex flex-wrap gap-3">
               {TIMING_OPTIONS.map(opt => (
                 <button
@@ -253,6 +253,20 @@ export function CreateMountain() {
                   <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">{opt}</span>
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, nastar: !prev.nastar }))}
+                className="flex items-center gap-2 active:opacity-70"
+              >
+                <div className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.nastar ? 'bg-[#ff5c39] border-[#ff5c39]' : 'bg-white border-[#d1d5db]'}`}>
+                  {formData.nastar && (
+                    <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                      <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </div>
+                <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">NASTAR</span>
+              </button>
             </div>
           </div>
 
@@ -350,20 +364,6 @@ export function CreateMountain() {
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setFormData(prev => ({ ...prev, nastar: !prev.nastar }))}
-            className="flex items-center gap-2 active:opacity-70"
-          >
-            <div className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center flex-shrink-0 transition-colors ${formData.nastar ? 'bg-[#ff5c39] border-[#ff5c39]' : 'bg-white border-[#d1d5db]'}`}>
-              {formData.nastar && (
-                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                  <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </div>
-            <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px]">NASTAR</span>
-          </button>
         </div>
 
         {/* Organization & Billing */}
