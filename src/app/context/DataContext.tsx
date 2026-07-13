@@ -637,6 +637,8 @@ export interface MyNotificationEntry {
   organizationId?: string;
   teamId?: string;
   locationId?: string;
+  authorName?: string;
+  assigneeName?: string;
 }
 
 interface ActivitySweepData {
@@ -656,8 +658,8 @@ interface ActivitySweepData {
 function sweepActivities(data: ActivitySweepData, isRelevant: (a: { type: 'note' | 'action'; completed?: boolean; archived?: boolean; assigneeContactId?: string }) => boolean): MyNotificationEntry[] {
   const { mountains, contacts, organizations, teams, projects, locations, notes } = data;
   const out: MyNotificationEntry[] = [];
-  const push = (a: ContactActivity, extra: Omit<MyNotificationEntry, 'id' | 'text' | 'type' | 'createdAt'>) => {
-    out.push({ id: a.id, text: a.text, type: a.type, createdAt: a.createdAt, ...extra });
+  const push = (a: ContactActivity, extra: Omit<MyNotificationEntry, 'id' | 'text' | 'type' | 'createdAt' | 'authorName' | 'assigneeName'>) => {
+    out.push({ id: a.id, text: a.text, type: a.type, createdAt: a.createdAt, authorName: a.authorName, assigneeName: a.assigneeName, ...extra });
   };
 
   mountains.forEach(m => (m.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'mountain', originLabel: m.name, mountainId: m.id })));

@@ -113,6 +113,13 @@ function ActivityList({ items, emptyLabel, onOpen }: { items: MyNotificationEntr
             <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
           </div>
           <p className="text-[13px] text-[#0a0a0a] mt-1">{n.text}</p>
+          {(n.authorName || n.assigneeName) && (
+            <p className="text-[11px] text-[#8992a0] mt-1">
+              {n.authorName && `Created by ${n.authorName}`}
+              {n.authorName && n.assigneeName && ' · '}
+              {n.assigneeName && `Assigned to ${n.assigneeName}`}
+            </p>
+          )}
         </button>
       ))}
     </div>
