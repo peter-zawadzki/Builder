@@ -72,6 +72,7 @@ export function EditMountain() {
     addTrail({ mountainId: mountainId!, name });
     setNewTrail('');
   };
+  const [trailToDelete, setTrailToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const [formData, setFormData] = useState({
     name: mountain?.name || '',
@@ -581,7 +582,7 @@ export function EditMountain() {
           {mountainTrails.map(t => (
             <div key={t.id} className="flex items-center justify-between border border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2.5">
               <span className="text-[14px] text-[#0a0a0a]">{t.name}</span>
-              <button type="button" onClick={() => deleteTrail(t.id)} className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]"><X size={14} className="text-[#ff5c39]" /></button>
+              <button type="button" onClick={() => setTrailToDelete({ id: t.id, name: t.name })} className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]"><X size={14} className="text-[#ff5c39]" /></button>
             </div>
           ))}
           <div className="flex gap-2">
@@ -717,6 +718,16 @@ export function EditMountain() {
         onDiscard={handleDiscard}
         onCancel={handleCancel}
       />
+
+      {/* Delete trail confirmation */}
+      {trailToDelete && (
+        <DeleteConfirmModal
+          title={`Delete "${trailToDelete.name}"?`}
+          description="This will permanently delete this trail. This cannot be undone."
+          onConfirm={() => { deleteTrail(trailToDelete.id); setTrailToDelete(null); }}
+          onCancel={() => setTrailToDelete(null)}
+        />
+      )}
 
       {/* Delete trail map confirmation */}
       {showDeleteMapModal && (
