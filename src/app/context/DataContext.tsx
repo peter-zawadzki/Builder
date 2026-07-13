@@ -109,6 +109,14 @@ export interface Mountain {
   organizationId?: string;
   affiliateContactIds?: string[];  // YULLR people who sell/represent this mountain
   archived?: boolean;  // soft-archived — hidden from default lists but recoverable; no hard delete
+  // Program / demographic stats
+  annualSkierVisits?: number;
+  terrainParks?: number;
+  highSchoolPrograms?: number;
+  middleSchoolPrograms?: number;
+  collegePrograms?: number;
+  adultLeagueParticipants?: number;
+  totalWeeklyJuniorAthletes?: number;
 }
 
 // ─── Inspection item types (shared between Location inspection + AddInspection) ─
@@ -517,6 +525,14 @@ export interface CRMTeam {
   activities?: ContactActivity[];
   logo?: string;           // base64 data URL
   createdBy?: string;      // name of the user who created the team
+  // Roster stats
+  coaches?: number;
+  totalAthletes?: number;
+  u10?: number;
+  u12?: number;
+  u14?: number;
+  u16?: number;
+  u18Plus?: number;
   createdAt: string;
   updatedAt: string;
 }

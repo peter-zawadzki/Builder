@@ -41,6 +41,13 @@ export function CreateMountain() {
     acreage: '',
     verticalDrop: '',
     region: '',
+    annualSkierVisits: '',
+    terrainParks: '',
+    highSchoolPrograms: '',
+    middleSchoolPrograms: '',
+    collegePrograms: '',
+    adultLeagueParticipants: '',
+    totalWeeklyJuniorAthletes: '',
     additionalContacts: [] as Contact[],
     mountainLogo: undefined as string | undefined,
   });
@@ -87,6 +94,13 @@ export function CreateMountain() {
                     formData.acreage.trim() !== '' ||
                     formData.verticalDrop.trim() !== '' ||
                     formData.region.trim() !== '' ||
+                    formData.annualSkierVisits.trim() !== '' ||
+                    formData.terrainParks.trim() !== '' ||
+                    formData.highSchoolPrograms.trim() !== '' ||
+                    formData.middleSchoolPrograms.trim() !== '' ||
+                    formData.collegePrograms.trim() !== '' ||
+                    formData.adultLeagueParticipants.trim() !== '' ||
+                    formData.totalWeeklyJuniorAthletes.trim() !== '' ||
                     formData.additionalContacts.length > 0 ||
                     trailNames.length > 0 ||
                     timingSystems.length > 0;
@@ -141,6 +155,13 @@ export function CreateMountain() {
       trailCount: formData.trailCount ? parseInt(formData.trailCount) : undefined,
       acreage: formData.acreage ? parseInt(formData.acreage) : undefined,
       verticalDrop: formData.verticalDrop ? parseInt(formData.verticalDrop) : undefined,
+      annualSkierVisits: formData.annualSkierVisits ? parseInt(formData.annualSkierVisits) : undefined,
+      terrainParks: formData.terrainParks ? parseInt(formData.terrainParks) : undefined,
+      highSchoolPrograms: formData.highSchoolPrograms ? parseInt(formData.highSchoolPrograms) : undefined,
+      middleSchoolPrograms: formData.middleSchoolPrograms ? parseInt(formData.middleSchoolPrograms) : undefined,
+      collegePrograms: formData.collegePrograms ? parseInt(formData.collegePrograms) : undefined,
+      adultLeagueParticipants: formData.adultLeagueParticipants ? parseInt(formData.adultLeagueParticipants) : undefined,
+      totalWeeklyJuniorAthletes: formData.totalWeeklyJuniorAthletes ? parseInt(formData.totalWeeklyJuniorAthletes) : undefined,
       trailMapUrl: formData.trailMapUrl.trim() || undefined,
       affiliateContactIds: formData.affiliateContactIds.length > 0 ? formData.affiliateContactIds : undefined,
       region: formData.region || undefined,
@@ -299,6 +320,34 @@ export function CreateMountain() {
             </div>
           </div>
 
+        </div>
+
+        {/* Programs & Participation */}
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4">
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">Programs &amp; Participation</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              ['annualSkierVisits', 'Annual Skier Visits'],
+              ['terrainParks', 'Terrain Parks'],
+              ['highSchoolPrograms', 'High School Programs'],
+              ['middleSchoolPrograms', 'Middle School Programs'],
+              ['collegePrograms', 'College Programs'],
+              ['adultLeagueParticipants', 'Adult League Participants'],
+              ['totalWeeklyJuniorAthletes', 'Total Weekly Junior Athletes'],
+            ] as const).map(([field, label]) => (
+              <div key={field}>
+                <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px] mb-2">{label}</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData[field]}
+                  onChange={e => updateField(field, e.target.value)}
+                  className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
+                  placeholder="0"
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Organization & Billing */}

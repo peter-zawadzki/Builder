@@ -1770,8 +1770,24 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
     email: team?.email || '',
     notes: team?.notes || '',
     logo: team?.logo || undefined as string | undefined,
+    coaches: team?.coaches?.toString() || '',
+    totalAthletes: team?.totalAthletes?.toString() || '',
+    u10: team?.u10?.toString() || '',
+    u12: team?.u12?.toString() || '',
+    u14: team?.u14?.toString() || '',
+    u16: team?.u16?.toString() || '',
+    u18Plus: team?.u18Plus?.toString() || '',
   });
   const [form, setForm] = useState(buildForm);
+  const rosterFields = (f: typeof form) => ({
+    coaches: f.coaches ? parseInt(f.coaches) : undefined,
+    totalAthletes: f.totalAthletes ? parseInt(f.totalAthletes) : undefined,
+    u10: f.u10 ? parseInt(f.u10) : undefined,
+    u12: f.u12 ? parseInt(f.u12) : undefined,
+    u14: f.u14 ? parseInt(f.u14) : undefined,
+    u16: f.u16 ? parseInt(f.u16) : undefined,
+    u18Plus: f.u18Plus ? parseInt(f.u18Plus) : undefined,
+  });
 
   // Staged when editing an existing team — nothing writes to the team until
   // Apply. New-team creation is unaffected (separate Cancel/Create footer).
@@ -1783,7 +1799,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
 
   const create = () => {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
-    addTeam({ ...form, createdBy });
+    addTeam({ ...form, ...rosterFields(form), createdBy });
     toast.success('Team created');
     onClose();
   };
@@ -1792,7 +1808,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
 
   const applyChanges = () => {
     if (!team) return;
-    updateTeam(team.id, form);
+    updateTeam(team.id, { ...form, ...rosterFields(form) });
     setIsEditMode(false);
     setDirty(false);
     toast.success('Team updated');
@@ -1888,6 +1904,25 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
                 </div>
               </div>
               <div>
+                <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Roster</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    ['coaches', 'Coaches'],
+                    ['totalAthletes', 'Total Athletes'],
+                    ['u10', 'U10'],
+                    ['u12', 'U12'],
+                    ['u14', 'U14'],
+                    ['u16', 'U16'],
+                    ['u18Plus', 'U18+'],
+                  ] as const).map(([field, label]) => (
+                    <div key={field}>
+                      <label className="block text-[11px] text-[#8992a0] mb-1">{label}</label>
+                      <input type="number" min="0" value={form[field]} onChange={e => set(field, e.target.value)} className={inputCls} placeholder="0" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
                 <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} className={`${inputCls} resize-none`} />
               </div>
@@ -1906,6 +1941,17 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
               {linkedMountains.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {linkedMountains.map(m => <span key={m.id} className="text-[11px] bg-[#e3f2fd] text-[#1565c0] px-2 py-0.5 rounded-full">{m.name}</span>)}
+                </div>
+              )}
+              {[team.coaches, team.totalAthletes, team.u10, team.u12, team.u14, team.u16, team.u18Plus].some(v => v != null) && (
+                <div className="flex flex-wrap gap-1.5">
+                  {team.coaches != null && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">Coaches: {team.coaches}</span>}
+                  {team.totalAthletes != null && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">Total Athletes: {team.totalAthletes}</span>}
+                  {team.u10 != null && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">U10: {team.u10}</span>}
+                  {team.u12 != null && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">U12: {team.u12}</span>}
+                  {team.u14 != null && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">U14: {team.u14}</span>}
+                  {team.u16 != null && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">U16: {team.u16}</span>}
+                  {team.u18Plus != null && <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">U18+: {team.u18Plus}</span>}
                 </div>
               )}
               {team.notes && <p className="text-[13px] text-[#6a7282]">{team.notes}</p>}
