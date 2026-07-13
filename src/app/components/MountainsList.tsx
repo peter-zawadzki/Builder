@@ -9,6 +9,8 @@ import { useIsSuperAdmin } from '../hooks/useRole';
 import { SalesProcessBar } from './SalesProcessBar';
 import { QuickNotesModal } from './QuickNotesModal';
 import { ProjectMiniBar } from './projects/ProjectsPane';
+import { StageBadge } from './crm/CRM';
+import { toast } from 'sonner';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
 const AUTH_HEADER = { Authorization: `Bearer ${publicAnonKey}` };
@@ -22,13 +24,14 @@ interface MapViewState {
 }
 
 export function MountainsList() {
-  const { mountains, trails, assets, projects, contacts, organizations, getNotesByMountainId, getLocationsByMountainId, getProjectsByMountainId } = useData();
+  const { mountains, trails, assets, projects, contacts, organizations, getNotesByMountainId, getLocationsByMountainId, getProjectsByMountainId, updateMountain } = useData();
   const navigate = useNavigate();
   const isSuperAdmin = useIsSuperAdmin();
 
   const [mapView, setMapView] = useState<MapViewState | null>(null);
   const [notesModalMountainId, setNotesModalMountainId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
   // State abbreviation to full name mapping
   const STATE_NAMES: Record<string, string> = {
@@ -167,7 +170,7 @@ export function MountainsList() {
 
   // Filter (single search box across mountain name, state, region, owner, status) and sort mountains
   const filteredAndSortedMountains = useMemo(() => {
-    let filtered = [...mountains];
+    let filtered = mountains.filter(m => showArchived ? m.archived : !m.archived);
 
     const q = search.trim().toLowerCase();
     if (q) {
@@ -185,7 +188,7 @@ export function MountainsList() {
     filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     return filtered;
-  }, [mountains, search, projects]);
+  }, [mountains, search, projects, showArchived]);
 
   const openMap = async (e: React.MouseEvent, mountainId: string, mountainName: string) => {
     e.preventDefault();
@@ -236,6 +239,12 @@ export function MountainsList() {
             >
               <Plus size={14} /> Add
             </button>
+            <button
+              onClick={() => setShowArchived(v => !v)}
+              className={`shrink-0 px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] ${showArchived ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}
+            >
+              Archived
+            </button>
           </div>
         </div>
 
@@ -250,14 +259,16 @@ export function MountainsList() {
           <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-8 text-center">
             <Mountain className="mx-auto mb-4 text-[#6a7282]" size={48} />
             <p className="text-[#6a7282] font-['Inter:Regular',sans-serif]">
-              No mountains found for "{search}".
+              {search ? `No mountains found for "${search}".` : showArchived ? 'No archived mountains.' : 'No mountains found.'}
             </p>
-            <button
-              onClick={() => setSearch('')}
-              className="mt-4 text-[#ff5c39] font-['Inter:Medium',sans-serif] text-[13px] active:opacity-70"
-            >
-              Clear search
-            </button>
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="mt-4 text-[#ff5c39] font-['Inter:Medium',sans-serif] text-[13px] active:opacity-70"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -282,20 +293,31 @@ export function MountainsList() {
               return (
                 <Link key={mountain.id} to={`/mountains/${mountain.id}`}>
                   <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 active:bg-[#f3f3f5] transition-colors h-full flex flex-col relative">
-                    {/* Activity pill in top right */}
-                    {activityPill && (
-                      <div
-                        className="absolute top-2 right-2 px-2 py-1 rounded-full text-[10px] font-['Inter:SemiBold',sans-serif] font-semibold"
-                        style={{ backgroundColor: activityPill.bgColor, color: activityPill.color }}
-                        title={activityPill.tooltip}
-                      >
-                        {activityPill.text}
-                      </div>
-                    )}
+                    {/* Status pill + activity pill in top right */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1">
+                      <StageBadge stage={mountain.pipelineStage} />
+                      {activityPill && (
+                        <div
+                          className="px-2 py-1 rounded-full text-[10px] font-['Inter:SemiBold',sans-serif] font-semibold"
+                          style={{ backgroundColor: activityPill.bgColor, color: activityPill.color }}
+                          title={activityPill.tooltip}
+                        >
+                          {activityPill.text}
+                        </div>
+                      )}
+                    </div>
                     <div className="flex flex-col gap-2 mb-3">
-                      <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px] line-clamp-2 pr-12">
+                      <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px] line-clamp-2 pr-28">
                         {mountain.name}
                       </h3>
+                      {mountain.archived && (
+                        <button
+                          onClick={e => { e.preventDefault(); e.stopPropagation(); updateMountain(mountain.id, { archived: false }); toast.success('Restored'); }}
+                          className="self-start text-[11px] text-[#307fe2] font-['Inter:Medium',sans-serif] bg-[#eef3fb] px-2 py-0.5 rounded-full active:opacity-70"
+                        >
+                          Restore
+                        </button>
+                      )}
                       <div className="flex flex-wrap gap-1.5">
                         {org && (
                           <span className="flex items-center gap-1 bg-[#f3edfb] text-[#7c3aed] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import type { Contact, TechAdmin, Annotation } from '../context/DataContext';
-import { ArrowLeft, Plus, X, Trash2, Upload, ZoomIn, ExternalLink, ImageIcon, Edit3, Check } from 'lucide-react';
+import { Plus, X, Archive, Trash2, Upload, ZoomIn, ExternalLink, ImageIcon, Edit3, Check } from 'lucide-react';
 import { LogoUploader } from './LogoUploader';
 import { toast } from 'sonner';
 import { formatPhone } from '../utils/formatPhone';
@@ -53,9 +53,6 @@ export function EditMountain() {
   const {
     getMountainById,
     updateMountain,
-    deleteMountain,
-    getLocationsByMountainId,
-    getAssetsByLocationId,
     organizations,
     contacts,
     getTrailsByMountainId,
@@ -102,8 +99,6 @@ export function EditMountain() {
     mountain?.technicalAdministrators?.map(a => ({ ...a })) || []
   );
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [timingSystems, setTimingSystems] = useState<string[]>(mountain?.timingSystems || []);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const TIMING_OPTIONS = ['Live Timing', 'VOLA', 'Other'];
@@ -209,13 +204,6 @@ export function EditMountain() {
     );
   }
 
-  const installLocations = getLocationsByMountainId(mountainId!);
-  const siteInspections: any[] = [];
-  const totalAssets = installLocations.reduce(
-    (sum, loc) => sum + getAssetsByLocationId(loc.id).filter(a => a.type !== 'Miscellaneous').length,
-    0
-  );
-
   // Collect team name suggestions from all contacts
   const allContacts = [...formData.additionalContacts];
   const knownTeamNames = [...new Set(
@@ -264,16 +252,18 @@ export function EditMountain() {
     onSave: handleSubmit,
   });
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      await deleteMountain(mountainId!);
-      toast.success(`${mountain.name} deleted`);
-      navigate('/');
-    } catch {
-      toast.error('Failed to delete mountain. Please try again.');
-      setIsDeleting(false);
-    }
+  // No hard deletes — mountains are soft-archived (recoverable from the
+  // Mountains list' Archived toggle) instead.
+  const handleArchive = () => {
+    updateMountain(mountainId!, { archived: true });
+    toast.success(`${mountain.name} archived`);
+    setHasUnsavedChanges(false);
+    markSaved();
+    navigate('/');
+  };
+
+  const handleClose = () => {
+    navigate(`/mountains/${mountainId}`);
   };
 
   const updateField = (field: string, value: string) => {
@@ -305,41 +295,16 @@ export function EditMountain() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      {showDeleteModal && (
-        <DeleteConfirmModal
-          title={`Delete ${mountain.name}?`}
-          description={
-            <>
-              This will permanently delete this mountain along with{' '}
-              <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-                {installLocations.length} install location{installLocations.length !== 1 ? 's' : ''}
-              </span>
-              ,{' '}
-              <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-                {totalAssets} asset{totalAssets !== 1 ? 's' : ''}
-              </span>
-              , and{' '}
-              <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-                {siteInspections.length} inspection location{siteInspections.length !== 1 ? 's' : ''}
-              </span>
-              , including all photos and videos. This cannot be undone.
-            </>
-          }
-          isDeleting={isDeleting}
-          onConfirm={handleDelete}
-          onCancel={() => setShowDeleteModal(false)}
-        />
-      )}
-
       {/* Header */}
       <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(`/mountains/${mountainId}`)} className="p-1 active:opacity-60">
-            <ArrowLeft size={24} className="text-[#0a0a0a]" />
-          </button>
           <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px] flex-1">
             Mountain Info
           </h1>
+          <button onClick={() => handleSubmit()} className="px-3 py-1.5 rounded-full bg-[#1D2930] text-white text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80">
+            Apply
+          </button>
+          <button onClick={handleClose} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
         </div>
       </div>
 
@@ -655,20 +620,15 @@ export function EditMountain() {
         {/* Contacts are managed from the CRM, not here. Existing contact data
             is preserved on save. */}
 
-        {/* Save */}
-        <button type="submit"
-          className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 font-['Inter:Medium',sans-serif] font-medium active:opacity-80">
-          Save Changes
-        </button>
-
-        {/* Delete Mountain */}
+        {/* Archive Mountain — no hard delete; recoverable from the Mountains
+            list' Archived toggle. */}
         <button
           type="button"
-          onClick={() => setShowDeleteModal(true)}
+          onClick={handleArchive}
           className="w-full flex items-center justify-center gap-2 bg-white border border-[rgba(255,92,57,0.3)] text-[#ff5c39] rounded-[8px] px-4 py-3 font-['Inter:Medium',sans-serif] font-medium active:bg-[#fff0ee]"
         >
-          <Trash2 size={18} />
-          Delete Mountain
+          <Archive size={18} />
+          Archive Mountain
         </button>
 
       </form>

@@ -108,6 +108,7 @@ export interface Mountain {
   corporateGroup?: string;
   organizationId?: string;
   affiliateContactIds?: string[];  // YULLR people who sell/represent this mountain
+  archived?: boolean;  // soft-archived — hidden from default lists but recoverable; no hard delete
 }
 
 // ─── Inspection item types (shared between Location inspection + AddInspection) ─

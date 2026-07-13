@@ -55,7 +55,7 @@ function isOverdue(dateStr?: string) {
   return new Date(dateStr) < new Date();
 }
 
-function StageBadge({ stage }: { stage?: MountainPipelineStage }) {
+export function StageBadge({ stage }: { stage?: MountainPipelineStage }) {
   if (!stage) return <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">No stage</span>;
   return <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${STAGE_COLORS[stage]}`}>{stage}</span>;
 }
