@@ -28,8 +28,6 @@ export function MountainsList() {
 
   const [mapView, setMapView] = useState<MapViewState | null>(null);
   const [notesModalMountainId, setNotesModalMountainId] = useState<string | null>(null);
-  const [filterState, setFilterState] = useState<string>('all');
-  const [filterOwner, setFilterOwner] = useState<string>('all');
   const [search, setSearch] = useState('');
 
   // State abbreviation to full name mapping
@@ -167,51 +165,27 @@ export function MountainsList() {
     }
   };
 
-  // Get all unique states from mountains
-  const allStates = useMemo(() => {
-    const states = new Set<string>();
-    mountains.forEach(m => {
-      const state = extractState(m.address);
-      if (state) states.add(state);
-    });
-    // Sort by full state name
-    return Array.from(states).sort((a, b) => {
-      const nameA = STATE_NAMES[a] || a;
-      const nameB = STATE_NAMES[b] || b;
-      return nameA.localeCompare(nameB);
-    });
-  }, [mountains]);
-
-  // Unique project owners across all mountains (for the owner filter).
-  const allOwners = useMemo(
-    () => Array.from(new Set(projects.map(p => p.ownerName).filter(Boolean))).sort() as string[],
-    [projects],
-  );
-
-  // Filter and sort mountains
+  // Filter (single search box across mountain name, state, region, owner, status) and sort mountains
   const filteredAndSortedMountains = useMemo(() => {
     let filtered = [...mountains];
 
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      filtered = filtered.filter(m => m.name.toLowerCase().includes(q) || (m.address || '').toLowerCase().includes(q));
-    }
-
-    // Filter by state
-    if (filterState !== 'all') {
-      filtered = filtered.filter(m => extractState(m.address) === filterState);
-    }
-
-    // Filter by project owner
-    if (filterOwner !== 'all') {
-      filtered = filtered.filter(m => getProjectsByMountainId(m.id).some(p => p.ownerName === filterOwner));
+    const q = search.trim().toLowerCase();
+    if (q) {
+      filtered = filtered.filter(m => {
+        const stateCode = extractState(m.address);
+        const stateName = stateCode ? STATE_NAMES[stateCode] || stateCode : '';
+        const owners = getProjectsByMountainId(m.id).map(p => p.ownerName).filter(Boolean);
+        const haystack = [m.name, m.address, stateCode, stateName, m.region, m.pipelineStage, ...owners]
+          .filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
     }
 
     // Always alphabetical A–Z.
     filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     return filtered;
-  }, [mountains, filterState, filterOwner, search, projects]);
+  }, [mountains, search, projects]);
 
   const openMap = async (e: React.MouseEvent, mountainId: string, mountainName: string) => {
     e.preventDefault();
@@ -252,7 +226,7 @@ export function MountainsList() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search mountains…"
+                placeholder="Search by mountain, state, region, owner, or status…"
                 className="w-full bg-[#f3f3f5] rounded-[6px] pl-9 pr-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] border-none outline-none"
               />
             </div>
@@ -263,50 +237,6 @@ export function MountainsList() {
               <Plus size={14} /> Add
             </button>
           </div>
-
-          {mountains.length > 0 && (
-            <div className="flex flex-col sm:flex-row gap-3">
-              {/* Filter by State */}
-              <div className="flex-1">
-                <label className="block text-[#6a7282] font-['Inter:Medium',sans-serif] text-[11px] mb-1.5 uppercase tracking-wider">
-                  Filter by State
-                </label>
-                <select
-                  value={filterState}
-                  onChange={e => setFilterState(e.target.value)}
-                  className="w-full bg-[#f3f3f5] rounded-[6px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] border-none outline-none"
-                >
-                  <option value="all">All States ({mountains.length})</option>
-                  {allStates.map(state => {
-                    const count = mountains.filter(m => extractState(m.address) === state).length;
-                    const stateName = STATE_NAMES[state] || state;
-                    return (
-                      <option key={state} value={state}>
-                        {stateName} ({count})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* Filter by Owner */}
-              <div className="flex-1">
-                <label className="block text-[#6a7282] font-['Inter:Medium',sans-serif] text-[11px] mb-1.5 uppercase tracking-wider">
-                  Filter by Owner
-                </label>
-                <select
-                  value={filterOwner}
-                  onChange={e => setFilterOwner(e.target.value)}
-                  className="w-full bg-[#f3f3f5] rounded-[6px] px-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] border-none outline-none"
-                >
-                  <option value="all">All Owners</option>
-                  {allOwners.map(owner => (
-                    <option key={owner} value={owner}>{owner}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
         </div>
 
         {mountains.length === 0 ? (
@@ -320,13 +250,13 @@ export function MountainsList() {
           <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-8 text-center">
             <Mountain className="mx-auto mb-4 text-[#6a7282]" size={48} />
             <p className="text-[#6a7282] font-['Inter:Regular',sans-serif]">
-              No mountains found for the selected state.
+              No mountains found for "{search}".
             </p>
             <button
-              onClick={() => setFilterState('all')}
+              onClick={() => setSearch('')}
               className="mt-4 text-[#ff5c39] font-['Inter:Medium',sans-serif] text-[13px] active:opacity-70"
             >
-              Clear filter
+              Clear search
             </button>
           </div>
         ) : (

@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { TrendingUp, Activity as ActivityIcon, Bell, ListTodo, MessageSquare, ChevronRight } from "lucide-react";
-import { FollowUps } from "./crm/CRM";
+import { TrendingUp, Activity as ActivityIcon, ListTodo, MessageSquare, ChevronRight } from "lucide-react";
 import { ActiveProjects } from "./projects/ActiveProjects";
 import { RecentActivity } from "./RecentActivity";
 import { useMyContact, useCanSeeAll } from "../hooks/useMyContact";
@@ -23,6 +22,8 @@ export function HomeDashboard() {
     () => effective === 'mine' ? getMyNotifications(me?.id, activityData) : getAllOpenActivities(activityData),
     [effective, me?.id, mountains, contacts, organizations, teams, projects, locations, notes],
   );
+  const notesItems = useMemo(() => activityItems.filter(n => n.type === 'note'), [activityItems]);
+  const actionItems = useMemo(() => activityItems.filter(n => n.type === 'action'), [activityItems]);
 
   const goToActivity = (n: MyNotificationEntry) => {
     if (n.origin === 'organization' && n.organizationId) navigate(`/crm?tab=organizations&open=${n.organizationId}`);
@@ -67,36 +68,17 @@ export function HomeDashboard() {
         <section>
           <div className="flex items-center gap-2 mb-2 px-1">
             <ListTodo size={16} className="text-[#6a7282]" />
-            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Notes &amp; action items</h2>
+            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Action items</h2>
           </div>
-          {activityItems.length === 0 ? (
-            <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
-              {effective === 'mine' ? 'Nothing assigned to you right now.' : 'No open notes or action items.'}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {activityItems.map(n => (
-                <button key={`${n.origin}:${n.id}`} onClick={() => goToActivity(n)} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:bg-[#f9fafb]">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#f3f3f5] text-[#6a7282] flex items-center gap-1">
-                      {n.type === 'action' ? <ListTodo size={10} /> : <MessageSquare size={10} />}
-                      {n.originLabel || n.origin}
-                    </span>
-                    <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
-                  </div>
-                  <p className="text-[13px] text-[#0a0a0a] mt-1">{n.text}</p>
-                </button>
-              ))}
-            </div>
-          )}
+          <ActivityList items={actionItems} emptyLabel={effective === 'mine' ? 'No action items assigned to you right now.' : 'No open action items.'} onOpen={goToActivity} />
         </section>
 
         <section>
           <div className="flex items-center gap-2 mb-2 px-1">
-            <Bell size={16} className="text-[#6a7282]" />
-            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Needs follow-up</h2>
+            <MessageSquare size={16} className="text-[#6a7282]" />
+            <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Notes</h2>
           </div>
-          <FollowUps scope={effective} />
+          <ActivityList items={notesItems} emptyLabel={effective === 'mine' ? 'No notes assigned to you right now.' : 'No open notes.'} onOpen={goToActivity} />
         </section>
 
         <section>
@@ -107,6 +89,32 @@ export function HomeDashboard() {
           <RecentActivity scope={effective} />
         </section>
       </div>
+    </div>
+  );
+}
+
+function ActivityList({ items, emptyLabel, onOpen }: { items: MyNotificationEntry[]; emptyLabel: string; onOpen: (n: MyNotificationEntry) => void }) {
+  if (items.length === 0) {
+    return (
+      <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
+        {emptyLabel}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {items.map(n => (
+        <button key={`${n.origin}:${n.id}`} onClick={() => onOpen(n)} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:bg-[#f9fafb]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#f3f3f5] text-[#6a7282] flex items-center gap-1">
+              {n.type === 'action' ? <ListTodo size={10} /> : <MessageSquare size={10} />}
+              {n.originLabel || n.origin}
+            </span>
+            <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
+          </div>
+          <p className="text-[13px] text-[#0a0a0a] mt-1">{n.text}</p>
+        </button>
+      ))}
     </div>
   );
 }

@@ -434,12 +434,16 @@ export function buildActivitySummaries(
     const name = entry.assigneeName || assignee?.name || 'Someone';
     const mention = assignee?.slackUserId ? `<@${assignee.slackUserId}>` : name;
     return {
-      summary: `${name} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"${mountainSuffix}`,
+      // In-app summary omits "by {author}" — the actor already shows on the
+      // line below the summary in RecentActivity/HomeDashboard.
+      summary: `${name} you have been assigned ${article} ${kind} "${entry.text}"${mountainSuffix}`,
       slackText: `${mention} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"${mountainSuffix}`,
     };
   }
-  const plain = `New ${kind} added by ${author}: "${entry.text}"${mountainSuffix}`;
-  return { summary: plain, slackText: plain };
+  return {
+    summary: `New ${kind}: "${entry.text}"${mountainSuffix}`,
+    slackText: `New ${kind} added by ${author}: "${entry.text}"${mountainSuffix}`,
+  };
 }
 
 export interface CRMContact {
