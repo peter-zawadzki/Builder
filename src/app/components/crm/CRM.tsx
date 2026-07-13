@@ -5,9 +5,9 @@ import {
   ArrowLeft, Users, Users2, Building2, Activity, Bell, LayoutDashboard, Mountain,
   Plus, Search, X, ChevronRight, Pencil, Trash2, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Phone, Mail, Star, Calendar,
-  ExternalLink, Check, MessageSquare, ListTodo, Archive,
+  ExternalLink, Check, MessageSquare, ListTodo, Archive, MapPin, ClipboardList, DollarSign,
 } from 'lucide-react';
-import { useData, buildActivitySlackSummary, getYullrOrgId } from '../../context/DataContext';
+import { useData, buildActivitySlackSummary, getYullrOrgId, getMountainProjects } from '../../context/DataContext';
 import type {
   CRMContact, CRMOrganization, CRMTeam, ContactType, ContactTag, ContactActivity,
   OrgType, MountainPipelineStage, StallReason, MountainNote, Mountain as MountainRecord, TeamType,
@@ -2145,7 +2145,7 @@ export function CRMSection() {
 // Mountains tab — a simple roster with add; the operational mountains list
 // lives under the Mountains icon (/mountains).
 function MountainsTab() {
-  const { mountains, organizations, teams, contacts } = useData();
+  const { mountains, organizations, teams, contacts, projects, getTrailsByMountainId, getAssetsByMountainId } = useData();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const filtered = useMemo(() => {
@@ -2177,30 +2177,57 @@ function MountainsTab() {
             const org = m.organizationId ? organizations.find(o => o.id === m.organizationId) : undefined;
             const linkedTeams = teams.filter(t => t.mountainIds.includes(m.id));
             const linkedContacts = contacts.filter(c => c.mountainId === m.id);
+            const trailCount = getTrailsByMountainId(m.id).length;
+            const projectCount = getMountainProjects(m.id, { projects, teams }).length;
+            const inventoryValue = getAssetsByMountainId(m.id).reduce((sum, a) => sum + (a.cost || 0), 0);
             return (
-              <div key={m.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3">
-                <button onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between text-left active:opacity-70">
-                  <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-                    {m.proposalCreated ? 'Customer' : 'Prospect'}
-                  </span>
-                </button>
-                <div className="flex gap-1.5 flex-wrap mt-1.5">
-                  {org && (
-                    <button onClick={() => navigate(`/crm?tab=organizations&open=${org.id}`)} className="text-[11px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 active:opacity-70">
-                      <Building2 size={10} /> {org.name}
-                    </button>
-                  )}
-                  <AssocPill
-                    icon={<Users2 size={10} />} label="Teams" colorClass="bg-[#eef3fb] text-[#307fe2]"
-                    items={linkedTeams.map(t => ({ id: t.id, name: t.name }))}
-                    onOpenOne={id => navigate(`/crm?tab=teams&open=${id}`)}
-                  />
-                  <LinkPill
-                    icon={<Users size={10} />} label="Contacts" colorClass="bg-[#eaf5ef] text-[#3f7a5c]"
-                    count={linkedContacts.length}
-                    onClick={() => navigate(`/crm?tab=contacts&filterMountainId=${m.id}`)}
-                  />
+              <div key={m.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3">
+                {m.mountainLogo ? (
+                  <img src={m.mountainLogo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
+                    {m.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <button onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between text-left active:opacity-70">
+                    <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
+                      {m.proposalCreated ? 'Customer' : 'Prospect'}
+                    </span>
+                  </button>
+                  <div className="flex gap-1.5 flex-wrap mt-1.5">
+                    {org && (
+                      <button onClick={() => navigate(`/crm?tab=organizations&open=${org.id}`)} className="text-[11px] bg-[#f3edfb] text-[#7c3aed] px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 active:opacity-70">
+                        <Building2 size={10} /> {org.name}
+                      </button>
+                    )}
+                    <AssocPill
+                      icon={<Users2 size={10} />} label="Teams" colorClass="bg-[#eef3fb] text-[#307fe2]"
+                      items={linkedTeams.map(t => ({ id: t.id, name: t.name }))}
+                      onOpenOne={id => navigate(`/crm?tab=teams&open=${id}`)}
+                    />
+                    <LinkPill
+                      icon={<Users size={10} />} label="Contacts" colorClass="bg-[#eaf5ef] text-[#3f7a5c]"
+                      count={linkedContacts.length}
+                      onClick={() => navigate(`/crm?tab=contacts&filterMountainId=${m.id}`)}
+                    />
+                    <LinkPill
+                      icon={<MapPin size={10} />} label="Trails" colorClass="bg-[#fff3e0] text-[#bf360c]"
+                      count={trailCount}
+                      onClick={() => navigate(`/mountains/${m.id}`)}
+                    />
+                    <LinkPill
+                      icon={<ClipboardList size={10} />} label="Projects" colorClass="bg-[#e3f2fd] text-[#1565c0]"
+                      count={projectCount}
+                      onClick={() => navigate(`/mountains/${m.id}`)}
+                    />
+                    {inventoryValue > 0 && (
+                      <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <DollarSign size={10} /> {inventoryValue.toLocaleString('en-US', { maximumFractionDigits: 0 })} inventory
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
