@@ -442,7 +442,7 @@ export function Pipeline() {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-start gap-2.5 flex-1 min-w-0">
                     {m.mountainLogo ? (
-                      <img src={m.mountainLogo} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                      <img src={m.mountainLogo} alt="" className="w-8 h-8 rounded-[8px] object-contain shrink-0 bg-white border border-[rgba(0,0,0,0.08)] p-0.5" />
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[13px] font-['Inter:Medium',sans-serif]">
                         {m.name.charAt(0).toUpperCase()}
@@ -696,7 +696,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
         {(() => {
           const logo = contactAvatarLogo(contact, { mountains, organizations, teams });
           return logo ? (
-            <img src={logo} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+            <img src={logo} alt="" className="w-8 h-8 rounded-[8px] object-contain shrink-0 bg-white border border-[rgba(0,0,0,0.08)] p-0.5" />
           ) : (
             <div className="w-8 h-8 rounded-full bg-[#1D2930] flex items-center justify-center text-white text-[13px] font-['Inter:Medium',sans-serif] shrink-0">
               {contact.name.charAt(0).toUpperCase()}
@@ -1006,7 +1006,7 @@ function Contacts({
                 className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3 cursor-pointer active:bg-[#f9fafb]"
               >
                 {logo ? (
-                  <img src={logo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                  <img src={logo} alt="" className="w-9 h-9 rounded-[10px] object-contain shrink-0 bg-white border border-[rgba(0,0,0,0.08)] p-1" />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
                     {c.name.charAt(0).toUpperCase()}
@@ -1376,7 +1376,7 @@ function Organizations({ openId }: { openId?: string } = {}) {
                 className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3 cursor-pointer active:bg-[#f9fafb]"
               >
                 {org.logo ? (
-                  <img src={org.logo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                  <img src={org.logo} alt="" className="w-9 h-9 rounded-[10px] object-contain shrink-0 bg-white border border-[rgba(0,0,0,0.08)] p-1" />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
                     {org.name.charAt(0).toUpperCase()}
@@ -1706,7 +1706,7 @@ function Teams({ openId }: { openId?: string } = {}) {
                 className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3 cursor-pointer active:bg-[#f9fafb]"
               >
                 {team.logo ? (
-                  <img src={team.logo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                  <img src={team.logo} alt="" className="w-9 h-9 rounded-[10px] object-contain shrink-0 bg-white border border-[rgba(0,0,0,0.08)] p-1" />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
                     {team.name.charAt(0).toUpperCase()}
@@ -2183,7 +2183,7 @@ function MountainsTab() {
             return (
               <div key={m.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3">
                 {m.mountainLogo ? (
-                  <img src={m.mountainLogo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 bg-white border border-[rgba(0,0,0,0.08)]" />
+                  <img src={m.mountainLogo} alt="" className="w-9 h-9 rounded-[10px] object-contain shrink-0 bg-white border border-[rgba(0,0,0,0.08)] p-1" />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-[#1D2930] flex items-center justify-center shrink-0 text-white text-[14px] font-['Inter:Medium',sans-serif]">
                     {m.name.charAt(0).toUpperCase()}
