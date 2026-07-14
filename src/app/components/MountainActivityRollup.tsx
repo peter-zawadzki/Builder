@@ -38,7 +38,7 @@ export function RollupEmptyState({ icon: Icon, message }: { icon: React.Componen
 // at their source. Used by both the action-item rollup (toggle complete) and
 // the note rollup (archive).
 export function useMountainRollupUpdater(mountainId: string) {
-  const { mountains, contacts, teams, organizations, projects, locations, updateMountain, updateContact, updateTeam, updateOrganization, updateProject, updateLocation } = useData();
+  const { mountains, contacts, teams, organizations, projects, inspections, updateMountain, updateContact, updateTeam, updateOrganization, updateProject, updateInspection } = useData();
 
   return (entry: MountainActivityEntry, updates: Partial<ContactActivity>) => {
     const apply = (list: ContactActivity[]) => list.map(a => a.id === entry.id ? { ...a, ...updates } : a);
@@ -69,12 +69,8 @@ export function useMountainRollupUpdater(mountainId: string) {
         break;
       }
       case 'inspection': {
-        const loc = locations.find(l => (l.inspections || []).some(i => i.id === entry.originId));
-        if (loc) {
-          const inspections = (loc.inspections || []).map(i => i.id === entry.originId ? { ...i, activities: apply(i.activities || []) } : i);
-          const inspection = loc.inspection?.id === entry.originId ? { ...loc.inspection, activities: apply(loc.inspection.activities || []) } : loc.inspection;
-          updateLocation(loc.id, { inspections, inspection });
-        }
+        const insp = inspections.find(i => i.id === entry.originId);
+        if (insp) updateInspection(insp.id, { activities: apply(insp.activities || []) });
         break;
       }
     }
@@ -86,10 +82,10 @@ export function useMountainRollupUpdater(mountainId: string) {
 // assigned to a person/team associated with it. Items are only ever created
 // at their source; this view exists to see and complete them.
 export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
-  const { mountains, contacts, teams, organizations, projects, locations } = useData();
+  const { mountains, contacts, teams, organizations, projects, locations, inspections } = useData();
   const me = useMyContact();
 
-  const items = getMountainRollupActivities(mountainId, { mountains, contacts, teams, organizations, projects, locations }).filter(a => a.type === 'action');
+  const items = getMountainRollupActivities(mountainId, { mountains, contacts, teams, organizations, projects, locations, inspections }).filter(a => a.type === 'action');
 
   const applyUpdate = useMountainRollupUpdater(mountainId);
 

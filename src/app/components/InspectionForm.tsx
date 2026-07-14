@@ -25,7 +25,7 @@ export function InspectionForm({
   inspection: Inspection | null;
   onClose: () => void;
 }) {
-  const { updateLocation, getProjectsByMountainId } = useData();
+  const { addInspection, updateInspection, getProjectsByMountainId } = useData();
   const { user } = useUser();
   const me = useMyContact();
   const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
@@ -68,24 +68,19 @@ export function InspectionForm({
     }
     setSaving(true);
     try {
-      const record: Inspection = inspection
-        ? { ...inspection, items, notes: notes.trim(), projectId: projectId || undefined, difficulty: (difficulty || undefined) as (1 | 2 | 3 | 4 | 5 | undefined) }
-        : {
-          id: crypto.randomUUID(),
-          items,
-          notes: notes.trim(),
+      const patch = { items, notes: notes.trim(), projectId: projectId || undefined, difficulty: (difficulty || undefined) as (1 | 2 | 3 | 4 | 5 | undefined) };
+      if (inspection) {
+        updateInspection(inspection.id, patch);
+      } else {
+        addInspection({
+          locationId: location.id,
+          mountainId: location.mountainId,
           createdAt: new Date().toISOString(),
           createdBy,
           createdByContactId: me?.id,
-          projectId: projectId || undefined,
-          difficulty: (difficulty || undefined) as (1 | 2 | 3 | 4 | 5 | undefined),
-        };
-      const prior = location.inspections || (location.inspection ? [location.inspection] : []);
-      const inspections = inspection
-        ? prior.map(i => i.id === inspection.id ? record : i)
-        : [...prior, record];
-      const mirrorIsThis = inspection ? location.inspection?.id === inspection.id : true;
-      updateLocation(location.id, { inspections, ...(mirrorIsThis ? { inspection: record } : {}) });
+          ...patch,
+        });
+      }
       toast.success(inspection ? 'Inspection updated' : 'Inspection added');
       onClose();
     } finally {

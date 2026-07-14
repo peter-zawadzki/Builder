@@ -56,10 +56,11 @@ function Section({ title, icon, children }: { title: string; icon: React.ReactNo
 
 export function MountainPortal() {
   const { mountainId } = useParams<{ mountainId: string }>();
-  const { getMountainById, getLocationsByMountainId, updateMountain, addContact } = useData();
+  const { getMountainById, getLocationsByMountainId, getInspectionsByLocationId, updateMountain, addContact } = useData();
 
   const mountain = getMountainById(mountainId!);
   const locations = getLocationsByMountainId(mountainId!);
+  const latestInspectionFor = (locationId: string) => getInspectionsByLocationId(locationId)[0];
 
   // Proposed date selection
   const [selectedDates, setSelectedDates] = useState<string[]>(mountain?.proposedInstallDates || []);
@@ -87,11 +88,11 @@ export function MountainPortal() {
   const hasTechContact = !!(mountain.technicalContact?.name && mountain.technicalContact?.email);
 
   const totalCameras = locations.reduce((sum, loc) => {
-    const cams = loc.inspection?.items.filter(i => i.type === 'Camera').reduce((s, i) => s + (i.count || 1), 0) || 0;
+    const cams = latestInspectionFor(loc.id)?.items.filter(i => i.type === 'Camera').reduce((s, i) => s + (i.count || 1), 0) || 0;
     return sum + cams;
   }, 0);
 
-  const locationsWithInspection = locations.filter(l => l.inspection);
+  const locationsWithInspection = locations.filter(l => !!latestInspectionFor(l.id));
 
   // ── Date selection ────────────────────────────────────────────────────────
 
@@ -252,7 +253,8 @@ export function MountainPortal() {
 
             <div className="space-y-2">
               {locations.map(loc => {
-                const cameras = loc.inspection?.items.filter(i => i.type === 'Camera') || [];
+                const latestInspection = latestInspectionFor(loc.id);
+                const cameras = latestInspection?.items.filter(i => i.type === 'Camera') || [];
                 const cameraCount = cameras.reduce((s, i) => s + (i.count || 1), 0);
                 return (
                   <div key={loc.id} className="border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-3">
@@ -268,8 +270,8 @@ export function MountainPortal() {
                         <Camera size={12} /> {cameraCount} camera{cameraCount !== 1 ? 's' : ''}
                       </div>
                     )}
-                    {loc.inspection?.notes && (
-                      <p className="text-[12px] text-[#6a7282] mt-1">{loc.inspection.notes}</p>
+                    {latestInspection?.notes && (
+                      <p className="text-[12px] text-[#6a7282] mt-1">{latestInspection.notes}</p>
                     )}
                   </div>
                 );

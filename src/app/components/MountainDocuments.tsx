@@ -27,7 +27,7 @@ interface MountainDocumentsProps {
 }
 
 export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumentsProps) {
-  const { getLocationsByMountainId, getAssetsByMountainId } = useData();
+  const { getLocationsByMountainId, getAssetsByMountainId, getInspectionsByLocationId } = useData();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
@@ -108,7 +108,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         });
 
         // Add inspection photos
-        const inspectionDate = loc.inspection?.createdAt || new Date().toISOString();
+        const inspectionDate = getInspectionsByLocationId(loc.id)[0]?.createdAt || new Date().toISOString();
         finalInspMedia.photos.forEach((photoUrl, idx) => {
           mediaDocs.push({
             id: `insp-${loc.id}-photo-${idx}`,

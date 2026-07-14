@@ -16,11 +16,11 @@ export function HomeDashboard() {
   const [scope, setScope] = useState<'mine' | 'all'>(me ? 'mine' : 'all');
   const effective: 'mine' | 'all' = !me ? 'all' : canSeeAll ? scope : 'mine';
 
-  const { mountains, contacts, organizations, teams, projects, locations, notes } = useData();
-  const activityData = { mountains, contacts, organizations, teams, projects, locations, notes };
+  const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = useData();
+  const activityData = { mountains, contacts, organizations, teams, projects, locations, inspections, notes };
   const activityItems = useMemo(
     () => effective === 'mine' ? getMyNotifications(me?.id, activityData) : getAllOpenActivities(activityData),
-    [effective, me?.id, mountains, contacts, organizations, teams, projects, locations, notes],
+    [effective, me?.id, mountains, contacts, organizations, teams, projects, locations, inspections, notes],
   );
   const notesItems = useMemo(() => activityItems.filter(n => n.type === 'note'), [activityItems]);
   const actionItems = useMemo(() => activityItems.filter(n => n.type === 'action'), [activityItems]);

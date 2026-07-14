@@ -17,6 +17,7 @@ export function TrailDetail() {
     trails, locations, assets,
     getMountainById, updateTrail, deleteTrail,
     getAssetsByLocationId,
+    getInspectionsByLocationId,
   } = useData();
 
   const mountain = getMountainById(mountainId!);
@@ -165,7 +166,7 @@ export function TrailDetail() {
             <div className="space-y-3">
               {trailLocations.map(location => {
                 const locAssets = getAssetsByLocationId(location.id).filter(a => a.type !== 'Miscellaneous');
-                const inspCount = location.inspection?.items.reduce((s, i) => s + i.count, 0) || 0;
+                const inspCount = getInspectionsByLocationId(location.id)[0]?.items.reduce((s, i) => s + i.count, 0) || 0;
                 return (
                   <Link key={location.id} to={`/mountains/${mountainId}/locations/${location.id}`}>
                     <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 active:bg-[#f3f3f5] transition-colors">

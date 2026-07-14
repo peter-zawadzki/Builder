@@ -12,7 +12,7 @@ interface ExportModalProps {
 type ExportStatus = 'idle' | 'loading' | 'done';
 
 export function ExportModal({ mountainId, onClose }: ExportModalProps) {
-  const { getMountainById, getLocationsByMountainId, getAssetsByLocationId, getNotesByMountainId, itemPrices } = useData();
+  const { getMountainById, getLocationsByMountainId, getAssetsByLocationId, getInspectionsByLocationId, getNotesByMountainId, itemPrices } = useData();
   const [pdfStatus, setPdfStatus] = useState<ExportStatus>('idle');
   const [csvStatus, setCsvStatus] = useState<ExportStatus>('idle');
 
@@ -21,13 +21,14 @@ export function ExportModal({ mountainId, onClose }: ExportModalProps) {
 
   const locations = getLocationsByMountainId(mountainId);
   const allAssets = locations.flatMap(l => getAssetsByLocationId(l.id));
+  const allInspections = locations.flatMap(l => getInspectionsByLocationId(l.id));
   const notes = getNotesByMountainId(mountainId);
 
   const handlePDF = async () => {
     if (pdfStatus === 'loading') return;
     setPdfStatus('loading');
     try {
-      await generatePDF(mountain, locations, allAssets, notes, itemPrices);
+      await generatePDF(mountain, locations, allAssets, notes, itemPrices, allInspections);
       setPdfStatus('done');
       toast.success('PDF exported successfully');
       setTimeout(() => setPdfStatus('idle'), 3000);

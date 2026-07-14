@@ -132,7 +132,7 @@ interface Props {
 }
 
 export function MountainMapView({ mountainId, onClose, initialFocusLocationId }: Props) {
-  const { getMountainById, getLocationsByMountainId, getAssetsByLocationId, updateLocation } = useData();
+  const { getMountainById, getLocationsByMountainId, getAssetsByLocationId, getInspectionsByLocationId, updateLocation } = useData();
   const mountain = getMountainById(mountainId);
   const locations = getLocationsByMountainId(mountainId);
 
@@ -607,7 +607,7 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
               locations.map((loc, idx) => {
                 const assets = getAssetsByLocationId(loc.id);
                 const assetCount = assets.filter(a => a.type !== 'Miscellaneous').length;
-                const inspCount = loc.inspection?.items.reduce((s, i) => s + i.count, 0) || 0;
+                const inspCount = getInspectionsByLocationId(loc.id)[0]?.items.reduce((s, i) => s + i.count, 0) || 0;
                 return (
                   <div id={`map-card-${loc.id}`} key={loc.id} className="snap-start">
                     <LocationCard

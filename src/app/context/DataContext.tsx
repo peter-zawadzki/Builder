@@ -169,6 +169,8 @@ export interface Trail {
 
 export interface Inspection {
   id: string;
+  locationId: string;               // FK -> Location (own top-level collection, not embedded)
+  mountainId: string;                // denormalized from the location, for mountain-level cascade delete + rollups
   items: SiteInspectionItem[];
   notes?: string;
   createdAt: string;
@@ -197,10 +199,13 @@ export interface Location {
     longitude: number;
     recordedAt: string;    // timestamp when original coordinates were captured
   };
-  /** Full inspection history; multiple inspections per location. */
-  inspections?: Inspection[];
-  /** Mirror of the most-recent inspection — kept for existing read sites. */
-  inspection?: Inspection;
+  /** @deprecated Inspections now live in their own `inspections` collection
+   * (Inspection.locationId), migrated automatically on load. These fields are
+   * only read during that one-time migration and are loosely typed since old
+   * records won't have locationId/mountainId set. */
+  inspections?: any[];
+  /** @deprecated same as `inspections` — mirror of the most recent entry. */
+  inspection?: any;
 }
 
 // ─── Asset ───────────────────────────────────────────────────────────────────
@@ -577,9 +582,9 @@ export function getMountainProjects(mountainId: string, data: { projects: Projec
 
 export function getMountainRollupActivities(
   mountainId: string,
-  data: { mountains: Mountain[]; contacts: CRMContact[]; teams: CRMTeam[]; organizations?: CRMOrganization[]; projects: Project[]; locations: Location[] },
+  data: { mountains: Mountain[]; contacts: CRMContact[]; teams: CRMTeam[]; organizations?: CRMOrganization[]; projects: Project[]; locations: Location[]; inspections: Inspection[] },
 ): MountainActivityEntry[] {
-  const { mountains, contacts, teams, projects, locations, organizations = [] } = data;
+  const { mountains, contacts, teams, projects, locations, inspections, organizations = [] } = data;
   const mountain = mountains.find(m => m.id === mountainId);
   if (!mountain) return [];
 
@@ -627,10 +632,9 @@ export function getMountainRollupActivities(
     (p.activities || []).forEach(a => out.push({ ...a, origin: 'project', originLabel: p.name, originId: p.id }));
   });
 
-  locations.filter(l => l.mountainId === mountainId).forEach(loc => {
-    (loc.inspections || []).forEach(insp => {
-      (insp.activities || []).forEach(a => out.push({ ...a, origin: 'inspection', originLabel: loc.name, originId: insp.id }));
-    });
+  inspections.filter(insp => insp.mountainId === mountainId).forEach(insp => {
+    const loc = locations.find(l => l.id === insp.locationId);
+    (insp.activities || []).forEach(a => out.push({ ...a, origin: 'inspection', originLabel: loc?.name, originId: insp.id }));
   });
 
   const seen = new Set<string>();
@@ -666,6 +670,7 @@ interface ActivitySweepData {
   teams: CRMTeam[];
   projects: Project[];
   locations: Location[];
+  inspections: Inspection[];
   notes: MountainNote[];
 }
 
@@ -674,7 +679,7 @@ interface ActivitySweepData {
 // getAllOpenActivities (unscoped, for the homepage-wide feed) so both stay
 // in sync with every place a note/action item can live.
 function sweepActivities(data: ActivitySweepData, isRelevant: (a: { type: 'note' | 'action'; completed?: boolean; archived?: boolean; assigneeContactId?: string }) => boolean): MyNotificationEntry[] {
-  const { mountains, contacts, organizations, teams, projects, locations, notes } = data;
+  const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = data;
   const out: MyNotificationEntry[] = [];
   const push = (a: ContactActivity, extra: Omit<MyNotificationEntry, 'id' | 'text' | 'type' | 'createdAt' | 'authorName' | 'assigneeName'>) => {
     out.push({ id: a.id, text: a.text, type: a.type, createdAt: a.createdAt, authorName: a.authorName, assigneeName: a.assigneeName, ...extra });
@@ -685,9 +690,10 @@ function sweepActivities(data: ActivitySweepData, isRelevant: (a: { type: 'note'
   organizations.forEach(o => (o.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'organization', originLabel: o.name, organizationId: o.id })));
   teams.forEach(t => (t.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'team', originLabel: t.name, teamId: t.id })));
   projects.forEach(p => (p.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'project', originLabel: p.name, mountainId: p.mountainId, teamId: p.teamId })));
-  locations.forEach(loc => (loc.inspections || []).forEach(insp =>
-    (insp.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'inspection', originLabel: loc.name, mountainId: loc.mountainId, locationId: loc.id }))
-  ));
+  inspections.forEach(insp => {
+    const loc = locations.find(l => l.id === insp.locationId);
+    (insp.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'inspection', originLabel: loc?.name, mountainId: insp.mountainId, locationId: insp.locationId }));
+  });
   notes.filter(isRelevant).forEach(n => out.push({
     id: n.id, text: n.text, type: 'note', createdAt: n.createdAt,
     origin: 'mountain', originLabel: mountains.find(m => m.id === n.mountainId)?.name, mountainId: n.mountainId,
@@ -764,6 +770,11 @@ interface DataContextType {
   addLocation: (location: Omit<Location, 'id'>) => string;
   updateLocation: (id: string, updates: Partial<Location>) => void;
   deleteLocation: (id: string) => Promise<void>;
+  inspections: Inspection[];
+  addInspection: (inspection: Omit<Inspection, 'id'>) => string;
+  updateInspection: (id: string, updates: Partial<Inspection>) => void;
+  deleteInspection: (id: string) => void;
+  getInspectionsByLocationId: (locationId: string) => Inspection[];
   addAsset: (asset: Omit<Asset, 'id'>) => string;
   updateAsset: (id: string, asset: Partial<Asset>) => void;
   deleteAsset: (id: string) => Promise<void>;
@@ -828,6 +839,7 @@ const DataContext = (globalThis as any)[_CTX_KEY] as ReturnType<typeof createCon
 const STORAGE_KEYS = {
   MOUNTAINS: 'yullrLocal_mountains',
   LOCATIONS: 'yullrLocal_locations',
+  INSPECTIONS: 'yullrLocal_inspections',
   ASSETS: 'yullrLocal_assets',
   NOTES: 'yullrLocal_notes',
   TRAILS: 'yullrLocal_trails',
@@ -1033,6 +1045,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     catch { return []; }
   });
+  const [inspections, setInspections] = useState<Inspection[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.INSPECTIONS) || '[]'); }
+    catch { return []; }
+  });
   const [assets, setAssets] = useState<Asset[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSETS) || '[]'); }
     catch { return []; }
@@ -1094,6 +1110,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         // Snapshot local state BEFORE fetching so we can merge below.
         let localMountains: Mountain[] = [];
         let localLocations: Location[] = [];
+        let localInspections: Inspection[] = [];
         let localAssets: Asset[] = [];
         let localNotes: MountainNote[] = [];
         let localTrails: Trail[] = [];
@@ -1104,6 +1121,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let localTeams: CRMTeam[] = [];
         try { localMountains = JSON.parse(localStorage.getItem(STORAGE_KEYS.MOUNTAINS) || '[]'); } catch {}
         try { localLocations = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATIONS) || '[]'); } catch {}
+        try { localInspections = JSON.parse(localStorage.getItem(STORAGE_KEYS.INSPECTIONS) || '[]'); } catch {}
         try { localAssets = JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSETS) || '[]'); } catch {}
         try { localNotes = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTES) || '[]'); } catch {}
         try { localTrails = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]'); } catch {}
@@ -1133,7 +1151,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
 
         // Batch 2: large collections
-        const [assetsRes, notesRes, projectsRes, proposalsRes, contactsRes, organizationsRes, teamsRes] = await Promise.all([
+        const [assetsRes, notesRes, projectsRes, proposalsRes, contactsRes, organizationsRes, teamsRes, inspectionsRes] = await Promise.all([
           apiCall('/assets').catch(() => silent()),
           apiCall('/notes').catch(() => silent()),
           apiCall('/projects').catch(() => silent()),
@@ -1141,6 +1159,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           apiCall('/contacts').catch(() => silent()),
           apiCall('/organizations').catch(() => silent()),
           apiCall('/teams').catch(() => silent()),
+          apiCall('/site-inspections').catch(() => silent()),
         ]);
 
         // Merge helper: server is authoritative for items it knows about;
@@ -1155,8 +1174,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
 
         if (mountainsRes) setMountains(mergeById(mountainsRes.mountains || [], localMountains, 'mountains'));
-        if (locationsRes) setLocations(mergeById(locationsRes.locations || [], localLocations, 'locations'));
         if (trailsRes) setTrails(mergeById(trailsRes.trails || [], localTrails, 'trails'));
+
+        // Locations + inspections are handled together: any location still
+        // carrying legacy embedded `inspections`/`inspection` (pre-normalization)
+        // gets migrated into the standalone `inspections` collection here, once,
+        // then stripped from the location. Idempotent — a location whose
+        // inspections already migrated (present in the merged inspections
+        // collection) is left alone even if the legacy fields are still present
+        // locally, so this never double-creates rows on repeat loads.
+        if (locationsRes || inspectionsRes) {
+          const mergedLocations = locationsRes ? mergeById(locationsRes.locations || [], localLocations, 'locations') : localLocations;
+          const mergedInspections = inspectionsRes ? mergeById(inspectionsRes.siteInspections || [], localInspections, 'site-inspections') : localInspections;
+
+          const alreadyMigratedLocationIds = new Set(mergedInspections.map(i => i.locationId));
+          const migratedInspections: Inspection[] = [...mergedInspections];
+          const finalLocations = mergedLocations.map(loc => {
+            if (alreadyMigratedLocationIds.has(loc.id)) return loc;
+            const legacyList: any[] = loc.inspections?.length ? loc.inspections : (loc.inspection ? [loc.inspection] : []);
+            if (legacyList.length === 0) return loc;
+            legacyList.forEach(legacy => {
+              const migrated: Inspection = { ...legacy, locationId: loc.id, mountainId: loc.mountainId };
+              migratedInspections.push(migrated);
+              syncOrQueue('/site-inspections', 'POST', JSON.stringify(migrated))
+                .catch(e => console.error('Inspection migration sync error:', e));
+            });
+            const { inspections: _drop1, inspection: _drop2, ...rest } = loc;
+            syncOrQueue(`/locations/${loc.id}`, 'PUT', JSON.stringify({ inspections: [], inspection: null }))
+              .catch(e => console.error('Location inspection-migration clear sync error:', e));
+            return rest as Location;
+          });
+
+          setLocations(finalLocations);
+          setInspections(migratedInspections);
+        }
         if (assetsRes) {
           const serverAssets: Asset[] = assetsRes.assets || [];
           const merged = mergeById(serverAssets, localAssets, 'assets');
@@ -1393,6 +1444,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(inspections)); }
+      catch (e) { console.error('Error saving inspections:', e); }
+    }
+  }, [inspections, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
       try {
         const stripped = assets.map(a => stripPhotos(a));
         localStorage.setItem(STORAGE_KEYS.ASSETS, JSON.stringify(stripped));
@@ -1541,11 +1599,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
     cloudLocSync.deleteLocationMedia(id).catch(() => {});
     setAssets(prev => prev.filter(a => !assetIds.includes(a.id)));
     setLocations(prev => prev.filter(l => l.id !== id));
+    setInspections(prev => prev.filter(i => i.locationId !== id));
 
     addTombstone('locations', id);
     syncOrQueue(`/locations/${id}/cascade`, 'DELETE', null)
       .catch(e => console.error('Location delete sync error:', e));
   };
+
+  // ─── Inspections (own collection, attached to a Location via locationId) ────
+
+  const addInspection = (inspection: Omit<Inspection, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newInspection = { ...inspection, id };
+    setInspections(prev => [...prev, newInspection]);
+    syncOrQueue('/site-inspections', 'POST', JSON.stringify(newInspection))
+      .catch(e => console.error('Inspection sync error:', e));
+    return id;
+  };
+
+  const updateInspection = (id: string, updates: Partial<Inspection>) => {
+    setInspections(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+    syncOrQueue(`/site-inspections/${id}`, 'PUT', JSON.stringify(updates))
+      .catch(e => console.error('Inspection update sync error:', e));
+  };
+
+  const deleteInspection = (id: string) => {
+    setInspections(prev => prev.filter(i => i.id !== id));
+    addTombstone('site-inspections', id);
+    syncOrQueue(`/site-inspections/${id}`, 'DELETE', null)
+      .catch(e => console.error('Inspection delete sync error:', e));
+  };
+
+  const getInspectionsByLocationId = (locationId: string) =>
+    inspections.filter(i => i.locationId === locationId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   // ─── Assets ─────────────────────────────────────────────────────────────────
 
@@ -2085,6 +2171,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         addLocation,
         updateLocation,
         deleteLocation,
+        inspections,
+        addInspection,
+        updateInspection,
+        deleteInspection,
+        getInspectionsByLocationId,
         addAsset,
         updateAsset,
         deleteAsset,

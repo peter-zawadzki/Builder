@@ -104,7 +104,7 @@ export function LocationDetail({
   const locationId = locationIdProp || params.locationId;
   const navigate = useNavigate();
   const {
-    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById, updateLocation, logActivity, contacts,
+    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById, getInspectionsByLocationId, updateInspection, logActivity, contacts,
   } = useData();
 
   // When embedded, "back" returns to the trail view inside the same modal
@@ -234,20 +234,14 @@ export function LocationDetail({
     );
   }
 
-  // Update a single inspection's notes/action items (inspections live nested
-  // inside the location, so this rewrites both the `inspections` array entry
-  // and the `inspection` mirror if it points at the same one).
+  // Update a single inspection's notes/action items.
   const updateInspectionActivities = (inspId: string, activities: ContactActivity[]) => {
-    const updatedInspections = (location.inspections || []).map(i => i.id === inspId ? { ...i, activities } : i);
-    const updatedInspection = location.inspection?.id === inspId ? { ...location.inspection, activities } : location.inspection;
-    updateLocation(location.id, { inspections: updatedInspections, inspection: updatedInspection });
+    updateInspection(inspId, { activities });
   };
 
-  const inspection = location.inspection;
+  const inspections = getInspectionsByLocationId(location.id);
+  const inspection = inspections[0];
   const totalInspItems = inspection?.items.reduce((s, i) => s + i.count, 0) || 0;
-  const inspections = (location.inspections && location.inspections.length)
-    ? [...location.inspections].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    : (location.inspection ? [location.inspection] : []);
   const fmtInspDate = (iso?: string) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 
   return (

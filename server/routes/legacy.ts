@@ -94,7 +94,12 @@ for (const collection of Object.keys(ARRAY_KEY)) {
         [id]
       );
     } else if (collection === "locations") {
-      await query(`DELETE FROM legacy_records WHERE collection = 'assets' AND data->>'locationId' = $1`, [id]);
+      await query(
+        `DELETE FROM legacy_records
+          WHERE collection IN ('assets','site-inspections')
+            AND data->>'locationId' = $1`,
+        [id]
+      );
     }
     return c.json({ ok: true });
   });
@@ -110,7 +115,12 @@ for (const collection of Object.keys(ARRAY_KEY)) {
         [id]
       );
     } else if (collection === "locations") {
-      await query(`DELETE FROM legacy_records WHERE collection = 'assets' AND data->>'locationId' = $1`, [id]);
+      await query(
+        `DELETE FROM legacy_records
+          WHERE collection IN ('assets','site-inspections')
+            AND data->>'locationId' = $1`,
+        [id]
+      );
     }
     return c.json({ ok: true });
   });

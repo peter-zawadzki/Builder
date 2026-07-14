@@ -22,10 +22,10 @@ export function AppHeader() {
   const { pathname } = useLocation();
   const isSuperAdmin = useIsSuperAdmin();
   const me = useMyContact();
-  const { mountains, contacts, organizations, teams, projects, locations, notes } = useData();
+  const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = useData();
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const notifications = getMyNotifications(me?.id, { mountains, contacts, organizations, teams, projects, locations, notes });
+  const notifications = getMyNotifications(me?.id, { mountains, contacts, organizations, teams, projects, locations, inspections, notes });
 
   const goToNotification = (n: MyNotificationEntry) => {
     setShowNotifications(false);

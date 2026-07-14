@@ -1,4 +1,4 @@
-import type { Mountain, Location, Asset, MountainNote } from '../context/DataContext';
+import type { Mountain, Location, Asset, MountainNote, Inspection } from '../context/DataContext';
 import logoUrl from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -278,7 +278,8 @@ export async function generatePDF(
   locations: Location[],
   assets: Asset[],
   notes: MountainNote[],
-  itemPrices: Record<string, number>
+  itemPrices: Record<string, number>,
+  inspections: Inspection[] = []
 ) {
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const totalAssets = assets.filter(a => a.type !== 'Miscellaneous').length;
@@ -293,7 +294,9 @@ export async function generatePDF(
   const locationSections = locations.map((loc, idx) => {
     const locAssets = assets.filter(a => a.locationId === loc.id && a.type !== 'Miscellaneous');
     const locTotal = locAssets.reduce((s, a) => s + getAssetPrice(a, itemPrices), 0);
-    const inspection = loc.inspection;
+    const inspection = inspections
+      .filter(i => i.locationId === loc.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
     const assetRows = locAssets.map(a => {
       const price = getAssetPrice(a, itemPrices);

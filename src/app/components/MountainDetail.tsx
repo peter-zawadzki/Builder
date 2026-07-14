@@ -119,6 +119,7 @@ export function MountainDetail() {
     getLocationsByMountainId,
     getAssetsByMountainId,
     getAssetsByLocationId,
+    getInspectionsByLocationId,
     assets,
     contacts,
     organizations,
@@ -514,7 +515,7 @@ export function MountainDetail() {
                       return sum + getAssetsByLocationId(loc.id).filter(a => a.type !== 'Miscellaneous').length;
                     }, 0);
                     const inspCount = trailLocations.reduce((sum, loc) => {
-                      return sum + (loc.inspection?.items.reduce((s, i) => s + i.count, 0) || 0);
+                      return sum + (getInspectionsByLocationId(loc.id)[0]?.items.reduce((s, i) => s + i.count, 0) || 0);
                     }, 0);
 
                     return (

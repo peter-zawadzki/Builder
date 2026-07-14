@@ -27,14 +27,14 @@ const MULTI_COUNT_ITEMS: SiteInspectionItemType[] = [
 export function AddInspection() {
   const { mountainId, locationId } = useParams();
   const navigate = useNavigate();
-  const { getMountainById, getLocationById, updateLocation, getProjectsByMountainId } = useData();
+  const { getMountainById, getLocationById, addInspection, getInspectionsByLocationId, getProjectsByMountainId } = useData();
   const { user } = useUser();
   const me = useMyContact();
   const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
 
   const mountain = getMountainById(mountainId!);
   const location = getLocationById(locationId!);
-  const existingCount = (location?.inspections?.length) || (location?.inspection ? 1 : 0);
+  const existingCount = getInspectionsByLocationId(locationId!).length;
 
   // Each visit adds a NEW inspection. Attach to a project (default the single active).
   const activeProjects = getProjectsByMountainId(mountainId!).filter(p => !isProjectCompleted(p));
@@ -93,8 +93,9 @@ export function AddInspection() {
     }
     setSaving(true);
     try {
-      const newInsp = {
-        id: crypto.randomUUID(),
+      addInspection({
+        locationId: locationId!,
+        mountainId: mountainId!,
         items,
         notes: notes.trim(),
         createdAt: new Date().toISOString(),
@@ -102,10 +103,7 @@ export function AddInspection() {
         createdByContactId: me?.id,
         projectId: projectId || undefined,
         difficulty: (difficulty || undefined) as (1 | 2 | 3 | 4 | 5 | undefined),
-      };
-      const prior = location?.inspections || (location?.inspection ? [location.inspection] : []);
-      const inspections = [...prior, newInsp];
-      updateLocation(locationId!, { inspections, inspection: newInsp });
+      });
 
       toast.success('Inspection added');
       setHasUnsavedChanges(false);

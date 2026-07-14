@@ -24,7 +24,7 @@ interface MapViewState {
 }
 
 export function MountainsList() {
-  const { mountains, trails, assets, projects, contacts, organizations, getNotesByMountainId, getLocationsByMountainId, getProjectsByMountainId, updateMountain } = useData();
+  const { mountains, trails, assets, projects, contacts, organizations, getNotesByMountainId, getLocationsByMountainId, getInspectionsByLocationId, getProjectsByMountainId, updateMountain } = useData();
   const navigate = useNavigate();
   const isSuperAdmin = useIsSuperAdmin();
 
@@ -107,8 +107,9 @@ export function MountainsList() {
     // Last inspection date
     const mountainLocations = getLocationsByMountainId(mountainId);
     mountainLocations.forEach(loc => {
-      if (loc.inspection?.createdAt) {
-        dates.push(new Date(loc.inspection.createdAt));
+      const latestInspection = getInspectionsByLocationId(loc.id)[0];
+      if (latestInspection?.createdAt) {
+        dates.push(new Date(latestInspection.createdAt));
       }
     });
 

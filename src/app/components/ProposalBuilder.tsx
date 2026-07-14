@@ -94,7 +94,7 @@ export function ProposalBuilder() {
   const navigate = useNavigate();
   const { mountainId, proposalId } = useParams<{ mountainId: string; proposalId: string }>();
   const {
-    getMountainById, getTrailsByMountainId, getLocationsByMountainId,
+    getMountainById, getTrailsByMountainId, getLocationsByMountainId, getInspectionsByLocationId,
     addTrail: saveTrailToDB,
     updateMountain,
     addNote,
@@ -159,9 +159,7 @@ export function ProposalBuilder() {
       let sawInspection = false;
       let total = 0;
       trailLocations.forEach(loc => {
-        const inspections = loc.inspections && loc.inspections.length
-          ? loc.inspections
-          : (loc.inspection ? [loc.inspection] : []);
+        const inspections = getInspectionsByLocationId(loc.id);
         inspections.filter(insp => insp.projectId === projectId).forEach(insp => {
           sawInspection = true;
           total += insp.items.filter(i => i.type === 'Camera').reduce((s, i) => s + i.count, 0);

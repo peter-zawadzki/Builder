@@ -23,7 +23,7 @@ export function TrailDetailModal({
 }) {
   const navigate = useNavigate();
   const {
-    trails, locations, getMountainById, updateTrail, deleteTrail, getAssetsByLocationId,
+    trails, locations, getMountainById, updateTrail, deleteTrail, getAssetsByLocationId, getInspectionsByLocationId,
   } = useData();
 
   const mountain = getMountainById(mountainId);
@@ -177,7 +177,7 @@ export function TrailDetailModal({
                   <div className="space-y-2.5">
                     {trailLocations.map(location => {
                       const locAssets = getAssetsByLocationId(location.id).filter(a => a.type !== 'Miscellaneous');
-                      const inspections = location.inspections?.length ? location.inspections : (location.inspection ? [location.inspection] : []);
+                      const inspections = getInspectionsByLocationId(location.id);
                       const media = mediaCounts[location.id];
                       return (
                         <button
