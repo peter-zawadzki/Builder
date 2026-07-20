@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 import * as photoDB from '../utils/photoDB';
 import * as locMediaDB from '../utils/locationMediaDB';
-import * as mountainDocsDB from '../utils/mountainDocumentsDB';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import * as cloudPhotos from '../utils/cloudPhotoSync';
 import * as cloudLocSync from '../utils/cloudLocationSync';
@@ -766,7 +765,6 @@ interface DataContextType {
   itemPrices: Record<string, number>;
   addMountain: (mountain: Omit<Mountain, 'id'>) => string;
   updateMountain: (id: string, mountain: Partial<Mountain>) => void;
-  deleteMountain: (id: string) => Promise<void>;
   addLocation: (location: Omit<Location, 'id'>) => string;
   updateLocation: (id: string, updates: Partial<Location>) => void;
   deleteLocation: (id: string) => Promise<void>;
@@ -1549,30 +1547,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Mountain update sync error:', e));
   };
 
-  const deleteMountain = async (id: string) => {
-    const locationIds = locations.filter(l => l.mountainId === id).map(l => l.id);
-    // Include both location-assigned assets AND mountain inventory assets
-    const assetIds = assets.filter(a =>
-      (a.locationId && locationIds.includes(a.locationId)) || a.mountainId === id
-    ).map(a => a.id);
-
-    await Promise.all(assetIds.map(aid => photoDB.deletePhotos(aid).catch(() => {})));
-    await Promise.all(assetIds.map(aid => cloudPhotos.deleteAssetPhotos(aid).catch(() => {})));
-    await Promise.all(locationIds.map(lid => locMediaDB.deleteAllMedia(lid).catch(() => {})));
-    await Promise.all(locationIds.map(lid => cloudLocSync.deleteLocationMedia(lid).catch(() => {})));
-    await mountainDocsDB.deleteDocuments(id).catch(() => {});
-
-    setNotes(prev => prev.filter(n => n.mountainId !== id));
-    setAssets(prev => prev.filter(a => !assetIds.includes(a.id)));
-    setLocations(prev => prev.filter(l => l.mountainId !== id));
-    setTrails(prev => prev.filter(t => t.mountainId !== id));
-    setMountains(prev => prev.filter(m => m.id !== id));
-
-    addTombstone('mountains', id);
-    syncOrQueue(`/mountains/${id}/cascade`, 'DELETE', null)
-      .catch(e => console.error('Mountain delete sync error:', e));
-  };
-
   // ─── Locations ──────────────────────────────────────────────────────────────
 
   const addLocation = (location: Omit<Location, 'id'>) => {
@@ -2167,7 +2141,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         itemPrices,
         addMountain,
         updateMountain,
-        deleteMountain,
         addLocation,
         updateLocation,
         deleteLocation,
