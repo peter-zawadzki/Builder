@@ -1,4 +1,4 @@
-import type { Mountain, Location, Asset, MountainNote, Inspection } from '../context/DataContext';
+import { getLocationInspections, type Mountain, type Location, type Asset, type MountainNote, type Inspection } from '../context/DataContext';
 import logoUrl from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -294,9 +294,7 @@ export async function generatePDF(
   const locationSections = locations.map((loc, idx) => {
     const locAssets = assets.filter(a => a.locationId === loc.id && a.type !== 'Miscellaneous');
     const locTotal = locAssets.reduce((s, a) => s + getAssetPrice(a, itemPrices), 0);
-    const inspection = inspections
-      .filter(i => i.locationId === loc.id)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    const inspection = getLocationInspections(inspections, loc.id)[0];
 
     const assetRows = locAssets.map(a => {
       const price = getAssetPrice(a, itemPrices);

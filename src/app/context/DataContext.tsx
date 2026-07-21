@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 import * as photoDB from '../utils/photoDB';
 import * as locMediaDB from '../utils/locationMediaDB';
@@ -83,7 +83,6 @@ export interface Mountain {
   mountainLogo?: string;              // base64 — stored in IndexedDB key mountainLogo:{id}
   proposedInstallDates?: string[];    // up to 3 ISO dates, set by mountain rep on portal
   confirmedInstallDate?: string;      // set by YULLR in Builder
-  invoicePaid?: boolean;              // toggled by YULLR in Builder
   onsiteContact?: {
     name: string;
     phone: string;
@@ -102,8 +101,6 @@ export interface Mountain {
   nextActionType?: 'Email' | 'Call' | 'Visit' | 'Task';
   nextActionAssigneeId?: string;   // YULLR contact the action is assigned to
   nextActionAssignee?: string;     // assignee display name
-  estimatedDealValue?: number;
-  closeProbability?: number;
   corporateGroup?: string;
   organizationId?: string;
   affiliateContactIds?: string[];  // YULLR people who sell/represent this mountain
@@ -180,6 +177,12 @@ export interface Inspection {
   activities?: ContactActivity[];  // notes / action items captured during this visit
 }
 
+// Shared by DataContext's getInspectionsByLocationId and exportUtils.ts, so
+// both stay in sync if the "latest inspection" ordering ever changes.
+export function getLocationInspections(inspections: Inspection[], locationId: string): Inspection[] {
+  return inspections.filter(i => i.locationId === locationId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 export interface Location {
   id: string;
   mountainId: string;
@@ -240,7 +243,9 @@ export interface Asset {
   assetClass?: 'Asset' | 'Expense';  // tracked asset vs. expensed consumable (default Asset)
   type: 'Camera' | 'Network Gear' | 'Miscellaneous' | 'Server';
   isDraft?: boolean;
+  /** @deprecated inventory-mode assets stored a Trail ID here under a name-shaped field — use trailId instead */
   trail?: string;
+  trailId?: string;      // links to a Trail record (set in inventory mode); legacy assets may only have `trail`
   manufacturer?: string;
   customManufacturer?: string;
   model?: string;
@@ -368,11 +373,9 @@ export interface Project {
   stageDates?: Partial<Record<ProjectStage, string>>;  // optional date per stage (any type/status)
   ownerContactId?: string;      // the owning YULLR contact (employee)
   ownerName?: string;           // display name of the current owner
-  ownerUserId?: string;         // legacy: Clerk user id, if owner was a login
   isStalled?: boolean;
   stallReason?: StallReason;
   stallNote?: string;           // required when stallReason === 'Other'
-  reconcileConfirmed?: boolean; // install-vs-inspection reconciliation acknowledged
   archived?: boolean;
   activities?: ContactActivity[]; // notes / action items, same shape as contacts
   createdBy?: string;           // name of the user who created the project
@@ -390,7 +393,6 @@ export interface Proposal {
   proposalCreated?: boolean;    // finalized / sent for signature
   proposalCreatedAt?: string;
   form?: any;                   // the editable ProposalForm content
-  invoice?: Invoice;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
@@ -969,6 +971,20 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
  * Route a write through the offline queue when offline, or attempt it
  * immediately and queue it as fallback if the network call fails.
  */
+// Runs a batch of one-off sync tasks with at most `limit` in flight at once,
+// instead of firing them all concurrently (a request storm on first load for
+// accounts with lots of legacy un-migrated data).
+async function runWithConcurrencyLimit(tasks: Array<() => Promise<void>>, limit: number): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (next < tasks.length) {
+      const task = tasks[next++];
+      await task();
+    }
+  });
+  await Promise.all(workers);
+}
+
 async function syncOrQueue(endpoint: string, method: string, body: string | null): Promise<void> {
   if (!navigator.onLine) {
     await offlineQueue.enqueue({ endpoint, method, body }).catch(err => {
@@ -1187,6 +1203,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
           const alreadyMigratedLocationIds = new Set(mergedInspections.map(i => i.locationId));
           const migratedInspections: Inspection[] = [...mergedInspections];
+          const migrationTasks: Array<() => Promise<void>> = [];
           const finalLocations = mergedLocations.map(loc => {
             if (alreadyMigratedLocationIds.has(loc.id)) return loc;
             const legacyList: any[] = loc.inspections?.length ? loc.inspections : (loc.inspection ? [loc.inspection] : []);
@@ -1194,16 +1211,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
             legacyList.forEach(legacy => {
               const migrated: Inspection = { ...legacy, locationId: loc.id, mountainId: loc.mountainId };
               migratedInspections.push(migrated);
-              syncOrQueue('/site-inspections', 'POST', JSON.stringify(migrated))
-                .catch(e => console.error('Inspection migration sync error:', e));
+              migrationTasks.push(() => syncOrQueue('/site-inspections', 'POST', JSON.stringify(migrated))
+                .catch(e => console.error('Inspection migration sync error:', e)));
             });
             const { inspections: _drop1, inspection: _drop2, ...rest } = loc;
-            syncOrQueue(`/locations/${loc.id}`, 'PUT', JSON.stringify({ inspections: [], inspection: null }))
-              .catch(e => console.error('Location inspection-migration clear sync error:', e));
+            migrationTasks.push(() => syncOrQueue(`/locations/${loc.id}`, 'PUT', JSON.stringify({ inspections: [], inspection: null }))
+              .catch(e => console.error('Location inspection-migration clear sync error:', e)));
             return rest as Location;
           });
 
-          setLocations(finalLocations);
+          if (migrationTasks.length > 0) runWithConcurrencyLimit(migrationTasks, 5);
+
+          if (locationsRes) setLocations(finalLocations);
           setInspections(migratedInspections);
         }
         if (assetsRes) {
@@ -1567,6 +1586,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deleteLocation = async (id: string) => {
     const assetIds = assets.filter(a => a.locationId === id).map(a => a.id);
+    const inspectionIds = inspections.filter(i => i.locationId === id).map(i => i.id);
     await Promise.all(assetIds.map(aid => photoDB.deletePhotos(aid).catch(() => {})));
     await Promise.all(assetIds.map(aid => cloudPhotos.deleteAssetPhotos(aid).catch(() => {})));
     await locMediaDB.deleteAllMedia(id).catch(() => {});
@@ -1576,6 +1596,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setInspections(prev => prev.filter(i => i.locationId !== id));
 
     addTombstone('locations', id);
+    inspectionIds.forEach(iid => addTombstone('site-inspections', iid));
     syncOrQueue(`/locations/${id}/cascade`, 'DELETE', null)
       .catch(e => console.error('Location delete sync error:', e));
   };
@@ -1604,8 +1625,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Inspection delete sync error:', e));
   };
 
-  const getInspectionsByLocationId = (locationId: string) =>
-    inspections.filter(i => i.locationId === locationId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Precomputed once per `inspections` change so call sites (several of them
+  // in render bodies/reduce loops) get an O(1) lookup instead of re-filtering
+  // and re-sorting the whole inspections array on every call.
+  const inspectionsByLocationId = useMemo(() => {
+    const map = new Map<string, Inspection[]>();
+    for (const insp of inspections) {
+      const arr = map.get(insp.locationId);
+      if (arr) arr.push(insp); else map.set(insp.locationId, [insp]);
+    }
+    for (const arr of map.values()) arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return map;
+  }, [inspections]);
+
+  const getInspectionsByLocationId = (locationId: string) => inspectionsByLocationId.get(locationId) || [];
 
   // ─── Assets ─────────────────────────────────────────────────────────────────
 
@@ -1950,9 +1983,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const getMountainTrailNames = (mountainId: string): string[] => {
     const mountainLocations = locations.filter(l => l.mountainId === mountainId);
     const locationIdSet = new Set(mountainLocations.map(l => l.id));
+    const mountainTrails = trails.filter(t => t.mountainId === mountainId);
+    const assetTrailNames = assets
+      .filter(a => locationIdSet.has(a.locationId))
+      .map(a => a.trailId || a.trail)
+      .filter(Boolean)
+      .map(idOrLegacy => mountainTrails.find(t => t.id === idOrLegacy)?.name)
+      .filter(Boolean) as string[];
     return [...new Set([
       ...mountainLocations.map(l => l.trailName).filter(Boolean) as string[],
-      ...assets.filter(a => locationIdSet.has(a.locationId) && a.trail).map(a => a.trail as string),
+      ...assetTrailNames,
     ])].sort();
   };
 

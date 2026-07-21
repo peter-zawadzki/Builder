@@ -224,7 +224,7 @@ function MapPicker({ mountainAddress, initialCoords, onSelect, onClose }: MapPic
 export function CreateLocation() {
   const { mountainId, trailId } = useParams();
   const navigate = useNavigate();
-  const { getMountainById, addLocation, getLocationsByMountainId, assets, trails } = useData();
+  const { getMountainById, addLocation, getMountainTrailNames, trails } = useData();
 
   const mountain = getMountainById(mountainId!);
   // If coming from a trail, pre-populate trail name
@@ -271,12 +271,7 @@ export function CreateLocation() {
   }, [nickname, trailName, notes, difficulty, coords, photos, videos]);
 
   // Trail name autocomplete from other locations + assets on this mountain
-  const existingLocations = getLocationsByMountainId(mountainId!);
-  const locationIds = new Set(existingLocations.map(l => l.id));
-  const existingTrails = [...new Set([
-    ...existingLocations.map(l => l.trailName).filter(Boolean) as string[],
-    ...assets.filter(a => locationIds.has(a.locationId) && a.trail).map(a => a.trail as string),
-  ])].sort();
+  const existingTrails = getMountainTrailNames(mountainId!);
 
   const getGPS = () => {
     if (!navigator.geolocation) {

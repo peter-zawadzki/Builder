@@ -198,7 +198,7 @@ export function AddAsset() {
   const [miscPhotos, setMiscPhotos] = useState<string[]>(existingAsset?.miscPhotos || []);
 
   // For inventory mode: track selected trail and location separately
-  const [selectedTrailId, setSelectedTrailId] = useState(existingAsset?.trail || '');
+  const [selectedTrailId, setSelectedTrailId] = useState(existingAsset?.trailId || existingAsset?.trail || '');
   const [selectedLocationId, setSelectedLocationId] = useState(existingAsset?.locationId || '');
 
   // Filter locations by selected trail
@@ -393,13 +393,13 @@ export function AddAsset() {
 
     // In inventory mode, use the selected trail and location
     const finalLocationId = isInventoryMode ? (selectedLocationId || undefined) : locationId;
-    const finalTrail = isInventoryMode ? selectedTrailId : formData.trail;
+    const finalTrailId = isInventoryMode ? (selectedTrailId || undefined) : undefined;
 
     const assetData = {
       ...formData,
       mountainId: mountainId!,
       locationId: finalLocationId,
-      trail: finalTrail,
+      trailId: finalTrailId,
       isDraft,
       ...(formData.type === 'Miscellaneous' && {
         miscItems: finalMiscItems,
