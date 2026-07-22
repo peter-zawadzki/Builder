@@ -226,7 +226,20 @@ const SELF_ATTRIBUTED_TYPES = new Set(["note_added", "action_added"]);
 // set APP_BASE_URL once this is deployed so links point at the real domain.
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
 
-export async function mirrorToSlack(rec: { type: string; summary: string; actor: string; path?: string | null; slackText?: string | null; tagged?: boolean }) {
+// Resolves a Builder `users.id` (the authenticated actor on an activity) to
+// their Slack member ID, via their email → the matching CRM contact's
+// slackUserId — the same field used for assignee @mentions. Falls back to
+// their plain name when either lookup misses (no matching contact, or no
+// slackUserId on file for them yet).
+async function resolveActorMention(actorId: string | null | undefined, actorName: string): Promise<string> {
+  if (!actorId) return actorName;
+  const userRow = await queryOne<{ email: string | null }>(`SELECT email FROM users WHERE id = $1`, [actorId]);
+  if (!userRow?.email) return actorName;
+  const contact = await getContactByEmail(userRow.email);
+  return contact?.data?.slackUserId ? `<@${contact.data.slackUserId}>` : actorName;
+}
+
+export async function mirrorToSlack(rec: { type: string; summary: string; actor: string; actorId?: string | null; path?: string | null; slackText?: string | null; tagged?: boolean }) {
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url || !SLACK_MIRROR_TYPES.has(rec.type)) return;
   if (TAGGED_ONLY_TYPES.has(rec.type) && !rec.tagged) return;
@@ -236,12 +249,12 @@ export async function mirrorToSlack(rec: { type: string; summary: string; actor:
   // label as plain text), so the link is appended separately instead.
   const text = rec.slackText || rec.summary;
   const link = rec.path ? ` <${APP_BASE_URL}${rec.path}|View in Builder>` : "";
-  const attribution = SELF_ATTRIBUTED_TYPES.has(rec.type) ? "" : ` — ${rec.actor}`;
+  const attribution = SELF_ATTRIBUTED_TYPES.has(rec.type) ? "" : ` — ${await resolveActorMention(rec.actorId, rec.actor)}`;
   try {
     await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `:round_pushpin: ${text}${attribution}${link}` }),
+      body: JSON.stringify({ text: `${text}${attribution}${link}` }),
     });
   } catch (e) {
     console.warn("Slack mirror failed:", e);

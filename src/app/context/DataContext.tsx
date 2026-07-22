@@ -489,7 +489,7 @@ export function canCompleteActivity(activity: { authorContactId?: string; assign
 // (identical, except the assignee becomes a real <@SLACKID> mention when
 // they have one on file — Slack-only, never shown in the app itself).
 export function buildActivitySummaries(
-  entry: { text: string; type: 'note' | 'action'; assigneeContactId?: string; assigneeName?: string },
+  entry: { text: string; type: 'note' | 'action'; assigneeContactId?: string; assigneeName?: string; authorContactId?: string },
   authorName: string | undefined,
   contacts: CRMContact[],
   mountainNames?: (string | undefined)[],
@@ -497,6 +497,11 @@ export function buildActivitySummaries(
   const kind = entry.type === 'note' ? 'note' : 'action item';
   const article = entry.type === 'note' ? 'a' : 'an';
   const author = authorName || 'someone';
+  // Same @mention treatment as the assignee below — tag the author in Slack
+  // too when we know who they are on file, instead of always spelling out
+  // their name.
+  const authorContact = entry.authorContactId ? contacts.find(c => c.id === entry.authorContactId) : undefined;
+  const authorMention = authorContact?.slackUserId ? `<@${authorContact.slackUserId}>` : author;
   const mountainSuffix = mountainNames?.filter(Boolean).length
     ? ` [${[...new Set(mountainNames.filter(Boolean))].join(', ')}]`
     : '';
@@ -508,12 +513,12 @@ export function buildActivitySummaries(
       // In-app summary omits "by {author}" — the actor already shows on the
       // line below the summary in RecentActivity/HomeDashboard.
       summary: `${name} you have been assigned ${article} ${kind} "${entry.text}"${mountainSuffix}`,
-      slackText: `${mention} you have been assigned ${article} ${kind} by ${author}: "${entry.text}"${mountainSuffix}`,
+      slackText: `${mention} you have been assigned ${article} ${kind} by ${authorMention}: "${entry.text}"${mountainSuffix}`,
     };
   }
   return {
     summary: `New ${kind}: "${entry.text}"${mountainSuffix}`,
-    slackText: `New ${kind} added by ${author}: "${entry.text}"${mountainSuffix}`,
+    slackText: `New ${kind} added by ${authorMention}: "${entry.text}"${mountainSuffix}`,
   };
 }
 

@@ -116,10 +116,13 @@ proposalPublicSign.post("/:token/client", async (c) => {
       assigneeName: peter.data.name || "Peter Zawadzki",
       authorName: "YULLR",
     });
+    const peterName = peter.data.name || "Peter Zawadzki";
+    const peterMention = peter.data.slackUserId ? `<@${peter.data.slackUserId}>` : peterName;
     await insertActivity({
       mountainId,
       type: "action_added",
-      summary: `${peter.data.name || "Peter Zawadzki"} you have been assigned a task: countersign the "${proposal.title || "Proposal"}" proposal`,
+      summary: `${peterName} you have been assigned a task: countersign the "${proposal.title || "Proposal"}" proposal`,
+      slackText: `${peterMention} you have been assigned a task: countersign the "${proposal.title || "Proposal"}" proposal`,
       path: `/mountains/${mountainId}/proposal/${row.id}`,
       tagged: true,
       actor: "YULLR System",
