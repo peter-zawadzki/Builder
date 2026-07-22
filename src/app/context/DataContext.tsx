@@ -1644,22 +1644,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Try to flush any ops that were queued during a previous offline session
-    if (navigator.onLine) {
-      flushQueue();
-      flushPendingPhotos();
-      flushPendingLocationMedia();
-      flushPendingAnnotations();
-    }
-
-    const handleOnline = () => {
+    const flushAll = () => {
       flushQueue();
       flushPendingPhotos();
       flushPendingLocationMedia();
       flushPendingAnnotations();
     };
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+
+    // Try to flush any ops that were queued during a previous offline session
+    if (navigator.onLine) flushAll();
+
+    window.addEventListener('online', flushAll);
+
+    // A write can fail (and get queued as a fallback) while navigator.onLine
+    // stays true the whole time — a transient server hiccup, not an actual
+    // offline period — in which case the 'online' event above never fires
+    // again and the item would sit stuck in the queue forever, showing
+    // "Syncing N offline change(s)…" indefinitely. Retry periodically while
+    // online so a real connectivity/server blip self-heals without the user
+    // needing to reload or actually go offline and back.
+    const retryInterval = setInterval(() => {
+      if (navigator.onLine) flushAll();
+    }, 20000);
+
+    return () => {
+      window.removeEventListener('online', flushAll);
+      clearInterval(retryInterval);
+    };
   }, [flushQueue, flushPendingPhotos, flushPendingLocationMedia, flushPendingAnnotations]);
 
   useEffect(() => {
