@@ -4,7 +4,7 @@ import { useData } from '../context/DataContext';
 import type { TechAdmin, CAFormData } from '../context/DataContext';
 import {
   ArrowLeft, Copy, CheckCircle, Clock, PenLine,
-  RefreshCw, XCircle, Lock, AlertTriangle, ExternalLink, FileCheck, Plus, X, Edit2, Archive, Send,
+  RefreshCw, XCircle, Lock, AlertTriangle, ExternalLink, FileCheck, FileText, Plus, X, Edit2, Archive, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
@@ -252,13 +252,21 @@ export function CustomerAgreementBuilder() {
               Customer Agreement
             </h1>
           </div>
+          {/* Contract/Agreement status pill lifecycle (Dev Story 12.2): grey
+              pre-send (mirrors the Proposal's grey draft state — no
+              agreement created yet), yellow once created/shared with the
+              customer awaiting signature, green once fully executed. */}
           {locked ? (
             <span className="flex items-center gap-1 bg-[#22c55e]/20 text-[#4ade80] text-[11px] font-['Inter:Medium',sans-serif] px-2.5 py-1 rounded-full flex-shrink-0">
               <CheckCircle size={11} /> Fully Executed
             </span>
+          ) : agreement ? (
+            <span className="flex items-center gap-1 bg-[#fbbf24]/20 text-[#fbbf24] text-[11px] font-['Inter:Medium',sans-serif] px-2.5 py-1 rounded-full flex-shrink-0">
+              <Send size={11} /> Sent
+            </span>
           ) : (
             <span className="flex items-center gap-1 bg-white/10 text-white/60 text-[11px] font-['Inter:Medium',sans-serif] px-2.5 py-1 rounded-full flex-shrink-0">
-              <Edit2 size={11} /> Editing
+              <Edit2 size={11} /> Draft
             </span>
           )}
         </div>
@@ -495,19 +503,20 @@ export function CustomerAgreementBuilder() {
                   <FileCheck size={20} className="text-[#22c55e] flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-[#0a0a0a] font-['Inter:SemiBold',sans-serif] font-semibold text-[15px]">Agreement Fully Executed</p>
-                    <p className="text-[#6a7282] text-[12px] font-['Inter:Regular',sans-serif]">Both parties have signed. The signed PDF is saved to Documents.</p>
+                    <p className="text-[#6a7282] text-[12px] font-['Inter:Regular',sans-serif]">Both parties have signed this agreement</p>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-[#6a7282] font-['Inter:Regular',sans-serif]">YULLR</span>
-                    <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{agreement.yullrSignature!.name} · {fmtDate(agreement.yullrSignature!.signedAt)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-[#6a7282] font-['Inter:Regular',sans-serif]">Customer</span>
-                    <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{agreement.clientSignature!.name} · {fmtDate(agreement.clientSignature!.signedAt)}</span>
-                  </div>
-                </div>
+                {signingUrl && (
+                  <a
+                    href={signingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full flex items-center justify-center gap-2 bg-white border border-[#22c55e] text-[#22c55e] rounded-[8px] px-4 py-2.5 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
+                  >
+                    <FileText size={15} />
+                    View Agreement
+                  </a>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

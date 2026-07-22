@@ -10,7 +10,7 @@ import { useData } from '../../context/DataContext';
 // archiving keeps the historical record (including signatures) while
 // freeing the project up for a brand-new proposal.
 export function ProposalsPane({ mountainId }: { mountainId: string }) {
-  const { getProposalsByMountainId, getProjectsByMountainId, getProjectById, addProposal } = useData();
+  const { getProposalsByMountainId, getProjectsByMountainId, getProjectById, addProposal, getCustomerAgreementByMountainId } = useData();
   const navigate = useNavigate();
   const { user } = useUser();
   const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
@@ -22,6 +22,13 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
   const projectsWithoutProposal = projects.filter(p => !proposals.some(pr => pr.projectId === p.id));
   const [showNew, setShowNew] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+
+  // User Agreement pill (Dev Story 13.1) — only relevant, and only shown,
+  // once a proposal on this mountain is fully executed. Colors mirror the
+  // Proposal/Contract pill lifecycle from 12.1/12.2.
+  const anyProposalSigned = proposals.some(pr => !!pr.clientSignature && !!pr.yullrSignature);
+  const agreement = anyProposalSigned ? getCustomerAgreementByMountainId(mountainId) : undefined;
+  const agreementSigned = !!(agreement?.clientSignature && agreement?.yullrSignature);
 
   const create = (projectId?: string) => {
     const proj = projectId ? getProjectById(projectId) : undefined;
@@ -48,15 +55,17 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
           {proposals.map(pr => {
             const proj = pr.projectId ? getProjectById(pr.projectId) : undefined;
             const bothSigned = !!pr.clientSignature && !!pr.yullrSignature;
-            // Draft (not yet finalized) -> Created (finalized) -> Sent (emailed,
-            // date shown) -> Signed (both parties) — matches the icon/pill
-            // color Peter asked for: gray, yellow, yellow-with-date, green.
+            // Lifecycle per Dev Story 12.1: Created (draft, not yet sent) ->
+            // grey; Sent to customer -> orange; Signed and countersigned
+            // (fully executed) -> green. "Created" (finalized-but-unsent)
+            // stays grey alongside "Draft" — the pill only turns orange once
+            // it's actually gone out to the customer.
             const status = bothSigned
               ? { label: 'Signed', color: 'bg-[#eaf5ef] text-[#3f7a5c]', icon: 'text-[#3f7a5c]' }
               : pr.sentAt
-              ? { label: `Sent ${new Date(pr.sentAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}`, color: 'bg-[#fef9c3] text-[#a16207]', icon: 'text-[#ca8a04]' }
+              ? { label: `Sent ${new Date(pr.sentAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}`, color: 'bg-[#fff3e0] text-[#e65100]', icon: 'text-[#e65100]' }
               : pr.proposalCreated
-              ? { label: 'Created', color: 'bg-[#fef9c3] text-[#a16207]', icon: 'text-[#ca8a04]' }
+              ? { label: 'Created', color: 'bg-[#f3f3f5] text-[#6a7282]', icon: 'text-[#6a7282]' }
               : { label: 'Draft', color: 'bg-[#f3f3f5] text-[#6a7282]', icon: 'text-[#ff5c39]' };
             return (
               <button key={pr.id} onClick={() => navigate(`/mountains/${mountainId}/proposal/${pr.id}`)}
@@ -76,6 +85,26 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
             );
           })}
         </div>
+      )}
+
+      {anyProposalSigned && (
+        <button
+          onClick={() => navigate(`/mountains/${mountainId}/agreement`)}
+          className="w-full mt-3 text-left border border-[rgba(0,0,0,0.08)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)] flex items-center justify-between gap-2"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText size={15} className="shrink-0 text-[#6a7282]" />
+            <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">User Agreement</div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`text-[11px] px-2 py-0.5 rounded-full ${
+              agreementSigned ? 'bg-[#eaf5ef] text-[#3f7a5c]' : agreement ? 'bg-[#fffbeb] text-[#b45309]' : 'bg-[#f3f3f5] text-[#6a7282]'
+            }`}>
+              {agreementSigned ? 'Signed' : agreement ? 'Sent' : 'Not started'}
+            </span>
+            <ChevronRight size={14} className="text-[#c0c4cc]" />
+          </div>
+        </button>
       )}
 
       {archivedProposals.length > 0 && (

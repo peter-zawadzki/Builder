@@ -116,6 +116,7 @@ export function ProposalBuilder() {
     getAssetsByLocationId,
     proposalTerms,
     sendProposal, countersignProposal, refreshProposal,
+    getCustomerAgreementByMountainId,
   } = useData();
 
   const mountain = mountainId ? getMountainById(mountainId) : null;
@@ -174,6 +175,13 @@ export function ProposalBuilder() {
   const clientSigned = !!proposalRecord?.clientSignature;
   const bothSigned = yullrSigned && clientSigned;
   const ro = !isEditMode || bothSigned;
+
+  // The Customer Agreement CTA below must only read as "done" (green) once
+  // the agreement itself is actually signed — it previously always rendered
+  // green as soon as the proposal was executed, which misrepresented the
+  // agreement's own unsigned state (Dev Story 13.3).
+  const customerAgreement = mountainId ? getCustomerAgreementByMountainId(mountainId) : undefined;
+  const agreementSigned = !!(customerAgreement?.yullrSignature && customerAgreement?.clientSignature);
 
   // Capture points for a trail default from the real Camera assets sitting at
   // this trail's Install Site locations for the selected project (an
@@ -1614,46 +1622,12 @@ export function ProposalBuilder() {
                     </div>
                   </div>
 
-                  {/* Signature details */}
-                  <div className="space-y-2 mb-3 bg-white/60 rounded-[8px] p-3">
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-[#6a7282] font-['Inter:Regular',sans-serif]">YULLR</span>
-                      <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">
-                        {signRecord.yullrSignature.name} · {new Date(signRecord.yullrSignature.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-[#6a7282] font-['Inter:Regular',sans-serif]">Client</span>
-                      <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif]">
-                        {signRecord.clientSignature.name} · {new Date(signRecord.clientSignature.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Sent / viewed summary */}
-                  {(signRecord?.sentAt || signRecord?.viewedAt) && (
-                    <div className="mb-3 bg-white/60 rounded-[8px] p-3 space-y-2">
-                      {signRecord?.sentAt && (
-                        <p className="text-[11px] text-[#166534] font-['Inter:Regular',sans-serif]">
-                          <span className="font-['Inter:SemiBold',sans-serif] font-semibold uppercase tracking-wider text-[10px] block mb-0.5">Sent</span>
-                          {signRecord.sentToName ? `${signRecord.sentToName} (${signRecord.sentTo})` : signRecord.sentTo} · {new Date(signRecord.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </p>
-                      )}
-                      {signRecord?.viewedAt && (
-                        <p className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif]">
-                          <span className="font-['Inter:SemiBold',sans-serif] font-semibold uppercase tracking-wider text-[10px] block mb-0.5">Link Opened</span>
-                          {new Date(signRecord.viewedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(signRecord.viewedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
                   <button
                     onClick={openPreview}
                     className="w-full flex items-center justify-center gap-2 bg-white border border-[#22c55e] text-[#22c55e] rounded-[8px] px-4 py-2.5 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
                   >
                     <FileText size={15} />
-                    View Signed Proposal
+                    View Proposal
                   </button>
                 </div>
               ) : (
@@ -1773,10 +1747,14 @@ export function ProposalBuilder() {
                 </p>
                 <button
                   onClick={() => navigate(`/mountains/${mountainId}/agreement`)}
-                  className="w-full flex items-center justify-center gap-2 bg-[#f0fdf4] border border-[#86efac] text-[#15803d] rounded-[10px] py-3.5 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
+                  className={`w-full flex items-center justify-center gap-2 rounded-[10px] py-3.5 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80 ${
+                    agreementSigned
+                      ? 'bg-[#f0fdf4] border border-[#86efac] text-[#15803d]'
+                      : 'bg-[#fffbeb] border border-[#fde68a] text-[#b45309]'
+                  }`}
                 >
                   <FileText size={15} />
-                  Review &amp; Sign Customer Agreement →
+                  {agreementSigned ? 'View Signed Customer Agreement →' : 'Review & Sign Customer Agreement →'}
                 </button>
               </div>
             )}

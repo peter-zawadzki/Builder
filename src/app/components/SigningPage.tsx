@@ -64,6 +64,7 @@ export function SigningPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [signed, setSigned] = useState(false);
   const [caToken, setCaToken] = useState<string | null>(null);
+  const [caSigned, setCaSigned] = useState(false);
   const sigPadRef = useRef<SignaturePadHandle>(null);
   const [sigEmpty, setSigEmpty] = useState(true);
   const [capturedSigUrl, setCapturedSigUrl] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export function SigningPage() {
       // Check if one already exists
       const statusRes = await fetch(`${AGREEMENT_SIGN_BASE}/by-mountain/${mountainId}`);
       const statusData = await statusRes.json() as any;
-      if (statusData.token) { setCaToken(statusData.token); return; }
+      if (statusData.token) { setCaToken(statusData.token); setCaSigned(!!statusData.signed); return; }
 
       // Auto-create with pre-populated data from the proposal snapshot
       // Field names must match CAFormData exactly
@@ -506,16 +507,68 @@ export function SigningPage() {
                   Authorized by YULLR, Inc.
                 </div>
                 <div style={{ borderTop: '2px solid #1a1a1a', paddingTop: 8, marginBottom: 6 }}>
-                  <p style={{ fontSize: 18, color: '#1a1a1a', fontWeight: 600, margin: 0 }}>
-                    {record.yullrSignature?.name}
-                  </p>
+                  {(record.yullrSignature as any)?.signatureImage
+                    ? <img src={(record.yullrSignature as any).signatureImage} alt="Countersignature" style={{ maxHeight: 60, maxWidth: '100%', display: 'block', marginBottom: 4 }} />
+                    : <p style={{ fontSize: 18, color: '#1a1a1a', fontWeight: 600, margin: 0 }}>{record.yullrSignature?.name}</p>
+                  }
+                  <p style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 600, margin: '4px 0 0' }}>{record.yullrSignature?.name}</p>
                 </div>
                 <p style={{ fontSize: 11, color: '#6a7282', margin: 0 }}>
                   Signed {new Date(record.yullrSignature!.signedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </p>
               </div>
             </div>
-          ) : (
+          ) : null}
+
+          {/* Customer Agreement CTA — must stay visible after the proposal is
+              countersigned, not just in the moment right after the client
+              signs, since it tracks the Agreement's own status, not the
+              proposal's (Dev Story 14.2). */}
+          {bothSigned && (
+            <div style={{ marginTop: 20, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '20px 24px' }}>
+              <p style={{ fontSize: 12.5, color: '#166534', fontWeight: 600, marginBottom: 8 }}>
+                {caSigned ? 'Customer Agreement — Fully Executed' : 'Next Step: Review & Sign Customer Agreement'}
+              </p>
+              {caToken ? (
+                <>
+                  <p style={{ fontSize: 12, color: '#6a7282', marginBottom: 14 }}>
+                    {caSigned
+                      ? 'Your Customer Agreement has been signed by both parties.'
+                      : 'Your Customer Agreement is ready. Click below to review and sign the formal service contract.'}
+                  </p>
+                  <a
+                    href={`${window.location.origin}/agreement-sign/${caToken}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      background: '#1D2930',
+                      color: '#fff',
+                      borderRadius: 10,
+                      padding: '11px 18px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      width: '100%',
+                      justifyContent: 'center',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    {caSigned ? 'View Signed Customer Agreement →' : 'Review & Sign Customer Agreement →'}
+                  </a>
+                </>
+              ) : (
+                <p style={{ fontSize: 12, color: '#6a7282' }}>
+                  Your YULLR representative will send you a link to sign the Customer Agreement — the formal service contract for your installation.
+                </p>
+              )}
+            </div>
+          )}
+
+        {!bothSigned && (
             /* Unsigned — show YULLR status + client signing form */
             <>
               {/* YULLR status */}

@@ -25,7 +25,8 @@ agreementPublicSign.get("/by-mountain/:mountainId", async (c) => {
     [mountainId]
   );
   if (!row) return c.json({ token: null });
-  return c.json({ token: row.data.signToken ?? null });
+  const signed = !!(row.data.clientSignature && row.data.yullrSignature);
+  return c.json({ token: row.data.signToken ?? null, signed });
 });
 
 agreementPublicSign.post("/create-for-mountain", async (c) => {
