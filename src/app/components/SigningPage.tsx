@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { useParams } from 'react-router';
-import { CheckCircle, AlertCircle, PenLine, Printer, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertCircle, PenLine, Printer } from 'lucide-react';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import { OnboardingModal } from './SigningOnboardingModal';
 
@@ -257,22 +257,64 @@ export function SigningPage() {
         </div>
       </div>
 
-      {/* ── Outstanding items banner — shown on return visits when the ── */}
-      {/* Technical Contact / install-preferences modal was skipped.     */}
-      {clientSigned && (!hasTechnicalContact || !hasPreferredInstallWindows) && (
-        <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <AlertTriangle size={14} color="#b45309" />
-          <span style={{ fontSize: 13, color: '#78350f' }}>
-            Outstanding: {[!hasTechnicalContact && 'Technical Contact', !hasPreferredInstallWindows && 'Preferred install dates'].filter(Boolean).join(' · ')}
-          </span>
-          <button
-            onClick={() => setShowOnboardingModal(true)}
-            style={{ background: '#b45309', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
-          >
-            Complete now
-          </button>
-        </div>
-      )}
+      {/* ── Progress bar — what's completed vs outstanding across the whole ── */}
+      {/* flow (sign proposal -> technical contact -> install prefs -> sign  */}
+      {/* the agreement), so a return visit always shows exactly where things */}
+      {/* stand, not just a plain "something's missing" banner.              */}
+      {(() => {
+        const steps = [
+          { label: 'Sign Proposal', done: clientSigned },
+          { label: 'Technical Contact', done: hasTechnicalContact },
+          { label: 'Install Preferences', done: hasPreferredInstallWindows },
+          { label: 'Sign Agreement', done: caSigned },
+        ];
+        const nextIdx = steps.findIndex(s => !s.done);
+        const outstanding = clientSigned && (!hasTechnicalContact || !hasPreferredInstallWindows);
+        return (
+          <div style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.08)', padding: '16px 24px' }}>
+            <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'flex-start' }}>
+              {steps.map((s, i) => (
+                <Fragment key={s.label}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 84, flexShrink: 0 }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: s.done ? '#22c55e' : i === nextIdx ? '#FF5C39' : '#e5e7eb',
+                      color: s.done || i === nextIdx ? '#fff' : '#9ca3af',
+                      fontSize: 11, fontWeight: 700,
+                    }}>
+                      {s.done ? '✓' : i + 1}
+                    </div>
+                    <span style={{
+                      marginTop: 6,
+                      textAlign: 'center',
+                      fontSize: 10.5,
+                      lineHeight: 1.3,
+                      fontWeight: s.done || i === nextIdx ? 600 : 400,
+                      color: s.done ? '#166534' : i === nextIdx ? '#c2410c' : '#9ca3af',
+                    }}>
+                      {s.label}
+                    </span>
+                  </div>
+                  {i < steps.length - 1 && (
+                    <div style={{ flex: 1, height: 3, background: s.done ? '#22c55e' : '#e5e7eb', marginTop: 11 }} />
+                  )}
+                </Fragment>
+              ))}
+            </div>
+            {outstanding && (
+              <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <button
+                  onClick={() => setShowOnboardingModal(true)}
+                  style={{ background: '#FF5C39', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Complete now
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {showOnboardingModal && record?.mountainId && (
         <OnboardingModal
@@ -566,8 +608,14 @@ export function SigningPage() {
               signs, since it tracks the Agreement's own status, not the
               proposal's (Dev Story 14.2). */}
           {bothSigned && (
-            <div style={{ marginTop: 20, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '20px 24px' }}>
-              <p style={{ fontSize: 12.5, color: '#166534', fontWeight: 600, marginBottom: 8 }}>
+            <div style={{
+              marginTop: 20,
+              background: caSigned ? '#f0fdf4' : '#fff3f0',
+              border: `1px solid ${caSigned ? '#bbf7d0' : '#ffd5cc'}`,
+              borderRadius: 12,
+              padding: '20px 24px',
+            }}>
+              <p style={{ fontSize: 12.5, color: caSigned ? '#166534' : '#c2410c', fontWeight: 600, marginBottom: 8 }}>
                 {caSigned ? 'Customer Agreement — Fully Executed' : 'Next Step: Review & Sign Customer Agreement'}
               </p>
               {caToken ? (
@@ -585,7 +633,7 @@ export function SigningPage() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 7,
-                      background: '#1D2930',
+                      background: caSigned ? '#1D2930' : '#FF5C39',
                       color: '#fff',
                       borderRadius: 10,
                       padding: '11px 18px',

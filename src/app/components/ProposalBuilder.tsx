@@ -10,6 +10,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
 
@@ -385,7 +386,7 @@ export function ProposalBuilder() {
 
   // Save & lock proposal
   const handleSave = () => {
-    if (!form.installDays.trim()) {
+    if (!form.selfInstall && !form.installDays.trim()) {
       toast.error('Estimated Install Duration is required');
       return;
     }
@@ -401,7 +402,7 @@ export function ProposalBuilder() {
 
   // Unsaved changes protection — only warn when the form actually changed
   // from what's saved (not just because it's a brand-new, never-saved proposal).
-  const { showPrompt, handleSave: handleSaveDialog, handleDiscard, handleCancel } = useUnsavedChanges({
+  const { showPrompt, handleSave: handleSaveDialog, handleDiscard, handleCancel, markSaved } = useUnsavedChanges({
     when: isEditMode && !bothSigned && formIsDirty,
     message: 'You have unsaved changes to this proposal. Do you want to save before leaving?',
     onSave: handleSave,
@@ -703,6 +704,7 @@ export function ProposalBuilder() {
     try {
       updateProposal(proposalId, { archived: true });
       toast.success('Proposal archived');
+      markSaved(); // deliberate navigation away — don't also trip the unsaved-changes blocker
       navigate(mountainId ? `/mountains/${mountainId}` : '/');
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
@@ -719,6 +721,7 @@ export function ProposalBuilder() {
     try {
       await deleteProposal(proposalId);
       toast.success('Proposal deleted');
+      markSaved(); // deleting implies discarding any in-progress edits — don't prompt about them
       navigate(mountainId ? `/mountains/${mountainId}` : '/');
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
@@ -1305,7 +1308,7 @@ export function ProposalBuilder() {
           <h2 className={sectionH}>Installation Notes</h2>
           <div className="flex items-end gap-4">
             <div>
-              <label className={label}>Estimated Install Duration <span className="text-[#ff5c39]">*</span></label>
+              <label className={label}>Estimated Install Duration {!form.selfInstall && <span className="text-[#ff5c39]">*</span>}</label>
               <input
                 className={`${inp(ro)} text-center`}
                 style={{ width: 56 }}
@@ -1314,7 +1317,7 @@ export function ProposalBuilder() {
                 onChange={e => setField('installDays', e.target.value)}
                 placeholder="2"
                 maxLength={3}
-                required
+                required={!form.selfInstall}
               />
             </div>
             <div className="relative inline-flex bg-[#f3f3f5] rounded-full p-1 mb-[1px]">
@@ -1851,23 +1854,21 @@ export function ProposalBuilder() {
       </div>
 
       {/* ── Confirmation Modal ── */}
-      {confirmModal && (
+      {confirmModal && confirmModal !== 'hardDelete' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="bg-white rounded-[16px] w-full max-w-sm shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className={`px-6 pt-6 pb-4 ${confirmModal === 'hardDelete' ? 'bg-[#fff0ee]' : confirmModal === 'deleteProposal' ? 'bg-[#f3f3f5]' : 'bg-[#fffbeb]'}`}>
+            <div className={`px-6 pt-6 pb-4 ${confirmModal === 'deleteProposal' ? 'bg-[#f3f3f5]' : 'bg-[#fffbeb]'}`}>
               <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${confirmModal === 'hardDelete' ? 'bg-[#ffe0da]' : confirmModal === 'deleteProposal' ? 'bg-[#e5e7eb]' : 'bg-[#fef3c7]'}`}>
-                  <AlertTriangle size={20} className={confirmModal === 'hardDelete' ? 'text-[#ff5c39]' : confirmModal === 'deleteProposal' ? 'text-[#6a7282]' : 'text-[#d97706]'} />
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${confirmModal === 'deleteProposal' ? 'bg-[#e5e7eb]' : 'bg-[#fef3c7]'}`}>
+                  <AlertTriangle size={20} className={confirmModal === 'deleteProposal' ? 'text-[#6a7282]' : 'text-[#d97706]'} />
                 </div>
                 <div>
                   <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-semibold text-[16px] leading-snug">
-                    {confirmModal === 'hardDelete' ? 'Delete Proposal?' : confirmModal === 'deleteProposal' ? 'Archive Proposal?' : 'Clear Signatures?'}
+                    {confirmModal === 'deleteProposal' ? 'Archive Proposal?' : 'Clear Signatures?'}
                   </h3>
                   <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mt-1 leading-relaxed">
-                    {confirmModal === 'hardDelete'
-                      ? 'This proposal has never been sent for signatures, so it will be permanently deleted with no historical record kept. This cannot be undone.'
-                      : confirmModal === 'deleteProposal'
+                    {confirmModal === 'deleteProposal'
                       ? 'This proposal (including any signatures) is kept for the historical record but hidden from the active list. Start a fresh proposal for this project any time — it will never inherit this one\'s data.'
                       : 'This will clear both the YULLR and client signatures. The proposal will be unlocked for editing and can be re-submitted for signatures.'}
                   </p>
@@ -1885,15 +1886,13 @@ export function ProposalBuilder() {
                 Cancel
               </button>
               <button
-                onClick={confirmModal === 'hardDelete' ? hardDeleteProposal : confirmModal === 'deleteProposal' ? archiveProposal : clearSignatures}
+                onClick={confirmModal === 'deleteProposal' ? archiveProposal : clearSignatures}
                 disabled={confirmBusy}
-                className={`flex-1 text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 ${confirmModal === 'hardDelete' ? 'bg-[#ff5c39]' : confirmModal === 'deleteProposal' ? 'bg-[#1D2930]' : 'bg-[#d97706]'}`}
+                className={`flex-1 text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 ${confirmModal === 'deleteProposal' ? 'bg-[#1D2930]' : 'bg-[#d97706]'}`}
               >
                 {confirmBusy
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : confirmModal === 'hardDelete'
-                    ? <><Trash2 size={15} /> Delete Proposal</>
-                    : confirmModal === 'deleteProposal'
+                  : confirmModal === 'deleteProposal'
                     ? <><Archive size={15} /> Archive Proposal</>
                     : <><XCircle size={15} /> Clear Signatures</>
                 }
@@ -1901,6 +1900,18 @@ export function ProposalBuilder() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Hard delete — type-to-confirm, same as every other genuinely
+          destructive delete in the app (Location, Asset, Trail...). */}
+      {confirmModal === 'hardDelete' && (
+        <DeleteConfirmModal
+          title="Delete Proposal"
+          description="This proposal has never been sent for signatures, so it will be permanently deleted with no historical record kept. This cannot be undone."
+          isDeleting={confirmBusy}
+          onConfirm={hardDeleteProposal}
+          onCancel={() => setConfirmModal(null)}
+        />
       )}
 
       {/* Unsaved changes dialog */}
