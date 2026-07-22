@@ -89,15 +89,11 @@ export function AppHeader() {
           <div className="flex items-center h-9 pl-1">
             <UserButton appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }}>
               <UserButton.MenuItems>
-                {canManageTeam && (
-                  <>
-                    <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
-                    <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
-                    <UserButton.Action label="Proposal terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />
-                    <UserButton.Action label="Proposal template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />
-                    <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />
-                  </>
-                )}
+                {canManageTeam && <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />}
+                {canManageTeam && <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />}
+                {canManageTeam && <UserButton.Action label="Proposal terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />}
+                {canManageTeam && <UserButton.Action label="Proposal template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />}
+                {canManageTeam && <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />}
                 <UserButton.Action
                   label={
                     versionInfo
