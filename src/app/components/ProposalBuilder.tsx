@@ -57,6 +57,8 @@ interface ProposalForm {
   installFee: string;
   bulkRows: BulkRow[];
   miscFee: string;
+  selfInstall: boolean;
+  selfInstallDiscount: string;
   paymentTerms: string;
   terms: string[];
   additionalTerms: string;
@@ -268,6 +270,8 @@ export function ProposalBuilder() {
         { id: uid(), passType: 'Season Passes', qty: '', unitPrice: '100' },
       ],
       miscFee: '',
+      selfInstall: false,
+      selfInstallDiscount: '',
       paymentTerms: `50% deposit is due upon execution of the Customer Agreement. The remaining 50% balance is due on or before November 1, ${new Date().getFullYear()}.`,
       terms: proposalTerms.length > 0 ? proposalTerms : DEFAULT_PROPOSAL_TERMS,
       additionalTerms: '',
@@ -308,10 +312,11 @@ export function ProposalBuilder() {
 
   const trailSubtotal = form.trails.reduce((s, t) => s + trailTotal(t), 0);
   const bulkSubtotal = form.bulkRows.reduce((s, b) => s + bulkTotal(b), 0);
-  const hwTotal = trailSubtotal + parseAmt(form.integrationFee) + parseAmt(form.installFee) + parseAmt(form.miscFee);
+  const selfInstallDiscountAmt = form.selfInstall ? parseAmt(form.selfInstallDiscount) : 0;
+  const hwTotal = Math.max(0, trailSubtotal + parseAmt(form.integrationFee) + parseAmt(form.installFee) + parseAmt(form.miscFee) - selfInstallDiscountAmt);
 
   // ── Field helpers ──
-  const setField = (k: keyof ProposalForm, v: string) =>
+  const setField = <K extends keyof ProposalForm>(k: K, v: ProposalForm[K]) =>
     setForm(prev => ({ ...prev, [k]: v }));
 
   // ── Terms helpers — this proposal's own editable copy of the base terms ──
@@ -375,6 +380,10 @@ export function ProposalBuilder() {
 
   // Save & lock proposal
   const handleSave = () => {
+    if (!form.installDays.trim()) {
+      toast.error('Estimated Install Duration is required');
+      return;
+    }
     if (proposalId) {
       updateProposal(proposalId, { form, proposalCreated: true, proposalCreatedAt: new Date().toISOString() });
     }
@@ -882,6 +891,9 @@ export function ProposalBuilder() {
               {parseAmt(form.miscFee) > 0 && (
                 <tr><td style={td}>Miscellaneous / Travel</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(form.miscFee))}</td></tr>
               )}
+              {selfInstallDiscountAmt > 0 && (
+                <tr><td style={td}>Self Install Discount</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>-{fmtMoney(selfInstallDiscountAmt)}</td></tr>
+              )}
               <tr style={subtotalRow}>
                 <td colSpan={3} style={{ ...td, paddingLeft: 12 }}>Hardware &amp; Installation Total</td>
                 <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(hwTotal)}</td>
@@ -1292,8 +1304,8 @@ export function ProposalBuilder() {
         <div className={section}>
           <h2 className={sectionH}>Installation Notes</h2>
           <div>
-            <label className={label}>Estimated Install Duration</label>
-            <input className={inp(ro)} readOnly={ro} value={form.installDays} onChange={e => setField('installDays', e.target.value)} placeholder="e.g. 2 days" />
+            <label className={label}>Estimated Install Duration <span className="text-[#ff5c39]">*</span></label>
+            <input className={inp(ro)} readOnly={ro} value={form.installDays} onChange={e => setField('installDays', e.target.value)} placeholder="e.g. 2 days" required />
           </div>
           <div>
             <label className={label}>Additional Notes <span className="text-[#9ca3af] font-normal">(one per line)</span></label>
@@ -1364,6 +1376,24 @@ export function ProposalBuilder() {
               <input className={`${inp(ro)} text-right`} readOnly={ro} value={form.miscFee} onChange={e => setField('miscFee', e.target.value)} placeholder="$0.00" />
             </div>
           </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="selfInstall"
+              checked={!!form.selfInstall}
+              disabled={ro}
+              onChange={e => setForm(prev => ({ ...prev, selfInstall: e.target.checked, selfInstallDiscount: e.target.checked ? prev.selfInstallDiscount : '' }))}
+              className="w-4 h-4"
+            />
+            <label htmlFor="selfInstall" className="text-[13px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">Self Install</label>
+          </div>
+          {form.selfInstall && (
+            <div className="flex flex-col gap-1 mt-2 max-w-[200px]">
+              <label className="text-[#6a7282] text-[11px] font-['Inter:Medium',sans-serif] leading-tight">Self-Install Discount</label>
+              <input className={`${inp(ro)} text-right`} readOnly={ro} value={form.selfInstallDiscount} onChange={e => setField('selfInstallDiscount', e.target.value)} placeholder="$0.00" />
+            </div>
+          )}
 
           <p className="text-[12px] text-[#ff5c39] font-['Inter:Medium',sans-serif] font-semibold uppercase tracking-wider mt-4 mb-2">Annual Bulk Subscriptions <span className="text-[#9ca3af] font-normal normal-case tracking-normal">(Optional)</span></p>
           <div className="hidden sm:grid grid-cols-[2fr_0.8fr_1fr_1fr_28px] gap-2 mb-1">
