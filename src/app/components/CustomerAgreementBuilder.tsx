@@ -238,9 +238,15 @@ export function CustomerAgreementBuilder() {
 
   return (
     <div className="min-h-screen bg-[#F2F3F5]">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .agreement-terms-scroll { max-height: none !important; overflow: visible !important; }
+        }
+      `}</style>
 
       {/* ── Header ── */}
-      <div className="bg-[#1D2930] px-4 pt-10 pb-4 sticky top-0 z-20">
+      <div className="bg-[#1D2930] px-4 pt-10 pb-4 sticky top-0 z-20 no-print">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/mountains/${mountainId}`)} className="p-2 -ml-2 text-white/70 active:text-white">
             <ArrowLeft size={20} />
@@ -394,7 +400,7 @@ export function CustomerAgreementBuilder() {
         {/* ── Full Agreement Text — on screen, no PDF download required ── */}
         <div className={SECTION}>
           <h2 className={SECTION_H}>Agreement Terms</h2>
-          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1 text-[12.5px] text-[#374151] leading-relaxed font-['Inter:Regular',sans-serif]">
+          <div className="agreement-terms-scroll space-y-3 max-h-[420px] overflow-y-auto pr-1 text-[12.5px] text-[#374151] leading-relaxed font-['Inter:Regular',sans-serif]">
             {renderTemplate(agreementTemplate, { paragraphStyle: {} })}
           </div>
         </div>
@@ -534,9 +540,10 @@ export function CustomerAgreementBuilder() {
         )}
       </div>
 
-      {/* ── Hidden render used only to generate the signed PDF ── */}
+      {/* ── Hidden render used only to generate the signed PDF (html2canvas ── */}
+      {/* capture) — never meant to appear in a native window.print() job.   */}
       {agreement && (
-        <div style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, pointerEvents: 'none' }}>
+        <div className="no-print" style={{ position: 'absolute', left: '-9999px', top: 0, opacity: 0, pointerEvents: 'none' }}>
           <div ref={printRef} style={{ width: 860, background: '#fff', padding: '48px 52px', fontFamily: 'Inter, sans-serif' }}>
             <div data-pdf-section style={{ borderBottom: '3px solid #FF5C39', paddingBottom: 22, marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>

@@ -247,7 +247,13 @@ export function CustomerAgreementSignPage() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         input:focus, select:focus, textarea:focus { border-color: #FF5C39 !important; box-shadow: 0 0 0 3px rgba(255,92,57,0.12) !important; outline: none !important; }
-        @media print { .no-print { display: none !important; } }
+        @media print {
+          .no-print { display: none !important; }
+          /* The Agreement Terms box is scrollable on screen so the page
+             isn't a mile long, but that clips everything past the visible
+             420px when printed — let it flow across pages instead. */
+          .agreement-terms-scroll { max-height: none !important; overflow: visible !important; }
+        }
       `}</style>
 
       <div className="no-print" style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.08)', padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
@@ -335,7 +341,7 @@ export function CustomerAgreementSignPage() {
         <div style={{ marginTop: 36 }}>
           <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Agreement Terms</h2>
           <div style={{ height: 2, background: '#f0f0f0', marginBottom: 16 }} />
-          <div style={{ maxHeight: 420, overflowY: 'auto', paddingRight: 6 }}>
+          <div className="agreement-terms-scroll" style={{ maxHeight: 420, overflowY: 'auto', paddingRight: 6 }}>
             {renderTemplate(agreementTemplate, { paragraphStyle: { fontSize: 12.5, color: '#374151', lineHeight: 1.7, marginBottom: 10 } })}
           </div>
         </div>
