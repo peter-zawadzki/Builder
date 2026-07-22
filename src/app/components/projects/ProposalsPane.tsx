@@ -79,32 +79,23 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className={`text-[11px] px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
+                  {bothSigned && (
+                    <span
+                      onClick={e => { e.stopPropagation(); navigate(`/mountains/${mountainId}/agreement`); }}
+                      title="User Agreement status"
+                      className={`text-[11px] px-2 py-0.5 rounded-full ${
+                        agreementSigned ? 'bg-[#eaf5ef] text-[#3f7a5c]' : agreement ? 'bg-[#fffbeb] text-[#b45309]' : 'bg-[#f3f3f5] text-[#6a7282]'
+                      }`}
+                    >
+                      Agreement: {agreementSigned ? 'Signed' : agreement ? 'Sent' : 'Not started'}
+                    </span>
+                  )}
                   <ChevronRight size={14} className="text-[#c0c4cc]" />
                 </div>
               </button>
             );
           })}
         </div>
-      )}
-
-      {anyProposalSigned && (
-        <button
-          onClick={() => navigate(`/mountains/${mountainId}/agreement`)}
-          className="w-full mt-3 text-left border border-[rgba(0,0,0,0.08)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)] flex items-center justify-between gap-2"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <FileText size={15} className="shrink-0 text-[#6a7282]" />
-            <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">User Agreement</div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className={`text-[11px] px-2 py-0.5 rounded-full ${
-              agreementSigned ? 'bg-[#eaf5ef] text-[#3f7a5c]' : agreement ? 'bg-[#fffbeb] text-[#b45309]' : 'bg-[#f3f3f5] text-[#6a7282]'
-            }`}>
-              {agreementSigned ? 'Signed' : agreement ? 'Sent' : 'Not started'}
-            </span>
-            <ChevronRight size={14} className="text-[#c0c4cc]" />
-          </div>
-        </button>
       )}
 
       {archivedProposals.length > 0 && (
