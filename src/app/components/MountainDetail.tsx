@@ -4,7 +4,7 @@ import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers, buildActivitySummaries } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
-import { ContactDetail, ContactForm, ContactAssociationPills } from './crm/CRM';
+import { ContactDetail, ContactForm, ContactAssociationPills, STAGE_COLORS } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import { ProposalsPane } from './projects/ProposalsPane';
 import { AssignInventoryModal } from './CheckInOutModal';
@@ -304,8 +304,9 @@ export function MountainDetail() {
                 <Map size={13} />
                 Map
               </button>
-              <div className="relative flex items-center gap-1.5 border border-[rgba(0,0,0,0.12)] rounded-full pl-3 pr-2 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">
+              <div className={`relative flex items-center gap-1.5 rounded-full pl-3 pr-2 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium ${mountain.pipelineStage ? STAGE_COLORS[mountain.pipelineStage] : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
                 <span>{mountain.pipelineStage || 'Stage'}</span>
+                <Pencil size={11} className="opacity-60" />
                 <select
                   value={mountain.pipelineStage || ''}
                   onChange={e => updateMountain(mountainId!, { pipelineStage: (e.target.value || undefined) as MountainPipelineStage | undefined })}

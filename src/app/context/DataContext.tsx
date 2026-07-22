@@ -305,11 +305,9 @@ export type StallReason = 'No response' | 'Waiting on legal' | 'Budget hold' | '
 // Mountain-level relationship stage — distinct from Project.stage (the
 // per-install sales pipeline), tracked in the mountain detail Status window.
 export type MountainPipelineStage =
-  | 'Prospect' | 'Demo Scheduled' | 'Demo Completed' | 'Verbal Yes'
-  | 'Signed Agreement' | 'Onboarding' | 'Active' | 'Declined' | 'Dead';
+  | 'Lead' | 'Prospect' | 'Onboarding' | 'Active' | 'Paused' | 'Dead';
 export const MOUNTAIN_PIPELINE_STAGES: MountainPipelineStage[] = [
-  'Prospect', 'Demo Scheduled', 'Demo Completed', 'Verbal Yes',
-  'Signed Agreement', 'Onboarding', 'Active', 'Declined', 'Dead',
+  'Lead', 'Prospect', 'Onboarding', 'Active', 'Paused', 'Dead',
 ];
 
 // ─── Projects (the unit of work on a mountain OR a team) ─────────────────────
