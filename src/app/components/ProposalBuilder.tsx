@@ -116,7 +116,7 @@ export function ProposalBuilder() {
     updateMountain,
     addNote,
     getNotesByMountainId,
-    getProposalById, updateProposal, getProjectById,
+    getProposalById, updateProposal, deleteProposal, getProjectById,
     getAssetsByLocationId,
     proposalTerms,
     defaultPaymentTerms,
@@ -155,7 +155,7 @@ export function ProposalBuilder() {
   const [yullrSigEmpty, setYullrSigEmpty] = useState(true);
 
   // ── Confirmation modal ─────────────────────────────────────────────────────
-  const [confirmModal, setConfirmModal] = useState<'clearSigs' | 'deleteProposal' | null>(null);
+  const [confirmModal, setConfirmModal] = useState<'clearSigs' | 'deleteProposal' | 'hardDelete' | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
   // ── Email sending ──────────────────────────────────────────────────────────
@@ -710,6 +710,22 @@ export function ProposalBuilder() {
     }
   }
 
+  // Unlike archiving, a real hard delete — only offered before the proposal
+  // has ever been sent, since nothing has been shared with the customer yet
+  // and there's no signature history worth preserving.
+  async function hardDeleteProposal() {
+    if (!proposalId) return;
+    setConfirmBusy(true);
+    try {
+      await deleteProposal(proposalId);
+      toast.success('Proposal deleted');
+      navigate(mountainId ? `/mountains/${mountainId}` : '/');
+    } catch (e: any) {
+      toast.error(`Error: ${e.message}`);
+      setConfirmBusy(false);
+    }
+  }
+
   async function sendProposalEmail() {
     if (!proposalId || !emailRecipient.trim()) {
       toast.error('Please enter recipient email');
@@ -1063,8 +1079,20 @@ export function ProposalBuilder() {
                 </button>
               </>
             ) : (
-              /* Editing / new state: Save Proposal + Preview */
+              /* Editing / new state: Save Proposal + Preview, plus a real
+                 delete — only offered before the proposal has ever been
+                 sent for signatures, since nothing's been shared yet. */
               <>
+                {!!proposalId && !signRecord?.sentAt && (
+                  <button
+                    onClick={() => setConfirmModal('hardDelete')}
+                    className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]"
+                    title="Delete proposal"
+                    aria-label="Delete proposal"
+                  >
+                    <Trash2 size={17} className="text-[#ff5c39]" />
+                  </button>
+                )}
                 <button
                   onClick={openPreview}
                   className="flex items-center gap-1.5 bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-3 py-2 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:bg-[#e5e7eb]"
@@ -1275,9 +1303,38 @@ export function ProposalBuilder() {
         {/* ── Installation Notes ── */}
         <div className={section}>
           <h2 className={sectionH}>Installation Notes</h2>
-          <div>
-            <label className={label}>Estimated Install Duration <span className="text-[#ff5c39]">*</span></label>
-            <input className={inp(ro)} readOnly={ro} value={form.installDays} onChange={e => setField('installDays', e.target.value)} placeholder="e.g. 2 days" required />
+          <div className="flex items-end gap-4">
+            <div>
+              <label className={label}>Estimated Install Duration <span className="text-[#ff5c39]">*</span></label>
+              <input
+                className={`${inp(ro)} text-center`}
+                style={{ width: 56 }}
+                readOnly={ro}
+                value={form.installDays}
+                onChange={e => setField('installDays', e.target.value)}
+                placeholder="2"
+                maxLength={3}
+                required
+              />
+            </div>
+            <div className="relative inline-flex bg-[#f3f3f5] rounded-full p-1 mb-[1px]">
+              <button
+                type="button"
+                disabled={ro}
+                onClick={() => setForm(prev => ({ ...prev, selfInstall: false, selfInstallDiscount: '', selfInstallNotes: '' }))}
+                className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${!form.selfInstall ? 'bg-white text-[#0a0a0a] shadow-sm' : 'text-[#6a7282]'}`}
+              >
+                YULLR Install
+              </button>
+              <button
+                type="button"
+                disabled={ro}
+                onClick={() => setForm(prev => ({ ...prev, selfInstall: true }))}
+                className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${form.selfInstall ? 'bg-white text-[#ff5c39] shadow-sm' : 'text-[#6a7282]'}`}
+              >
+                Self Install
+              </button>
+            </div>
           </div>
           <div>
             <label className={label}>Additional Notes <span className="text-[#9ca3af] font-normal">(one per line)</span></label>
@@ -1290,19 +1347,8 @@ export function ProposalBuilder() {
             />
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="selfInstall"
-              checked={!!form.selfInstall}
-              disabled={ro}
-              onChange={e => setForm(prev => ({ ...prev, selfInstall: e.target.checked, selfInstallDiscount: e.target.checked ? prev.selfInstallDiscount : '', selfInstallNotes: e.target.checked ? prev.selfInstallNotes : '' }))}
-              className="w-4 h-4"
-            />
-            <label htmlFor="selfInstall" className="text-[13px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">Self Install</label>
-          </div>
           {form.selfInstall && (
-            <div className="mt-2 space-y-2">
+            <div className="space-y-2">
               <div className="flex flex-col gap-1 max-w-[200px]">
                 <label className="text-[#6a7282] text-[11px] font-['Inter:Medium',sans-serif] leading-tight">Self-Install Discount</label>
                 <input className={`${inp(ro)} text-right`} readOnly={ro} value={form.selfInstallDiscount} onChange={e => setField('selfInstallDiscount', e.target.value)} placeholder="$0.00" />
@@ -1809,17 +1855,19 @@ export function ProposalBuilder() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="bg-white rounded-[16px] w-full max-w-sm shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className={`px-6 pt-6 pb-4 ${confirmModal === 'deleteProposal' ? 'bg-[#f3f3f5]' : 'bg-[#fffbeb]'}`}>
+            <div className={`px-6 pt-6 pb-4 ${confirmModal === 'hardDelete' ? 'bg-[#fff0ee]' : confirmModal === 'deleteProposal' ? 'bg-[#f3f3f5]' : 'bg-[#fffbeb]'}`}>
               <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${confirmModal === 'deleteProposal' ? 'bg-[#e5e7eb]' : 'bg-[#fef3c7]'}`}>
-                  <AlertTriangle size={20} className={confirmModal === 'deleteProposal' ? 'text-[#6a7282]' : 'text-[#d97706]'} />
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${confirmModal === 'hardDelete' ? 'bg-[#ffe0da]' : confirmModal === 'deleteProposal' ? 'bg-[#e5e7eb]' : 'bg-[#fef3c7]'}`}>
+                  <AlertTriangle size={20} className={confirmModal === 'hardDelete' ? 'text-[#ff5c39]' : confirmModal === 'deleteProposal' ? 'text-[#6a7282]' : 'text-[#d97706]'} />
                 </div>
                 <div>
                   <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-semibold text-[16px] leading-snug">
-                    {confirmModal === 'deleteProposal' ? 'Archive Proposal?' : 'Clear Signatures?'}
+                    {confirmModal === 'hardDelete' ? 'Delete Proposal?' : confirmModal === 'deleteProposal' ? 'Archive Proposal?' : 'Clear Signatures?'}
                   </h3>
                   <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mt-1 leading-relaxed">
-                    {confirmModal === 'deleteProposal'
+                    {confirmModal === 'hardDelete'
+                      ? 'This proposal has never been sent for signatures, so it will be permanently deleted with no historical record kept. This cannot be undone.'
+                      : confirmModal === 'deleteProposal'
                       ? 'This proposal (including any signatures) is kept for the historical record but hidden from the active list. Start a fresh proposal for this project any time — it will never inherit this one\'s data.'
                       : 'This will clear both the YULLR and client signatures. The proposal will be unlocked for editing and can be re-submitted for signatures.'}
                   </p>
@@ -1837,13 +1885,15 @@ export function ProposalBuilder() {
                 Cancel
               </button>
               <button
-                onClick={confirmModal === 'deleteProposal' ? archiveProposal : clearSignatures}
+                onClick={confirmModal === 'hardDelete' ? hardDeleteProposal : confirmModal === 'deleteProposal' ? archiveProposal : clearSignatures}
                 disabled={confirmBusy}
-                className={`flex-1 text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 ${confirmModal === 'deleteProposal' ? 'bg-[#1D2930]' : 'bg-[#d97706]'}`}
+                className={`flex-1 text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 ${confirmModal === 'hardDelete' ? 'bg-[#ff5c39]' : confirmModal === 'deleteProposal' ? 'bg-[#1D2930]' : 'bg-[#d97706]'}`}
               >
                 {confirmBusy
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : confirmModal === 'deleteProposal'
+                  : confirmModal === 'hardDelete'
+                    ? <><Trash2 size={15} /> Delete Proposal</>
+                    : confirmModal === 'deleteProposal'
                     ? <><Archive size={15} /> Archive Proposal</>
                     : <><XCircle size={15} /> Clear Signatures</>
                 }
