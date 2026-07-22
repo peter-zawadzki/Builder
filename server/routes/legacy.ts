@@ -274,6 +274,28 @@ export async function insertActivity(rec: {
   return full;
 }
 
+// Resolves a project's owner contact email — used to auto-CC the project
+// owner on proposal send/reminder emails (Dev Story 4.1) so they have
+// visibility into what was sent without the sender remembering to add them.
+export async function getProjectOwnerEmail(projectId: string): Promise<{ email: string; name?: string } | null> {
+  const project = await queryOne<{ data: any }>(`SELECT data FROM legacy_records WHERE collection='projects' AND id=$1`, [projectId]);
+  const ownerContactId = project?.data?.ownerContactId;
+  if (!ownerContactId) return null;
+  const contact = await queryOne<{ data: any }>(`SELECT data FROM legacy_records WHERE collection='contacts' AND id=$1`, [ownerContactId]);
+  if (!contact?.data?.email) return null;
+  return { email: contact.data.email, name: contact.data.name };
+}
+
+// Merges an auto-CC address into a possibly-already-set cc string/list
+// without duplicating the primary recipient or an address already present.
+export function withAutoCc(cc: string | undefined, to: string | undefined, autoCcEmail: string | undefined): string | undefined {
+  if (!autoCcEmail) return cc;
+  const existing = (cc || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (autoCcEmail.toLowerCase() === (to || "").toLowerCase()) return cc;
+  if (existing.includes(autoCcEmail.toLowerCase())) return cc;
+  return cc ? `${cc},${autoCcEmail}` : autoCcEmail;
+}
+
 // Looks up a CRM contact by email (case-insensitive) — used to resolve who
 // "Peter Zawadzki" is for the auto-assigned countersign task, without the app
 // needing a separate stable "staff id" concept.
@@ -336,10 +358,11 @@ legacy.post("/proposals/:id/send", async (c) => {
   let emailResult: any = { ok: false, skipped: true };
   if (to) {
     const signUrl = `${process.env.APP_BASE_URL || "http://localhost:5173"}/sign/${token}`;
+    const owner = proposal.projectId ? await getProjectOwnerEmail(proposal.projectId) : null;
     const { sendTemplateEmail } = await import("../email");
     emailResult = await sendTemplateEmail({
       to,
-      cc,
+      cc: withAutoCc(cc, to, owner?.email),
       templateAlias: "proposal",
       model: { product_url: signUrl },
     });

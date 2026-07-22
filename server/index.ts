@@ -12,6 +12,7 @@ import { catalog } from "./routes/catalog";
 import { legacy } from "./routes/legacy";
 import { proposalPublicSign } from "./routes/proposalPublicSign";
 import { agreementPublicSign } from "./routes/agreementPublicSign";
+import { startProposalReminderScheduler } from "./proposalReminders";
 
 const app = new Hono<HonoEnv>();
 
@@ -63,5 +64,10 @@ app.route("/api/legacy", legacy);
 const port = Number(process.env.API_PORT ?? 8787);
 serve({ fetch: app.fetch, port });
 console.log(`[api] listening on http://localhost:${port}`);
+
+// Hourly sweep for proposal follow-up reminders (Dev Story 4.2) — checks
+// day-since-sent against the reminder cadence and stops once signed,
+// archived, or 8 weeks have elapsed.
+startProposalReminderScheduler();
 
 export { app };

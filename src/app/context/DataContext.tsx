@@ -404,6 +404,7 @@ export interface Proposal {
   viewedAt?: string;             // first time the customer opened the sign link
   clientSignature?: { name: string; title?: string | null; legalEntity?: string | null; signatureImage?: string | null; signedAt: string };
   yullrSignature?: { name: string; signatureImage?: string | null; signedAt: string };
+  remindersSentDays?: number[];  // days-since-sentAt thresholds already emailed (server-managed reminder cadence)
 }
 
 export interface CAFormData {

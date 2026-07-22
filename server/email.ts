@@ -54,11 +54,13 @@ export async function sendTemplateEmail({
   to,
   cc,
   templateAlias,
+  templateId,
   model,
 }: {
   to: string;
   cc?: string;
-  templateAlias: string;
+  templateAlias?: string;
+  templateId?: number;
   model: Record<string, unknown>;
 }): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
   const token = process.env.POSTMARK_API_KEY;
@@ -66,6 +68,9 @@ export async function sendTemplateEmail({
   if (!token || !from) {
     console.warn("Postmark not configured (POSTMARK_API_KEY/POSTMARK_FROM) — skipping email send");
     return { ok: false, skipped: true };
+  }
+  if (!templateAlias && !templateId) {
+    return { ok: false, error: "sendTemplateEmail requires templateAlias or templateId" };
   }
   try {
     const res = await fetch("https://api.postmarkapp.com/email/withTemplate", {
@@ -79,7 +84,7 @@ export async function sendTemplateEmail({
         From: from,
         To: to,
         ...(cc ? { Cc: cc } : {}),
-        TemplateAlias: templateAlias,
+        ...(templateId ? { TemplateId: templateId } : { TemplateAlias: templateAlias }),
         TemplateModel: model,
         MessageStream: "outbound",
       }),
