@@ -645,15 +645,8 @@ export function getMountainRollupActivities(
   const mountain = mountains.find(m => m.id === mountainId);
   if (!mountain) return [];
 
-  const affiliateIds = new Set(mountain.affiliateContactIds || []);
   const linkedTeamIds = new Set(teams.filter(t => t.mountainIds.includes(mountainId)).map(t => t.id));
   const linkedOrgIds = new Set(organizations.filter(o => o.mountainIds.includes(mountainId)).map(o => o.id));
-
-  // An item lives elsewhere but is relevant here because its assignee (a
-  // person — tasks can only be assigned to people, not teams) is tied to
-  // this mountain.
-  const assignedHere = (a: ContactActivity) =>
-    !!a.assigneeContactId && affiliateIds.has(a.assigneeContactId);
 
   const out: MountainActivityEntry[] = [];
 
@@ -674,7 +667,7 @@ export function getMountainRollupActivities(
 
   teams.forEach(t => {
     (t.activities || []).forEach(a => {
-      if (linkedTeamIds.has(t.id) || assignedHere(a)) {
+      if (linkedTeamIds.has(t.id)) {
         out.push({ ...a, origin: 'team', originLabel: t.name, originId: t.id });
       }
     });
@@ -682,7 +675,7 @@ export function getMountainRollupActivities(
 
   organizations.forEach(o => {
     (o.activities || []).forEach(a => {
-      if (linkedOrgIds.has(o.id) || assignedHere(a)) {
+      if (linkedOrgIds.has(o.id)) {
         out.push({ ...a, origin: 'organization', originLabel: o.name, originId: o.id });
       }
     });

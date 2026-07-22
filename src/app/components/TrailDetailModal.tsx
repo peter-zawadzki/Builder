@@ -111,10 +111,6 @@ export function TrailDetailModal({
                   className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" aria-label="Edit trail">
                   <Pencil size={16} className="text-[#0a0a0a]" />
                 </button>
-                <button onClick={() => setShowDelete(true)}
-                  className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]" aria-label="Delete trail">
-                  <Trash2 size={16} className="text-[#ff5c39]" />
-                </button>
                 <button onClick={onClose} className="p-2 bg-[#f3f3f5] rounded-full active:bg-[#e8e8ea]" aria-label="Close">
                   <X size={16} className="text-[#6a7282]" />
                 </button>
@@ -151,6 +147,10 @@ export function TrailDetailModal({
                     <button onClick={handleSaveEdit} className="flex-1 bg-[#ff5c39] text-white rounded-[8px] py-2.5 font-['Inter:Medium',sans-serif] font-medium active:opacity-80">Save</button>
                     <button onClick={() => setEditing(false)} className="flex-1 bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] py-2.5 font-['Inter:Medium',sans-serif] font-medium active:opacity-70">Cancel</button>
                   </div>
+                  <button onClick={() => setShowDelete(true)}
+                    className="w-full flex items-center justify-center gap-2 text-[#ff5c39] text-[13px] font-['Inter:Medium',sans-serif] font-medium py-2 active:opacity-70">
+                    <Trash2 size={14} /> Delete Trail
+                  </button>
                 </div>
               )}
 

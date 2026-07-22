@@ -84,10 +84,6 @@ export function TrailDetail() {
             className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" aria-label="Edit trail">
             <Pencil size={18} className="text-[#0a0a0a]" />
           </button>
-          <button onClick={() => setShowDelete(true)}
-            className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]" aria-label="Delete trail">
-            <Trash2 size={18} className="text-[#ff5c39]" />
-          </button>
         </div>
       </div>
 
@@ -129,6 +125,10 @@ export function TrailDetail() {
                 Cancel
               </button>
             </div>
+            <button onClick={() => setShowDelete(true)}
+              className="w-full flex items-center justify-center gap-2 text-[#ff5c39] text-[13px] font-['Inter:Medium',sans-serif] font-medium py-2 active:opacity-70">
+              <Trash2 size={14} /> Delete Trail
+            </button>
           </div>
         )}
 

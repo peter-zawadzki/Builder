@@ -60,6 +60,7 @@ interface ProposalForm {
   miscFee: string;
   selfInstall: boolean;
   selfInstallDiscount: string;
+  selfInstallNotes: string;
   paymentTerms: string;
   terms: string[];
   additionalTerms: string;
@@ -275,6 +276,7 @@ export function ProposalBuilder() {
       miscFee: '',
       selfInstall: false,
       selfInstallDiscount: '',
+      selfInstallNotes: '',
       paymentTerms: (defaultPaymentTerms || DEFAULT_PAYMENT_TERMS).replace(/\{\{year\}\}/g, String(new Date().getFullYear())),
       terms: proposalTerms.length > 0 ? proposalTerms : DEFAULT_PROPOSAL_TERMS,
       additionalTerms: '',
@@ -1153,9 +1155,6 @@ export function ProposalBuilder() {
         {/* ── Trails / Capture Points ── */}
         <div className={section}>
           <h2 className={sectionH}>Trails / Capture Points</h2>
-          {proposalProject && (
-            <p className="text-[11px] text-[#9ca3af] -mt-1 mb-2">Capture points are pulled from inspections logged for “{proposalProject.name}”.</p>
-          )}
           {/* Column headers */}
           <div className="hidden sm:grid grid-cols-[1.8fr_0.8fr_2fr_1fr_1fr_28px] gap-2 mb-1">
             {['Trail Name', 'Capture Points', 'Notes', 'Unit $', 'Total', ''].map(h => (
@@ -1290,6 +1289,36 @@ export function ProposalBuilder() {
               placeholder="e.g. All installs during non-operational hours"
             />
           </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="selfInstall"
+              checked={!!form.selfInstall}
+              disabled={ro}
+              onChange={e => setForm(prev => ({ ...prev, selfInstall: e.target.checked, selfInstallDiscount: e.target.checked ? prev.selfInstallDiscount : '', selfInstallNotes: e.target.checked ? prev.selfInstallNotes : '' }))}
+              className="w-4 h-4"
+            />
+            <label htmlFor="selfInstall" className="text-[13px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">Self Install</label>
+          </div>
+          {form.selfInstall && (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-col gap-1 max-w-[200px]">
+                <label className="text-[#6a7282] text-[11px] font-['Inter:Medium',sans-serif] leading-tight">Self-Install Discount</label>
+                <input className={`${inp(ro)} text-right`} readOnly={ro} value={form.selfInstallDiscount} onChange={e => setField('selfInstallDiscount', e.target.value)} placeholder="$0.00" />
+              </div>
+              <div>
+                <label className={label}>Self-Install Notes</label>
+                <textarea
+                  className={`${inp(ro)} min-h-[60px] resize-y`}
+                  readOnly={ro}
+                  value={form.selfInstallNotes}
+                  onChange={e => setField('selfInstallNotes', e.target.value)}
+                  placeholder="e.g. Customer's own crew will handle mounting; YULLR provides commissioning only"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Site Requirements ── */}
@@ -1379,24 +1408,6 @@ export function ProposalBuilder() {
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="selfInstall"
-              checked={!!form.selfInstall}
-              disabled={ro}
-              onChange={e => setForm(prev => ({ ...prev, selfInstall: e.target.checked, selfInstallDiscount: e.target.checked ? prev.selfInstallDiscount : '' }))}
-              className="w-4 h-4"
-            />
-            <label htmlFor="selfInstall" className="text-[13px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">Self Install</label>
-          </div>
-          {form.selfInstall && (
-            <div className="flex flex-col gap-1 mt-2 max-w-[200px]">
-              <label className="text-[#6a7282] text-[11px] font-['Inter:Medium',sans-serif] leading-tight">Self-Install Discount</label>
-              <input className={`${inp(ro)} text-right`} readOnly={ro} value={form.selfInstallDiscount} onChange={e => setField('selfInstallDiscount', e.target.value)} placeholder="$0.00" />
-            </div>
-          )}
-
           <p className="text-[12px] text-[#ff5c39] font-['Inter:Medium',sans-serif] font-semibold uppercase tracking-wider mt-4 mb-2">Annual Bulk Subscriptions <span className="text-[#9ca3af] font-normal normal-case tracking-normal">(Optional)</span></p>
           <div className="hidden sm:grid grid-cols-[2fr_0.8fr_1fr_1fr_28px] gap-2 mb-1">
             {['Pass Type', 'Qty', 'Unit $', 'Total', ''].map(h => (
@@ -1460,7 +1471,7 @@ export function ProposalBuilder() {
 
         {/* ── Terms ── */}
         <div className={section}>
-          <h2 className={sectionH}>Terms <span className="text-[#9ca3af] font-normal normal-case tracking-normal">(this proposal's own copy — edit freely; new proposals start from the admin defaults)</span></h2>
+          <h2 className={sectionH}>Terms</h2>
           <div className="space-y-2">
             {form.terms.map((term, i) => (
               <div key={i} className="flex items-start gap-2">
@@ -1496,9 +1507,6 @@ export function ProposalBuilder() {
               <Plus size={14} /> Add Term
             </button>
           )}
-          <p className="text-[11px] text-[#9ca3af] mt-2">
-            Use <code>{'{{termYears}}'}</code> / <code>{'{{termYearsWord}}'}</code> in a term to reference the Contract Term field above.
-          </p>
         </div>
 
         {/* ── Additional Terms ── */}
@@ -1658,7 +1666,7 @@ export function ProposalBuilder() {
                           YULLR, Inc. · {new Date(signRecord.yullrSignature.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
                       </div>
-                    ) : (
+                    ) : clientSigned ? (
                       <div className="space-y-3 mt-1">
                         <div>
                           <label className="block text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[12px] mb-1.5">
@@ -1693,6 +1701,10 @@ export function ProposalBuilder() {
                           )}
                         </button>
                       </div>
+                    ) : (
+                      <p className="text-[#9ca3af] text-[12px] font-['Inter:Regular',sans-serif] mt-1">
+                        Waiting for the customer to sign first — you'll be able to countersign once they have.
+                      </p>
                     )}
                   </div>
 

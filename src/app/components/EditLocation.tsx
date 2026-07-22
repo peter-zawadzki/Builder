@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, useNavigate } from 'react-router';
 import {
-  ArrowLeft, MapPin, Loader2, CheckCircle2, X, Image, Video, RefreshCw, Map,
+  ArrowLeft, MapPin, Loader2, CheckCircle2, X, Image, Video, RefreshCw, Map, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
@@ -10,6 +10,7 @@ import * as locMediaDB from '../utils/locationMediaDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 import L from 'leaflet';
 
 // ─── Map Picker Modal ─────────────────────────────────────────────────────────
@@ -224,7 +225,7 @@ function MapPicker({ mountainAddress, initialCoords, onSelect, onClose }: MapPic
 export function EditLocation() {
   const { mountainId, locationId } = useParams();
   const navigate = useNavigate();
-  const { getMountainById, getLocationById, updateLocation, getMountainTrailNames } = useData();
+  const { getMountainById, getLocationById, updateLocation, deleteLocation, getMountainTrailNames } = useData();
 
   const mountain = getMountainById(mountainId!);
   const location = getLocationById(locationId!);
@@ -235,6 +236,8 @@ export function EditLocation() {
   const [notes, setNotes] = useState(location?.notes || '');
   const [locationType, setLocationType] = useState<string>(location?.locationType || '');
   const [validationErrors, setValidationErrors] = useState<{ name?: string; locationType?: string }>({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // ─── GPS ─────────────────────────────────────────────────────────────────────
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(
@@ -376,6 +379,20 @@ export function EditLocation() {
     }
   };
 
+  // ─── Delete — only reachable from edit mode, not the location detail view ──
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteLocation(locationId!);
+      toast.success(`"${location?.name}" deleted`);
+      navigate(location?.trailId ? `/mountains/${mountainId}/trails/${location.trailId}` : `/mountains/${mountainId}`);
+    } catch {
+      toast.error('Failed to delete location. Please try again.');
+      setIsDeleting(false);
+    }
+  };
+
   // ─── Save ─────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
@@ -493,6 +510,11 @@ export function EditLocation() {
               {mountain.name}
             </p>
           </div>
+          <button onClick={() => setShowDeleteModal(true)}
+            className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]"
+            aria-label="Delete location">
+            <Trash2 size={20} className="text-[#ff5c39]" />
+          </button>
         </div>
       </div>
 
@@ -802,6 +824,16 @@ export function EditLocation() {
             setShowManual(false);
           }}
           onClose={() => setShowMapPicker(false)}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          title="Delete Location"
+          description={`This will permanently remove "${location?.name}" and its assets/inspections/media.`}
+          isDeleting={isDeleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteModal(false)}
         />
       )}
     </div>

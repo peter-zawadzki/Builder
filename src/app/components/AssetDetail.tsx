@@ -662,14 +662,14 @@ export function AssetDetail() {
           </div>
 
           {!isEditing && !isInventoryItem && (
-            <>
-              <button onClick={enterEditMode} className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" aria-label="Edit asset">
-                <Pencil size={18} className="text-[#0a0a0a]" />
-              </button>
-              <button onClick={() => setShowDeleteModal(true)} className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]" aria-label="Delete asset">
-                <Trash2 size={18} className="text-[#ff5c39]" />
-              </button>
-            </>
+            <button onClick={enterEditMode} className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]" aria-label="Edit asset">
+              <Pencil size={18} className="text-[#0a0a0a]" />
+            </button>
+          )}
+          {isEditing && !isInventoryItem && (
+            <button onClick={() => setShowDeleteModal(true)} className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]" aria-label="Delete asset">
+              <Trash2 size={18} className="text-[#ff5c39]" />
+            </button>
           )}
           {!isEditing && isInventoryItem && (
             <span className="text-[11px] text-[#6a7282] bg-[#f3f3f5] px-2.5 py-1 rounded-full font-['Inter:Medium',sans-serif]">

@@ -5,12 +5,11 @@ import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { useData, SiteInspectionItem, Annotation, ContactActivity, Inspection, buildActivitySummaries } from '../context/DataContext';
 import {
-  ArrowLeft, Plus, MapPin, Trash2,
+  ArrowLeft, Plus, MapPin,
   ClipboardList, Pencil, Image as ImageIcon, Video as VideoIcon,
   ChevronLeft, ChevronRight, X, Edit3, LayoutGrid, List as ListIcon, Film,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { ActivitySection } from './ActivitySection';
 import { ImageAnnotator } from './ImageAnnotator';
 import { MountainMapView } from './MountainMapView';
@@ -104,7 +103,7 @@ export function LocationDetail({
   const locationId = locationIdProp || params.locationId;
   const navigate = useNavigate();
   const {
-    getLocationById, getMountainById, getAssetsByLocationId, deleteLocation, getProjectById, getInspectionsByLocationId, updateInspection, logActivity, contacts,
+    getLocationById, getMountainById, getAssetsByLocationId, getProjectById, getInspectionsByLocationId, updateInspection, logActivity, contacts,
   } = useData();
 
   // When embedded, "back" returns to the trail view inside the same modal
@@ -115,8 +114,6 @@ export function LocationDetail({
     else navigate(`/mountains/${mountainId}`);
   };
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showInspectionForm, setShowInspectionForm] = useState<'new' | Inspection | null>(null);
   const [photoView, setPhotoView] = useState<'grid' | 'list' | null>(null);
@@ -189,19 +186,6 @@ export function LocationDetail({
     });
   }, [locationId]);
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      const trailId = location?.trailId;
-      await deleteLocation(locationId!);
-      toast.success(`"${location?.name}" deleted`);
-      goBack(trailId);
-    } catch {
-      toast.error('Failed to delete. Please try again.');
-      setIsDeleting(false);
-    }
-  };
-
   const handleOpenAnnotator = async () => {
     if (!lightbox || !lightbox.imageId) return;
     const annotations = await imageAnnotationsDB.getAnnotations(lightbox.imageId);
@@ -268,30 +252,6 @@ export function LocationDetail({
         />
       )}
 
-      {/* Delete modal */}
-      {showDeleteModal && (
-        <DeleteConfirmModal
-          title={`Delete "${location.name}"?`}
-          description={
-            <>
-              This will permanently delete this location
-              {inspection && (
-                <>
-                  , the inspection with{' '}
-                  <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-                    {totalInspItems} item{totalInspItems !== 1 ? 's' : ''}
-                  </span>
-                </>
-              )}
-              , and all media. This cannot be undone.
-            </>
-          }
-          isDeleting={isDeleting}
-          onConfirm={handleDelete}
-          onCancel={() => setShowDeleteModal(false)}
-        />
-      )}
-
       {/* Map view */}
       {showMap && (
         <MountainMapView
@@ -314,11 +274,6 @@ export function LocationDetail({
               {location.name}
             </h1>
           </div>
-          <button onClick={() => setShowDeleteModal(true)}
-            className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]"
-            aria-label="Delete location">
-            <Trash2 size={20} className="text-[#ff5c39]" />
-          </button>
           <Link to={`/mountains/${mountainId}/locations/${locationId}/edit`}>
             <button
               className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"

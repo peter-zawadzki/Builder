@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import * as locMediaDB from '../utils/locationMediaDB';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers, buildActivitySummaries, getMountainLastActionAt, daysSince } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
@@ -13,6 +14,7 @@ import {
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
   Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Maximize2, Pencil, Check, Rocket,
+  Image as ImageIcon, Film,
 } from 'lucide-react';
 
 type ContactSlot =
@@ -149,6 +151,25 @@ export function MountainDetail() {
   const [showCheckInOut, setShowCheckInOut] = useState(false);
   const [showAddAction, setShowAddAction] = useState(false);
   const [openTrailId, setOpenTrailId] = useState<string | null>(null);
+  const [locationMediaCounts, setLocationMediaCounts] = useState<Record<string, { photos: number; videos: number }>>({});
+
+  // Photo/video counts per location, for the Trails pane pills — same
+  // pattern as TrailDetailModal.tsx's mediaCounts (location media + any
+  // inspection media captured at that location).
+  useEffect(() => {
+    let alive = true;
+    Promise.all(allLocations.map(async loc => {
+      const [lm, im] = await Promise.all([
+        locMediaDB.getLocationMedia(loc.id),
+        locMediaDB.getInspectionMedia(loc.id),
+      ]);
+      return [loc.id, { photos: lm.photos.length + im.photos.length, videos: lm.videos.length + im.videos.length }] as const;
+    })).then(entries => {
+      if (!alive) return;
+      setLocationMediaCounts(Object.fromEntries(entries));
+    });
+    return () => { alive = false; };
+  }, [allLocations.map(l => l.id).join(',')]);
   const [newActionText, setNewActionText] = useState('');
   const [newActionAssigneeId, setNewActionAssigneeId] = useState('');
 
@@ -559,8 +580,10 @@ export function MountainDetail() {
                       return sum + getAssetsByLocationId(loc.id).filter(a => a.type !== 'Miscellaneous').length;
                     }, 0);
                     const inspCount = trailLocations.reduce((sum, loc) => {
-                      return sum + (getInspectionsByLocationId(loc.id)[0]?.items.reduce((s, i) => s + i.count, 0) || 0);
+                      return sum + getInspectionsByLocationId(loc.id).length;
                     }, 0);
+                    const photoCount = trailLocations.reduce((sum, loc) => sum + (locationMediaCounts[loc.id]?.photos || 0), 0);
+                    const videoCount = trailLocations.reduce((sum, loc) => sum + (locationMediaCounts[loc.id]?.videos || 0), 0);
 
                     return (
                       <button
@@ -596,7 +619,19 @@ export function MountainDetail() {
                           {inspCount > 0 && (
                             <span className="bg-[#f3f3f5] text-[#0a0a0a] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
                               <ClipboardList size={9} />
-                              {inspCount} insp.
+                              {inspCount} inspection{inspCount !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {photoCount > 0 && (
+                            <span className="bg-[#f3f3f5] text-[#0a0a0a] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <ImageIcon size={9} />
+                              {photoCount} photo{photoCount !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {videoCount > 0 && (
+                            <span className="bg-[#f3f3f5] text-[#0a0a0a] text-[10px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Film size={9} />
+                              {videoCount} video{videoCount !== 1 ? 's' : ''}
                             </span>
                           )}
                         </div>
