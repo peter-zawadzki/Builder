@@ -686,6 +686,33 @@ export function getMountainRollupActivities(
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+// "Days since last action" for a mountain — the most recent timestamp across
+// every note/action item that rolls up to it (getMountainRollupActivities:
+// mountain/contact/team/org/project/inspection origins) plus the mountain's
+// own QuickNotes-style notes collection, which isn't part of that rollup.
+// Returns undefined if the mountain has no activity/notes at all yet, in
+// which case callers should fall back to the mountain's createdAt.
+export function getMountainLastActionAt(
+  mountainId: string,
+  data: { mountains: Mountain[]; contacts: CRMContact[]; teams: CRMTeam[]; organizations?: CRMOrganization[]; projects: Project[]; locations: Location[]; inspections: Inspection[]; notes: MountainNote[] },
+): string | undefined {
+  const timestamps: string[] = [];
+
+  getMountainRollupActivities(mountainId, data).forEach(a => timestamps.push(a.createdAt));
+
+  data.notes
+    .filter(n => n.mountainId === mountainId && !n.archived)
+    .forEach(n => timestamps.push(n.updatedAt || n.createdAt));
+
+  if (timestamps.length === 0) return undefined;
+  return timestamps.reduce((latest, t) => (t > latest ? t : latest));
+}
+
+export function daysSince(iso: string): number {
+  const ms = Date.now() - new Date(iso).getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
 // Everything assigned to a specific person, across every collection that can
 // carry a ContactActivity/MountainNote — for the notification bell. Only
 // open (incomplete) action items and non-archived notes count; a note has no

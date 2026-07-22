@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers, buildActivitySummaries } from '../context/DataContext';
+import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers, buildActivitySummaries, getMountainLastActionAt, daysSince } from '../context/DataContext';
 import type { Asset, Contact, ContactNote, CRMContact, MountainPipelineStage } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
 import { ContactDetail, ContactForm, ContactAssociationPills, STAGE_COLORS } from './crm/CRM';
@@ -124,6 +124,10 @@ export function MountainDetail() {
     contacts,
     organizations,
     teams,
+    projects,
+    locations,
+    inspections,
+    notes,
     updateLocation,
     updateMountain,
     updateContact,
@@ -198,6 +202,13 @@ export function MountainDetail() {
 
   // At-a-glance summary for the Status pane.
   const linkedOrg = mountain.organizationId ? organizations.find(o => o.id === mountain.organizationId) : undefined;
+
+  // Days since last action of any kind (notes/action items across the
+  // mountain and everything rolled up to it — contacts, teams, orgs,
+  // projects, inspections — plus the mountain's own notes). Falls back to
+  // the mountain's creation date if nothing has happened yet.
+  const lastActionAt = getMountainLastActionAt(mountainId!, { mountains: [mountain], contacts, teams, organizations, projects, locations, inspections, notes });
+  const daysSinceLastAction = lastActionAt ? daysSince(lastActionAt) : undefined;
 
   // Teams pill — distinct team names among this mountain's own contacts.
   const teamNames = Array.from(new Set(
@@ -319,6 +330,14 @@ export function MountainDetail() {
               </div>
             </div>
           </div>
+          {daysSinceLastAction !== undefined && (
+            <div
+              className="shrink-0 text-right text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif] pt-1"
+              title={`Last action: ${new Date(lastActionAt!).toLocaleString()}`}
+            >
+              {daysSinceLastAction === 0 ? 'Active today' : `${daysSinceLastAction}d since last action`}
+            </div>
+          )}
         </div>
       </div>
 
