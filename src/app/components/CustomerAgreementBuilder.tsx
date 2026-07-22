@@ -4,7 +4,7 @@ import { useData } from '../context/DataContext';
 import type { CAFormData } from '../context/DataContext';
 import {
   ArrowLeft, Copy, CheckCircle, Clock, PenLine,
-  RefreshCw, XCircle, Lock, AlertTriangle, ExternalLink, FileCheck, FileText, Edit2, Archive, Send,
+  RefreshCw, XCircle, Lock, AlertTriangle, ExternalLink, FileCheck, FileText, Edit2, Archive, Send, Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
@@ -82,10 +82,23 @@ export function CustomerAgreementBuilder() {
   const {
     getMountainById, addCustomerAgreement, updateCustomerAgreement,
     getCustomerAgreementByMountainId, countersignCustomerAgreement, refreshCustomerAgreement,
-    agreementTemplate,
+    agreementTemplate, getProposalsByMountainId,
   } = useData();
   const mountain = getMountainById(mountainId || '');
   const agreement = mountainId ? getCustomerAgreementByMountainId(mountainId) : undefined;
+
+  // The Customer Agreement doesn't store which proposal led to it — find the
+  // one that actually got fully executed (that's what triggers the
+  // agreement in the first place) so "back" can go there instead of just
+  // the mountain. Falls back to the most recently created proposal if none
+  // are marked fully signed yet (e.g. viewing before that happened).
+  const sourceProposal = mountainId
+    ? (() => {
+        const proposals = getProposalsByMountainId(mountainId).filter(p => !p.archived);
+        return proposals.find(p => !!p.clientSignature && !!p.yullrSignature)
+          || [...proposals].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      })()
+    : undefined;
 
   const [form, setForm] = useState<CAFormData>(() => buildForm(agreement?.formData, mountain));
   const [creating, setCreating] = useState(false);
@@ -257,6 +270,22 @@ export function CustomerAgreementBuilder() {
               <Edit2 size={11} /> Draft
             </span>
           )}
+        </div>
+        <div className="flex items-center gap-2 mt-3 pl-8">
+          {sourceProposal && (
+            <button
+              onClick={() => navigate(`/mountains/${mountainId}/proposal/${sourceProposal.id}`)}
+              className="flex items-center gap-1.5 text-[12px] text-white/70 active:text-white"
+            >
+              <FileText size={13} /> View Proposal
+            </button>
+          )}
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 text-[12px] text-white/70 active:text-white"
+          >
+            <Printer size={13} /> Print / Save PDF
+          </button>
         </div>
       </div>
 

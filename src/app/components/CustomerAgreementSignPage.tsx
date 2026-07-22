@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router';
-import { CheckCircle, AlertCircle, PenLine } from 'lucide-react';
+import { CheckCircle, AlertCircle, PenLine, Printer } from 'lucide-react';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import { CA_INTRO_PARAGRAPHS, CA_BODY_PARAGRAPHS } from '../data/customerAgreementText';
 import { renderTemplate } from '../utils/templateRenderer';
@@ -244,15 +244,27 @@ export function CustomerAgreementSignPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F2F3F5', fontFamily: 'Inter, sans-serif' }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } } input:focus, select:focus, textarea:focus { border-color: #FF5C39 !important; box-shadow: 0 0 0 3px rgba(255,92,57,0.12) !important; outline: none !important; }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        input:focus, select:focus, textarea:focus { border-color: #FF5C39 !important; box-shadow: 0 0 0 3px rgba(255,92,57,0.12) !important; outline: none !important; }
+        @media print { .no-print { display: none !important; } }
+      `}</style>
 
-      <div style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.08)', padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div className="no-print" style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.08)', padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <img src="https://race.yullr.com/_assets/v11/8b719608599361ca2b1d142742df531a9af04c08.png" alt="YULLR" style={{ height: 34 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        {yullrSigned && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff3f0', color: '#FF5C39', fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20 }}>
-            <CheckCircle size={13} /> Signed by YULLR
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {yullrSigned && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff3f0', color: '#FF5C39', fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20 }}>
+              <CheckCircle size={13} /> Signed by YULLR
+            </span>
+          )}
+          <button
+            onClick={() => window.print()}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f3f3f5', border: 'none', color: '#555', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          >
+            <Printer size={14} /> Print / Save PDF
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: 720, margin: '28px auto 60px', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.10)', padding: '48px 52px' }}>
