@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router';
-import { CheckCircle, AlertCircle, PenLine, Plus, X } from 'lucide-react';
+import { CheckCircle, AlertCircle, PenLine } from 'lucide-react';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import { CA_INTRO_PARAGRAPHS, CA_BODY_PARAGRAPHS } from '../data/customerAgreementText';
 import { renderTemplate } from '../utils/templateRenderer';
@@ -27,8 +27,6 @@ const US_STATES = [
 
 const ENTITY_TYPES = ['C-Corp', 'S-Corp', 'LLC', 'LLP', 'Sole Proprietorship', 'Non-Profit', 'Other'];
 
-interface TechAdmin { id: string; name: string; role: string; email: string; phone: string; }
-
 interface CAFormData {
   yullrEmail?: string;
   customerLegalName?: string;
@@ -40,7 +38,6 @@ interface CAFormData {
   facilityName?: string;
   facilityLocation?: string;
   effectiveDate?: string;
-  technicalAdministrators?: TechAdmin[];
 }
 
 interface AgreementRecord {
@@ -90,7 +87,6 @@ export function CustomerAgreementSignPage() {
   const [authorizedSignatory, setAuthorizedSignatory] = useState('');
   const [addressForNotices, setAddressForNotices] = useState('');
   const [emailForNotices, setEmailForNotices] = useState('');
-  const [techAdmins, setTechAdmins] = useState<TechAdmin[]>([{ id: crypto.randomUUID(), name: '', role: '', email: '', phone: '' }]);
 
   const [signerName, setSignerName] = useState('');
   const [signerTitle, setSignerTitle] = useState('');
@@ -123,7 +119,6 @@ export function CustomerAgreementSignPage() {
         setAuthorizedSignatory(fd.authorizedSignatory || '');
         setAddressForNotices(fd.addressForNotices || '');
         setEmailForNotices(fd.emailForNotices || '');
-        if (Array.isArray(fd.technicalAdministrators) && fd.technicalAdministrators.length > 0) setTechAdmins(fd.technicalAdministrators);
         if (rec.clientSignature) {
           setSubmitted(true);
           setSignerName(rec.clientSignature.name);
@@ -133,10 +128,6 @@ export function CustomerAgreementSignPage() {
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
   }, [token]);
-
-  const addAdmin = () => setTechAdmins(prev => [...prev, { id: crypto.randomUUID(), name: '', role: '', email: '', phone: '' }]);
-  const removeAdmin = (i: number) => setTechAdmins(prev => prev.filter((_, idx) => idx !== i));
-  const setAdminField = (i: number, field: keyof TechAdmin, val: string) => setTechAdmins(prev => prev.map((a, idx) => idx === i ? { ...a, [field]: val } : a));
 
   const handleSubmit = async () => {
     if (!token) return;
@@ -163,7 +154,6 @@ export function CustomerAgreementSignPage() {
             authorizedSignatory: authorizedSignatory.trim(),
             addressForNotices: addressForNotices.trim(),
             emailForNotices: emailForNotices.trim(),
-            technicalAdministrators: techAdmins.filter(a => a.name.trim()),
           },
         }),
       });
@@ -328,39 +318,6 @@ export function CustomerAgreementSignPage() {
         <ReadRow label="Location" value={facilityLocation} />
         <ReadRow label="Effective Date" value={fmtDate(effectiveDate)} />
 
-        {/* ── Technical Administrators ── */}
-        <div style={{ marginTop: 36 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Technical Administrator(s)</h2>
-          <div style={{ height: 2, background: '#f0f0f0', marginBottom: 16 }} />
-          <p style={{ fontSize: 13, color: '#6a7282', lineHeight: 1.6, marginBottom: 20 }}>
-            Designate the individual(s) at your facility responsible for configuring camera field-of-view, positioning, and related technical settings. At least one is required.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {techAdmins.map((admin, i) => (
-              <div key={admin.id || i} style={{ border: '1px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>Technical Administrator {i + 1}{admin.name ? ` — ${admin.name}` : ''}</p>
-                  {techAdmins.length > 1 && (
-                    <button type="button" onClick={() => removeAdmin(i)} style={{ background: '#fff0ee', border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#FF5C39', fontWeight: 600 }}>
-                      <X size={13} /> Remove
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                  <div><label style={LBL}>Full Name{REQUIRED_DOT}</label><input style={INP} value={admin.name} onChange={e => setAdminField(i, 'name', e.target.value)} placeholder="Full name" /></div>
-                  <div><label style={LBL}>Role / Title{REQUIRED_DOT}</label><input style={INP} value={admin.role} onChange={e => setAdminField(i, 'role', e.target.value)} placeholder="e.g. IT Manager" /></div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div><label style={LBL}>Email{REQUIRED_DOT}</label><input style={INP} type="email" value={admin.email} onChange={e => setAdminField(i, 'email', e.target.value)} placeholder="admin@facility.com" /></div>
-                  <div><label style={LBL}>Phone</label><input style={INP} type="tel" value={admin.phone} onChange={e => setAdminField(i, 'phone', e.target.value)} placeholder="(000) 000-0000" /></div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button type="button" onClick={addAdmin} style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: '1.5px dashed rgba(0,0,0,0.16)', borderRadius: 10, padding: '11px 16px', fontSize: 13, color: '#6a7282', background: 'transparent', cursor: 'pointer', fontWeight: 600 }}>
-            <Plus size={14} /> Add Another Administrator
-          </button>
-        </div>
 
         {/* ── Full Agreement Text — on screen, no PDF download required ── */}
         <div style={{ marginTop: 36 }}>

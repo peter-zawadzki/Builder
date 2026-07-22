@@ -624,6 +624,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
     mountainId: contact.mountainId || '',
     primaryAssociation: contact.primaryAssociation,
     slackUserId: contact.slackUserId || '',
+    linkedIn: contact.linkedIn || '',
     notes: contact.notes || '',
   });
   const [form, setForm] = useState(buildForm);
@@ -647,6 +648,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
       organizationId: form.organizationId || undefined,
       teamId: form.teamId || undefined,
       slackUserId: form.slackUserId.trim() || undefined,
+      linkedIn: form.linkedIn.trim() || undefined,
       phones: cleanPhones,
       phone: cleanPhones[0]?.number || '',
     });
@@ -777,6 +779,11 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
                 <p className="text-[11px] text-[#8992a0] mt-1">Enables @mentioning them in Slack when assigned a note or action item. Find it in Slack: profile → More → Copy member ID.</p>
               </div>
             )}
+
+            <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">LinkedIn</label>
+              <input type="url" value={form.linkedIn} onChange={e => set('linkedIn', e.target.value)} placeholder="https://linkedin.com/in/..." className={inputCls} />
+            </div>
 
             <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Organization</label>
@@ -1128,6 +1135,7 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
     mountainId: contact?.mountainId || defaults?.mountainId || '',
     primaryAssociation: contact?.primaryAssociation,
     slackUserId: contact?.slackUserId || '',
+    linkedIn: contact?.linkedIn || '',
     notes: contact?.notes || '',
   });
 
@@ -1146,6 +1154,7 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
       organizationId: form.organizationId || undefined,
       teamId: form.teamId || undefined,
       slackUserId: form.slackUserId.trim() || undefined,
+      linkedIn: form.linkedIn.trim() || undefined,
       phones: cleanPhones,
       phone: cleanPhones[0]?.number || '',
       emails: form.emails.map(s => s.trim()).filter(Boolean),
@@ -1228,6 +1237,11 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
               <p className="text-[11px] text-[#8992a0] mt-1">Enables @mentioning them in Slack when assigned a note or action item. Find it in Slack: profile → More → Copy member ID.</p>
             </div>
           )}
+
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">LinkedIn</label>
+            <input type="url" value={form.linkedIn} onChange={e => set('linkedIn', e.target.value)} placeholder="https://linkedin.com/in/..." className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+          </div>
 
           <div>
             <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Additional emails</label>

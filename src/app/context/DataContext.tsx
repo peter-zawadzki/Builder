@@ -84,6 +84,12 @@ export interface Mountain {
   mountainLogo?: string;              // base64 — stored in IndexedDB key mountainLogo:{id}
   proposedInstallDates?: string[];    // up to 3 ISO dates, set by mountain rep on portal
   confirmedInstallDate?: string;      // set by YULLR in Builder
+  // Collected right after the customer signs their proposal (SigningPage's
+  // post-sign Technical Contact & Install Preferences modal) — a distinct,
+  // earlier-stage preference signal from the rep-facing propose/confirm flow
+  // above, so it doesn't disturb that flow's existing string[]-of-3 shape.
+  // Each entry is a single day (end omitted or equal to start) or a range.
+  preferredInstallWindows?: { start: string; end?: string }[];
   onsiteContact?: {
     name: string;
     phone: string;
@@ -534,6 +540,7 @@ export interface CRMContact {
   primaryAssociation?: 'mountain' | 'organization' | 'team';
   affiliation?: 'Employee' | 'Ambassador';  // for YULLR-org people: their role in Builder
   slackUserId?: string;      // Slack member ID (e.g. U0123ABC) — enables @mentions in Slack activity mirror
+  linkedIn?: string;         // LinkedIn profile URL
   archived?: boolean;        // archived contacts drop out of default lists/search
   notes?: string;
   activities?: ContactActivity[];

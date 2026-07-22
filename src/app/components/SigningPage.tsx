@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router';
-import { CheckCircle, AlertCircle, PenLine, Printer } from 'lucide-react';
+import { CheckCircle, AlertCircle, PenLine, Printer, AlertTriangle } from 'lucide-react';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
+import { OnboardingModal } from './SigningOnboardingModal';
 
 // Proposal send/view/sign, and now Customer Agreement auto-creation, run
 // through our own local server — public, token-authenticated, no Clerk
@@ -65,6 +66,9 @@ export function SigningPage() {
   const [signed, setSigned] = useState(false);
   const [caToken, setCaToken] = useState<string | null>(null);
   const [caSigned, setCaSigned] = useState(false);
+  const [hasTechnicalContact, setHasTechnicalContact] = useState(false);
+  const [hasPreferredInstallWindows, setHasPreferredInstallWindows] = useState(false);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const sigPadRef = useRef<SignaturePadHandle>(null);
   const [sigEmpty, setSigEmpty] = useState(true);
   const [capturedSigUrl, setCapturedSigUrl] = useState<string | null>(null);
@@ -118,6 +122,8 @@ export function SigningPage() {
           clientSignature: p.clientSignature,
         };
         setRecord(rec);
+        setHasTechnicalContact(!!data.hasTechnicalContact);
+        setHasPreferredInstallWindows(!!data.hasPreferredInstallWindows);
         // Track that the link was opened (fire-and-forget)
         fetch(`${PROPOSAL_SIGN_BASE}/${token}/viewed`, { method: 'POST' }).catch(() => {});
         if (rec.clientSignature) {
@@ -158,6 +164,11 @@ export function SigningPage() {
       setSigned(true);
       // Auto-create CA and fetch the link after signing
       if (record?.mountainId) ensureCaExists(record.mountainId, record.proposalSnapshot);
+      // Immediately prompt for a Technical Contact + install preferences —
+      // the modal itself is skippable, but it opens automatically the
+      // moment they've just signed rather than requiring them to notice a
+      // banner first.
+      setShowOnboardingModal(true);
     } catch (e: any) {
       setSubmitError(e.message);
     } finally {
@@ -245,6 +256,36 @@ export function SigningPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Outstanding items banner — shown on return visits when the ── */}
+      {/* Technical Contact / install-preferences modal was skipped.     */}
+      {clientSigned && (!hasTechnicalContact || !hasPreferredInstallWindows) && (
+        <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <AlertTriangle size={14} color="#b45309" />
+          <span style={{ fontSize: 13, color: '#78350f' }}>
+            Outstanding: {[!hasTechnicalContact && 'Technical Contact', !hasPreferredInstallWindows && 'Preferred install dates'].filter(Boolean).join(' · ')}
+          </span>
+          <button
+            onClick={() => setShowOnboardingModal(true)}
+            style={{ background: '#b45309', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Complete now
+          </button>
+        </div>
+      )}
+
+      {showOnboardingModal && record?.mountainId && (
+        <OnboardingModal
+          token={token!}
+          caUrl={caToken ? `${window.location.origin}/agreement-sign/${caToken}` : null}
+          onClose={() => setShowOnboardingModal(false)}
+          onSaved={(technicalContactAdded, installWindowsAdded) => {
+            if (technicalContactAdded) setHasTechnicalContact(true);
+            if (installWindowsAdded) setHasPreferredInstallWindows(true);
+            setShowOnboardingModal(false);
+          }}
+        />
+      )}
 
       {/* ── Proposal Document ── */}
       <div style={{ maxWidth: 860, margin: '28px auto 60px', background: '#fff', padding: '60px 70px', boxShadow: '0 2px 20px rgba(0,0,0,0.10)' }}>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
-import type { TechAdmin, CAFormData } from '../context/DataContext';
+import type { CAFormData } from '../context/DataContext';
 import {
   ArrowLeft, Copy, CheckCircle, Clock, PenLine,
-  RefreshCw, XCircle, Lock, AlertTriangle, ExternalLink, FileCheck, FileText, Plus, X, Edit2, Archive, Send,
+  RefreshCw, XCircle, Lock, AlertTriangle, ExternalLink, FileCheck, FileText, Edit2, Archive, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
@@ -42,10 +42,12 @@ function buildForm(raw: any, mountain: any): CAFormData {
     facilityName: raw?.facilityName || mountain?.name || '',
     facilityLocation: raw?.facilityLocation || mountain?.address || '',
     effectiveDate: raw?.effectiveDate || todayISO(),
-    technicalAdministrators:
-      Array.isArray(raw?.technicalAdministrators) && raw.technicalAdministrators.length > 0
-        ? raw.technicalAdministrators
-        : [{ id: crypto.randomUUID(), name: '', role: '', email: '', phone: '' }],
+    // Technical Administrator(s) used to be collected here, but is now
+    // collected earlier, right after the proposal is signed (Technical
+    // Contact modal on SigningPage.tsx), which creates real CRM contacts
+    // instead. Kept as an empty array for backward type/data compatibility
+    // with agreements created before this change — no UI collects it anymore.
+    technicalAdministrators: Array.isArray(raw?.technicalAdministrators) ? raw.technicalAdministrators : [],
   };
 }
 
@@ -119,22 +121,8 @@ export function CustomerAgreementBuilder() {
     setDirty(true);
   };
 
-  const addAdmin = () => {
-    setForm(prev => ({ ...prev, technicalAdministrators: [...prev.technicalAdministrators, { id: crypto.randomUUID(), name: '', role: '', email: '', phone: '' }] }));
-    setDirty(true);
-  };
-  const setAdmin = (i: number, field: keyof TechAdmin, val: string) => {
-    setForm(prev => ({ ...prev, technicalAdministrators: prev.technicalAdministrators.map((a, idx) => idx === i ? { ...a, [field]: val } : a) }));
-    setDirty(true);
-  };
-  const removeAdmin = (i: number) => {
-    setForm(prev => ({ ...prev, technicalAdministrators: prev.technicalAdministrators.filter((_, idx) => idx !== i) }));
-    setDirty(true);
-  };
-
   const createAgreement = () => {
     if (!mountainId) return;
-    if (form.technicalAdministrators.length === 0) { toast.error('At least one Technical Administrator is required'); return; }
     if (!form.customerLegalName.trim() || !form.facilityName.trim()) { toast.error('Legal Name and Facility Name are required'); return; }
     setCreating(true);
     try {
@@ -148,7 +136,6 @@ export function CustomerAgreementBuilder() {
 
   const saveForm = () => {
     if (!agreement) return;
-    if (form.technicalAdministrators.length === 0) { toast.error('At least one Technical Administrator is required'); return; }
     updateCustomerAgreement(agreement.id, { formData: form });
     setDirty(false);
     toast.success('Agreement details saved');
@@ -374,64 +361,6 @@ export function CustomerAgreementBuilder() {
           </div>
         </div>
 
-        {/* ── Technical Administrators ── */}
-        <div className={SECTION}>
-          <div className="mb-4">
-            <h2 className={SECTION_H} style={{ marginBottom: 4 }}>Technical Administrator(s)</h2>
-            <p className="text-[12px] text-[#6a7282] font-['Inter:Regular',sans-serif] leading-relaxed">
-              Designate the individuals responsible for configuring camera field-of-view, positioning, and related technical settings at the Facility.
-            </p>
-          </div>
-
-          {form.technicalAdministrators.length === 0 && (
-            <div className="bg-[#fff7ed] border border-[#fed7aa] rounded-[8px] px-3 py-2.5 mb-3 flex items-center gap-2">
-              <AlertTriangle size={13} className="text-[#c2410c] flex-shrink-0" />
-              <p className="text-[#c2410c] text-[12px] font-['Inter:Regular',sans-serif]">At least one Technical Administrator is required.</p>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {form.technicalAdministrators.map((admin, i) => (
-              <div key={admin.id || i} className="border border-[rgba(0,0,0,0.1)] rounded-[10px] p-3">
-                <div className="flex items-center justify-between mb-2.5">
-                  <p className="text-[12px] font-['Inter:SemiBold',sans-serif] font-semibold text-[#0a0a0a]">
-                    Admin {i + 1}{admin.name ? ` — ${admin.name}` : ''}
-                  </p>
-                  {!locked && (
-                    <button type="button" onClick={() => removeAdmin(i)} className="p-1.5 rounded-[6px] bg-[#fff0ee] active:bg-[#ffe0da]">
-                      <X size={13} className="text-[#F95C39]" />
-                    </button>
-                  )}
-                </div>
-                {locked ? (
-                  <div className="space-y-1">
-                    <p className="text-[13px] text-[#0a0a0a]">{admin.name} — <span className="text-[#6a7282]">{admin.role}</span></p>
-                    {admin.email && <p className="text-[12px] text-[#6a7282]">{admin.email}</p>}
-                    {admin.phone && <p className="text-[12px] text-[#6a7282]">{admin.phone}</p>}
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-2 mb-2">
-                      <div><label className={LBL}>Name *</label><input className={INP} value={admin.name} onChange={e => setAdmin(i, 'name', e.target.value)} placeholder="Full name" /></div>
-                      <div><label className={LBL}>Role *</label><input className={INP} value={admin.role} onChange={e => setAdmin(i, 'role', e.target.value)} placeholder="e.g. IT Manager" /></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div><label className={LBL}>Email *</label><input className={INP} type="email" value={admin.email} onChange={e => setAdmin(i, 'email', e.target.value)} placeholder="admin@mountain.com" /></div>
-                      <div><label className={LBL}>Phone</label><input className={INP} type="tel" value={admin.phone} onChange={e => setAdmin(i, 'phone', e.target.value)} placeholder="(000) 000-0000" /></div>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {!locked && (
-            <button type="button" onClick={addAdmin}
-              className="mt-3 w-full flex items-center justify-center gap-2 border border-dashed border-[rgba(0,0,0,0.18)] rounded-[10px] py-2.5 text-[13px] text-[#6a7282] font-['Inter:Medium',sans-serif] active:bg-[#f9f9f9]">
-              <Plus size={14} /> Add Another Administrator
-            </button>
-          )}
-        </div>
 
         {/* ── Full Agreement Text — on screen, no PDF download required ── */}
         <div className={SECTION}>
@@ -604,11 +533,6 @@ export function CustomerAgreementBuilder() {
                     </p>
                     <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Facility:</strong> {form.facilityName} — {form.facilityLocation}</p>
                     <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Effective Date:</strong> {fmtDate(form.effectiveDate)}</p>
-
-                    <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', marginTop: 24, marginBottom: 10 }}>Technical Administrator(s)</h2>
-                    {form.technicalAdministrators.map((a, i) => (
-                      <p key={a.id || i} style={{ fontSize: 12.5, color: '#374151', marginBottom: 4 }}>{a.name} — {a.role}{a.email ? ` · ${a.email}` : ''}{a.phone ? ` · ${a.phone}` : ''}</p>
-                    ))}
                   </>
                 ),
               },

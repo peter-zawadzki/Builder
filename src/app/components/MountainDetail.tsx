@@ -380,6 +380,23 @@ export function MountainDetail() {
           </div>
         )}
 
+        {/* Preferred install dates/ranges the customer entered right after signing */}
+        {!mountain.confirmedInstallDate && mountain.preferredInstallWindows && mountain.preferredInstallWindows.length > 0 && (
+          <div className="bg-[#eef3fb] border border-[#c5deff] rounded-[12px] px-4 py-3">
+            <p className="text-[14px] font-['Inter:Medium',sans-serif] text-[#1e3a5f] mb-2">
+              📅 Customer's preferred install {mountain.preferredInstallWindows.length !== 1 ? 'dates' : 'date'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {mountain.preferredInstallWindows.map((w, i) => (
+                <span key={i} className="text-[12px] bg-white border border-[#c5deff] text-[#1e3a5f] px-3 py-1.5 rounded-full font-['Inter:Medium',sans-serif]">
+                  {new Date(w.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {w.end ? ` – ${new Date(w.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Status + Contacts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* ── Status Pane ── */}
