@@ -20,7 +20,7 @@ const emptyContact = (): Contact => ({
 
 export function CreateMountain() {
   const navigate = useNavigate();
-  const { addMountain, addTrail, organizations, contacts } = useData();
+  const { addMountain, addTrail, organizations, contacts, mountains } = useData();
   const mountainGroups = organizations.filter(o => o.type === 'Mountain Group').sort((a, b) => a.name.localeCompare(b.name));
   const yullrOrg = organizations.find(o => o.name.trim().toLowerCase() === 'yullr');
   const ambassadors = yullrOrg ? contacts.filter(c => c.organizationId === yullrOrg.id).sort((a, b) => a.name.localeCompare(b.name)) : [];
@@ -56,6 +56,15 @@ export function CreateMountain() {
   const [billingSameAsMain, setBillingSameAsMain] = useState(false);
   const [timingSystems, setTimingSystems] = useState<string[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [duplicateWarningDismissed, setDuplicateWarningDismissed] = useState(false);
+
+  // Same-name resorts are common (e.g. multiple "Sunrise" or "Snow Valley"
+  // mountains across different states), so this is a dismissible heads-up,
+  // not a blocker — the user can confirm and keep going.
+  const duplicateMountains = formData.name.trim()
+    ? mountains.filter(m => m.name.trim().toLowerCase() === formData.name.trim().toLowerCase())
+    : [];
+  const showDuplicateWarning = duplicateMountains.length > 0 && !duplicateWarningDismissed;
 
   const TIMING_OPTIONS = ['Live Timing', 'VOLA', 'Brower', 'Other'];
   const toggleTiming = (opt: string) => {
@@ -116,6 +125,7 @@ export function CreateMountain() {
 
   const updateField = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'name') setDuplicateWarningDismissed(false);
   };
 
   const toggleAffiliate = (id: string) => {
@@ -206,6 +216,20 @@ export function CreateMountain() {
             <input type="text" required value={formData.name} onChange={e => updateField('name', e.target.value)}
               className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif]"
               placeholder="e.g., Whistler Mountain" autoFocus />
+            {showDuplicateWarning && (
+              <div className="mt-2 flex items-start gap-2 bg-[#fffbeb] border border-[#fde68a] rounded-[8px] px-3 py-2.5">
+                <span className="flex-1 text-[#92400e] font-['Inter:Regular',sans-serif] text-[13px] leading-snug">
+                  A mountain named "{formData.name.trim()}" already exists{duplicateMountains.length === 1 ? '' : ` (${duplicateMountains.length} matches)`}. If this is a different resort with the same name, you can ignore this.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWarningDismissed(true)}
+                  className="p-0.5 rounded active:opacity-60 flex-shrink-0"
+                >
+                  <X size={14} className="text-[#92400e]" />
+                </button>
+              </div>
+            )}
           </div>
 
           <LogoUploader value={formData.mountainLogo} onChange={v => setFormData(prev => ({ ...prev, mountainLogo: v }))} />
