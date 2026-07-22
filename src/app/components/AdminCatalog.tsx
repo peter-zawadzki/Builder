@@ -13,9 +13,9 @@ import { useIsSuperAdmin } from '../hooks/useRole';
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const BASE_EQUIPMENT_ITEMS = [
-  'Camera', 'Battery Box', 'POE Switch', 'POE Extender',
-  'Wireless RX', 'Wireless TX', 'Existing 120V', 'Existing 480V',
-  'Transformer Required', 'Existing Data Drop', 'Existing Fiber Drop',
+  'Camera', 'POE Switch', 'POE Extender',
+  'Wireless', 'Existing Power',
+  'Transformer Required', 'Data Drop', 'Existing Fiber Drop',
   'Passive POE Adapter', 'Ethernet Cable 50Ft', 'Antenna Mount',
 ];
 

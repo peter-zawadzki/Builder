@@ -119,18 +119,29 @@ export interface Mountain {
 // ─── Inspection item types (shared between Location inspection + AddInspection) ─
 
 export type SiteInspectionItemType =
-  | 'Camera' | 'Battery Box' | 'POE Switch' | 'POE Extender'
-  | 'Wireless RX' | 'Wireless TX' | 'Existing 120V' | 'Existing 480V'
-  | 'Transformer Required' | 'Existing Data Drop' | 'Existing Fiber Drop'
+  | 'Camera' | 'POE Switch' | 'POE Extender'
+  | 'Wireless' | 'Existing Power'
+  | 'Transformer Required' | 'Data Drop' | 'Existing Fiber Drop'
   | 'Passive POE Adapter' | 'Ethernet Cable 50Ft' | 'Antenna Mount';
 
 export const MULTI_COUNT_ITEMS: SiteInspectionItemType[] = [
   'Camera', 'Passive POE Adapter', 'Ethernet Cable 50Ft', 'Antenna Mount',
 ];
 
+// Items that reveal a 2-option sub-toggle once selected (e.g. POE Switch ->
+// Existing/Required). The first option is the default applied the moment
+// the item is selected.
+export const SUB_TOGGLE_OPTIONS: Partial<Record<SiteInspectionItemType, [string, string]>> = {
+  'POE Switch': ['Existing', 'Required'],
+  'Wireless': ['RX', 'TX'],
+  'Existing Power': ['120V', '480V'],
+  'Data Drop': ['Needed', 'Existing'],
+};
+
 export interface SiteInspectionItem {
   type: SiteInspectionItemType;
   count: number;
+  subValue?: string;
 }
 
 // ─── Annotations ──────────────────────────────────────────────────────────────

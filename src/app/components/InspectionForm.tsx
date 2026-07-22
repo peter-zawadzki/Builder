@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { X, Check, Plus, Minus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useData, isProjectCompleted, MULTI_COUNT_ITEMS } from '../context/DataContext';
+import { useData, isProjectCompleted, MULTI_COUNT_ITEMS, SUB_TOGGLE_OPTIONS } from '../context/DataContext';
 import type { Location, Inspection, SiteInspectionItem, SiteInspectionItemType } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
 
 const INSPECTION_ITEM_TYPES: SiteInspectionItemType[] = [
-  'Camera', 'Battery Box', 'POE Switch', 'POE Extender',
-  'Wireless RX', 'Wireless TX', 'Existing 120V', 'Existing 480V',
-  'Transformer Required', 'Existing Data Drop', 'Existing Fiber Drop',
+  'Camera', 'POE Switch', 'POE Extender',
+  'Wireless', 'Existing Power',
+  'Transformer Required', 'Data Drop', 'Existing Fiber Drop',
   'Passive POE Adapter', 'Ethernet Cable 50Ft', 'Antenna Mount',
 ];
 
@@ -47,7 +47,8 @@ export function InspectionForm({
         }
         return prev.filter(i => i.type !== type);
       }
-      return [...prev, { type, count: 1 }];
+      const subOptions = SUB_TOGGLE_OPTIONS[type];
+      return [...prev, { type, count: 1, ...(subOptions ? { subValue: subOptions[0] } : {}) }];
     });
   };
 
@@ -59,7 +60,12 @@ export function InspectionForm({
     });
   };
 
+  const setSubValue = (type: SiteInspectionItemType, subValue: string) => {
+    setItems(prev => prev.map(i => i.type === type ? { ...i, subValue } : i));
+  };
+
   const getItemCount = (type: SiteInspectionItemType): number => items.find(i => i.type === type)?.count || 0;
+  const getItemSubValue = (type: SiteInspectionItemType): string | undefined => items.find(i => i.type === type)?.subValue;
 
   const handleSave = async () => {
     if (!notes.trim() && items.length === 0) {
@@ -127,10 +133,15 @@ export function InspectionForm({
                 const count = getItemCount(type);
                 const isMultiCount = MULTI_COUNT_ITEMS.includes(type);
                 const isSelected = count > 0;
+                const subOptions = SUB_TOGGLE_OPTIONS[type];
+                const subValue = getItemSubValue(type);
                 return (
                   <div key={type} className={`rounded-[8px] border-2 transition-all ${isSelected ? 'bg-[#f0fdf4] border-[#22c55e]' : 'bg-[#f9fafb] border-[rgba(0,0,0,0.08)]'}`}>
                     <button type="button" onClick={() => toggleItem(type)} className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 active:opacity-70">
-                      <span className={`font-['Inter:Medium',sans-serif] text-[13px] flex-1 ${isSelected ? 'text-[#0a0a0a]' : 'text-[#6a7282]'}`}>{type}</span>
+                      <span className={`font-['Inter:Medium',sans-serif] text-[13px] flex-1 flex items-center gap-1 ${isSelected ? 'text-[#0a0a0a]' : 'text-[#6a7282]'}`}>
+                        {type}
+                        {type === 'Camera' && <Plus size={12} className={isSelected ? 'text-[#22c55e]' : 'text-[#6a7282]'} />}
+                      </span>
                       {isSelected && (
                         <div className={`flex items-center gap-1 ${isMultiCount ? 'bg-[#22c55e] text-white rounded-full px-2 py-0.5' : ''}`}>
                           {isMultiCount ? <span className="text-[11px] font-['Inter:SemiBold',sans-serif] font-semibold">{count}</span> : <Check size={14} className="text-[#22c55e]" />}
@@ -145,6 +156,20 @@ export function InspectionForm({
                         <button type="button" onClick={() => incrementItem(type)} className="flex-1 bg-[#22c55e] text-white rounded-[6px] py-1.5 flex items-center justify-center gap-1 font-['Inter:Medium',sans-serif] text-[12px] active:opacity-80">
                           <Plus size={12} /> Add
                         </button>
+                      </div>
+                    )}
+                    {subOptions && isSelected && (
+                      <div className="border-t border-[#22c55e]/20 px-3 py-2 flex items-center gap-2">
+                        {subOptions.map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setSubValue(type, opt)}
+                            className={`flex-1 py-1.5 rounded-[6px] text-[12px] font-['Inter:Medium',sans-serif] ${subValue === opt ? 'bg-[#1D2930] text-white' : 'bg-white text-[#6a7282] border border-[rgba(0,0,0,0.1)]'}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
