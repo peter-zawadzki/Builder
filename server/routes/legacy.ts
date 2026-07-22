@@ -350,17 +350,51 @@ export async function pushMountainActivity(mountainId: string, activity: Record<
   await upsert("mountains", mountainId, { ...row.data, activities: [...activities, activity] });
 }
 
-// Marks a project pipeline stage 'done' — the server-side equivalent of the
+// Marks a project pipeline stage — the server-side equivalent of the
 // client's checkbox-cycling in ProjectsPane, used to auto-advance a project
-// when its proposal is sent/signed instead of requiring a manual click.
-export async function markProjectStageDone(projectId: string, stage: string) {
+// when its proposal/agreement is sent/signed instead of requiring a manual
+// click.
+async function setProjectStageStatus(projectId: string, stage: string, status: "in_progress" | "done") {
   const row = await queryOne<{ data: any }>(
     `SELECT data FROM legacy_records WHERE collection = 'projects' AND id = $1`,
     [projectId]
   );
   if (!row) return;
-  const stageStatus = { ...(row.data.stageStatus || {}), [stage]: "done" };
+  const stageStatus = { ...(row.data.stageStatus || {}), [stage]: status };
   await upsert("projects", projectId, { ...row.data, stageStatus });
+}
+
+// Which literal ProjectStage key a proposal/agreement milestone maps to
+// depends on the project's type — this MUST mirror DataContext.tsx's
+// PROJECT_STAGES_BY_TYPE (a client-only React module the server can't
+// import directly). Install/Upgrade projects use one combined "Proposal"
+// stage (in_progress once sent, done once signed) and a separate
+// "Contract" stage for the Customer Agreement; Repair/Special Event split
+// the proposal into two distinct stages ("Proposal Sent"/"Proposal
+// Signed") and have no Contract stage at all. Initial Onboarding/Followup
+// Training projects don't track a proposal or contract stage — nothing to
+// mark for those. This was the actual bug: the previous code always wrote
+// literally "Proposal Sent"/"Proposal Signed", which only exist in the
+// Repair/Special Event stage lists, so Install/Upgrade projects (the
+// common case) never saw their "Proposal" checkbox move at all.
+export async function markProposalMilestone(projectId: string, milestone: "sent" | "signed") {
+  const project = await queryOne<{ data: any }>(`SELECT data FROM legacy_records WHERE collection = 'projects' AND id = $1`, [projectId]);
+  const type = project?.data?.type as string | undefined;
+  if (type === "Install" || type === "Upgrade") {
+    await setProjectStageStatus(projectId, "Proposal", milestone === "sent" ? "in_progress" : "done");
+  } else if (type === "Repair" || type === "Special Event") {
+    await setProjectStageStatus(projectId, milestone === "sent" ? "Proposal Sent" : "Proposal Signed", "done");
+  }
+  // Initial Onboarding / Followup Training: no proposal stage, nothing to mark.
+}
+
+export async function markContractMilestone(projectId: string, milestone: "sent" | "signed") {
+  const project = await queryOne<{ data: any }>(`SELECT data FROM legacy_records WHERE collection = 'projects' AND id = $1`, [projectId]);
+  const type = project?.data?.type as string | undefined;
+  if (type === "Install" || type === "Upgrade") {
+    await setProjectStageStatus(projectId, "Contract", milestone === "sent" ? "in_progress" : "done");
+  }
+  // Every other project type has no Contract stage.
 }
 
 // ── Proposal send / countersign (authenticated — staff only) ─────────────────
@@ -407,7 +441,7 @@ legacy.post("/proposals/:id/send", async (c) => {
       actorId: user.id,
     });
 
-    if (proposal.projectId) await markProjectStageDone(proposal.projectId, "Proposal Sent");
+    if (proposal.projectId) await markProposalMilestone(proposal.projectId, "sent");
   }
 
   return c.json({ ok: true, token, email: emailResult });
@@ -450,7 +484,7 @@ legacy.post("/proposals/:id/countersign", async (c) => {
       actorId: user.id,
     });
 
-    if (proposal.projectId) await markProjectStageDone(proposal.projectId, "Proposal Signed");
+    if (proposal.projectId) await markProposalMilestone(proposal.projectId, "signed");
   }
 
   return c.json({ ok: true, bothSigned });
@@ -483,6 +517,21 @@ legacy.post("/customer-agreements/:id/countersign", async (c) => {
       actor: user.name || user.email || "Someone",
       actorId: user.id,
     });
+
+    // The Customer Agreement itself doesn't store which project it belongs
+    // to — find the mountain's fully-executed proposal (that's what
+    // triggers the agreement in the first place) and mark ITS project's
+    // Contract stage done.
+    if (agreement.mountainId) {
+      const proposalRow = await queryOne<{ data: any }>(
+        `SELECT data FROM legacy_records WHERE collection = 'proposals' AND data->>'mountainId' = $1
+           AND data->'clientSignature' IS NOT NULL AND data->'yullrSignature' IS NOT NULL
+         ORDER BY updated_at DESC LIMIT 1`,
+        [agreement.mountainId]
+      );
+      const projectId = proposalRow?.data?.projectId;
+      if (projectId) await markContractMilestone(projectId, "signed");
+    }
   }
 
   return c.json({ ok: true, bothSigned });
