@@ -1166,7 +1166,9 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
   };
 
   const save = () => {
-    if (!fullName) { toast.error('First name is required'); return; }
+    if (!form.firstName.trim()) { toast.error('First name is required'); return; }
+    if (!form.lastName.trim()) { toast.error('Last name is required'); return; }
+    if (!form.email.trim()) { toast.error('Email is required'); return; }
     // Only warn on new contacts.
     if (!contact) {
       const dups = findDuplicateContacts({ ...form, name: fullName }, contacts);
@@ -1189,11 +1191,11 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
               <input type="text" value={form.firstName} onChange={e => set('firstName', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
             </div>
             <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Last Name</label>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Last Name *</label>
               <input type="text" value={form.lastName} onChange={e => set('lastName', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
             </div>
             <div>
-              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Email</label>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Email *</label>
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
             </div>
             <div>
