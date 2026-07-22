@@ -1328,7 +1328,36 @@ export function ProposalBuilder() {
                 <div className="grid grid-cols-[1fr_1fr_1fr_28px] gap-2 items-end">
                   <div>
                     <span className="text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Location</span>
-                    <input className={inp(ro)} readOnly={ro} value={r.location} onChange={e => setReq(r.id, 'location', e.target.value)} placeholder="e.g. Summit" />
+                    {allLocations.length > 0 ? (
+                      <select
+                        className={`${inp(ro)} appearance-none`}
+                        disabled={ro}
+                        value={r.location}
+                        onChange={e => setReq(r.id, 'location', e.target.value)}
+                      >
+                        <option value="">Select a location…</option>
+                        {allLocations.map(loc => (
+                          <option key={loc.id} value={loc.name}>{loc.name}</option>
+                        ))}
+                        {/* Preserve a legacy free-typed value that no longer matches any location. */}
+                        {r.location && !allLocations.some(loc => loc.name === r.location) && (
+                          <option value={r.location}>{r.location}</option>
+                        )}
+                      </select>
+                    ) : (
+                      <div>
+                        <input className={inp(ro)} readOnly={ro} value={r.location} onChange={e => setReq(r.id, 'location', e.target.value)} placeholder="e.g. Summit" />
+                        {mountainId && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/mountains/${mountainId}/locations/new`)}
+                            className="text-[11px] text-[#307fe2] mt-1 active:opacity-70"
+                          >
+                            No locations yet — add one
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <span className="text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Requirement</span>
