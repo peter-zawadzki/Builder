@@ -556,7 +556,7 @@ export function LocationDetail({
                           const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
                           updateInspectionActivities(insp.id, [...(insp.activities || []), full]);
                           const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountain.name]);
-                          logActivity(location.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/mountains/${location.mountainId}/locations/${location.id}`, slackText);
+                          logActivity(location.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/mountains/${location.mountainId}/locations/${location.id}`, slackText, !!entry.assigneeContactId);
                         }}
                         onToggle={(id) => {
                           const updated = (insp.activities || []).map(a =>

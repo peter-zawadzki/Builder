@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { TrendingUp, Activity as ActivityIcon, ListTodo, MessageSquare, ChevronRight } from "lucide-react";
+import { TrendingUp, Activity as ActivityIcon, ListTodo, MessageSquare, ChevronRight, Archive, Lock } from "lucide-react";
 import { ActiveProjects } from "./projects/ActiveProjects";
 import { RecentActivity } from "./RecentActivity";
 import { useMyContact, useCanSeeAll } from "../hooks/useMyContact";
-import { useData, getMyNotifications, getAllOpenActivities } from "../context/DataContext";
+import { useData, getMyNotifications, getAllOpenActivities, useGlobalActivityUpdater, canCompleteActivity } from "../context/DataContext";
 import type { MyNotificationEntry } from "../context/DataContext";
 
 // The landing page after login: one master My/All toggle scopes every section
@@ -30,8 +30,13 @@ export function HomeDashboard() {
     else if (n.origin === 'team' && n.teamId) navigate(`/crm?tab=teams&open=${n.teamId}`);
     else if (n.origin === 'inspection' && n.mountainId && n.locationId) navigate(`/mountains/${n.mountainId}/locations/${n.locationId}`);
     else if (n.mountainId) navigate(`/mountains/${n.mountainId}`);
+    else if (n.origin === 'contact' && n.contactId) navigate(`/crm?tab=contacts&open=${n.contactId}`);
     else if (n.origin === 'contact') navigate('/crm?tab=contacts');
   };
+
+  const applyActivityUpdate = useGlobalActivityUpdater();
+  const completeAction = (n: MyNotificationEntry) => applyActivityUpdate(n, { completed: true, completedAt: new Date().toISOString() });
+  const archiveNote = (n: MyNotificationEntry) => applyActivityUpdate(n, { archived: true });
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -70,7 +75,7 @@ export function HomeDashboard() {
             <ListTodo size={16} className="text-[#6a7282]" />
             <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Action items</h2>
           </div>
-          <ActivityList items={actionItems} emptyLabel={effective === 'mine' ? 'No action items assigned to you right now.' : 'No open action items.'} onOpen={goToActivity} />
+          <ActivityList items={actionItems} emptyLabel={effective === 'mine' ? 'No action items assigned to you right now.' : 'No open action items.'} onOpen={goToActivity} me={me} onAction={completeAction} />
         </section>
 
         <section>
@@ -78,7 +83,7 @@ export function HomeDashboard() {
             <MessageSquare size={16} className="text-[#6a7282]" />
             <h2 className="text-[15px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Notes</h2>
           </div>
-          <ActivityList items={notesItems} emptyLabel={effective === 'mine' ? 'No notes assigned to you right now.' : 'No open notes.'} onOpen={goToActivity} />
+          <ActivityList items={notesItems} emptyLabel={effective === 'mine' ? 'No notes assigned to you right now.' : 'No open notes.'} onOpen={goToActivity} me={me} onAction={archiveNote} />
         </section>
 
         <section>
@@ -93,7 +98,15 @@ export function HomeDashboard() {
   );
 }
 
-function ActivityList({ items, emptyLabel, onOpen }: { items: MyNotificationEntry[]; emptyLabel: string; onOpen: (n: MyNotificationEntry) => void }) {
+function ActivityList({
+  items, emptyLabel, onOpen, me, onAction,
+}: {
+  items: MyNotificationEntry[];
+  emptyLabel: string;
+  onOpen: (n: MyNotificationEntry) => void;
+  me: ReturnType<typeof useMyContact>;
+  onAction: (n: MyNotificationEntry) => void;
+}) {
   if (items.length === 0) {
     return (
       <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
@@ -103,25 +116,49 @@ function ActivityList({ items, emptyLabel, onOpen }: { items: MyNotificationEntr
   }
   return (
     <div className="space-y-2">
-      {items.map(n => (
-        <button key={`${n.origin}:${n.id}`} onClick={() => onOpen(n)} className="w-full text-left bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 active:bg-[#f9fafb]">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#f3f3f5] text-[#6a7282] flex items-center gap-1">
-              {n.type === 'action' ? <ListTodo size={10} /> : <MessageSquare size={10} />}
-              {n.originLabel || n.origin}
-            </span>
-            <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
+      {items.map(n => {
+        const canAct = canCompleteActivity(n, me);
+        return (
+          <div key={`${n.origin}:${n.id}`} className="w-full bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3">
+            <button onClick={() => onOpen(n)} className="flex-1 min-w-0 text-left active:opacity-70">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#f3f3f5] text-[#6a7282] flex items-center gap-1">
+                  {n.type === 'action' ? <ListTodo size={10} /> : <MessageSquare size={10} />}
+                  {n.originLabel || n.origin}
+                </span>
+                <ChevronRight size={14} className="text-[#c0c4cc] shrink-0" />
+              </div>
+              <p className="text-[13px] text-[#0a0a0a] mt-1">{n.text}</p>
+              {(n.authorName || n.assigneeName) && (
+                <p className="text-[11px] text-[#8992a0] mt-1">
+                  {n.authorName && `Created by ${n.authorName}`}
+                  {n.authorName && n.assigneeName && ' · '}
+                  {n.assigneeName && `Assigned to ${n.assigneeName}`}
+                </p>
+              )}
+            </button>
+            {n.type === 'action' ? (
+              <button
+                onClick={() => canAct && onAction(n)}
+                disabled={!canAct}
+                title={canAct ? 'Mark complete' : 'Only the creator or assignee can complete this'}
+                className="mt-0.5 shrink-0 w-5 h-5 rounded border-2 border-[#1D2930] flex items-center justify-center active:opacity-70 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                {canAct ? null : <Lock size={10} className="text-[#1D2930]" />}
+              </button>
+            ) : (
+              <button
+                onClick={() => canAct && onAction(n)}
+                disabled={!canAct}
+                title={canAct ? 'Archive' : 'Only the creator or assignee can archive this'}
+                className="mt-0.5 shrink-0 p-1 rounded-[6px] active:bg-[#ffe0da] disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {canAct ? <Archive size={14} className="text-[#ff5c39]" /> : <Lock size={11} className="text-[#c0c4cc]" />}
+              </button>
+            )}
           </div>
-          <p className="text-[13px] text-[#0a0a0a] mt-1">{n.text}</p>
-          {(n.authorName || n.assigneeName) && (
-            <p className="text-[11px] text-[#8992a0] mt-1">
-              {n.authorName && `Created by ${n.authorName}`}
-              {n.authorName && n.assigneeName && ' · '}
-              {n.assigneeName && `Assigned to ${n.assigneeName}`}
-            </p>
-          )}
-        </button>
-      ))}
+        );
+      })}
     </div>
   );
 }

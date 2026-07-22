@@ -163,7 +163,7 @@ export function TrailDetailModal({
                   className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:opacity-80"
                 >
                   <Plus size={18} />
-                  +Add
+                  Add Location
                 </button>
 
                 {trailLocations.length === 0 ? (

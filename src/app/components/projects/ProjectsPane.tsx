@@ -494,7 +494,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
     const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     updateProject(project.id, { activities: [...(project.activities || []), full] });
     const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountains.find(m => m.id === project.mountainId)?.name]);
-    logActivity(project.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, project.mountainId ? undefined : project.teamId ? `/crm?tab=teams&open=${project.teamId}` : undefined, slackText);
+    logActivity(project.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, project.mountainId ? undefined : project.teamId ? `/crm?tab=teams&open=${project.teamId}` : undefined, slackText, !!entry.assigneeContactId);
   };
   const toggleActivity = (id: string) => {
     const updated = (project.activities || []).map(a =>

@@ -283,6 +283,7 @@ export interface Asset {
   dateOfPurchase?: string;          // ISO date string
   upc?: string;
   mountainDeployment?: string;      // from MOUNTAIN_DEPLOYMENTS
+  deployedDate?: string;            // ISO date; set via the mountain page's Deploy button, cleared only from the main Inventory edit form
   deploymentLog?: DeploymentLogEntry[];
   serverId?: string;                // if assigned to a server build
   serverComponentIds?: string[];    // if this IS a server, the component asset IDs
@@ -390,12 +391,49 @@ export interface Proposal {
   mountainId: string;
   projectId?: string;
   title?: string;
-  proposalCreated?: boolean;    // finalized / sent for signature
+  proposalCreated?: boolean;    // finalized (locked from free editing)
   proposalCreatedAt?: string;
+  archived?: boolean;           // soft-deleted — kept for historical record, never hard-deleted once created
   form?: any;                   // the editable ProposalForm content
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
+  // ── Send / e-sign lifecycle ────────────────────────────────────────────────
+  signToken?: string;           // capability token for the public /sign/:token page
+  sentAt?: string;
+  sentTo?: string;               // recipient email
+  sentToName?: string;
+  viewedAt?: string;             // first time the customer opened the sign link
+  clientSignature?: { name: string; title?: string | null; legalEntity?: string | null; signatureImage?: string | null; signedAt: string };
+  yullrSignature?: { name: string; signatureImage?: string | null; signedAt: string };
+}
+
+export interface CAFormData {
+  yullrEmail: string;
+  customerLegalName: string;
+  entityType: string;
+  stateOfFormation: string;
+  authorizedSignatory: string;
+  addressForNotices: string;
+  emailForNotices: string;
+  facilityName: string;
+  facilityLocation: string;
+  effectiveDate: string;
+  technicalAdministrators: TechAdmin[];
+}
+
+// One per mountain — id is the mountainId itself, so "does this mountain have
+// an agreement yet" is a direct lookup, no separate index needed.
+export interface CustomerAgreement {
+  id: string;
+  mountainId: string;
+  formData: CAFormData;
+  archived?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  signToken?: string;
+  clientSignature?: { name: string; title?: string | null; signatureImage?: string | null; signedAt: string };
+  yullrSignature?: { name: string; signatureImage?: string | null; signedAt: string };
 }
 
 export interface ContactActivity {
@@ -603,9 +641,14 @@ export function getMountainRollupActivities(
 
   (mountain.activities || []).forEach(a => out.push({ ...a, origin: 'general' }));
 
+  // A contact's own notes/tasks only surface on the mountain that contact is
+  // actually associated with — not wherever its assignee happens to be an
+  // affiliate. A note on a mountain-less (e.g. YULLR-internal) contact never
+  // shows on any mountain page; the assignee gets it via Slack + My
+  // Notifications instead, and opens it from the contact record itself.
   contacts.forEach(c => {
     (c.activities || []).forEach(a => {
-      if (c.mountainId === mountainId || assignedHere(a)) {
+      if (c.mountainId === mountainId) {
         out.push({ ...a, origin: 'person', originLabel: c.name, originId: c.id });
       }
     });
@@ -660,7 +703,12 @@ export interface MyNotificationEntry {
   organizationId?: string;
   teamId?: string;
   locationId?: string;
+  contactId?: string;
+  projectId?: string;
+  inspectionId?: string;
   authorName?: string;
+  authorContactId?: string;
+  assigneeContactId?: string;
   assigneeName?: string;
 }
 
@@ -682,22 +730,23 @@ interface ActivitySweepData {
 function sweepActivities(data: ActivitySweepData, isRelevant: (a: { type: 'note' | 'action'; completed?: boolean; archived?: boolean; assigneeContactId?: string }) => boolean): MyNotificationEntry[] {
   const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = data;
   const out: MyNotificationEntry[] = [];
-  const push = (a: ContactActivity, extra: Omit<MyNotificationEntry, 'id' | 'text' | 'type' | 'createdAt' | 'authorName' | 'assigneeName'>) => {
-    out.push({ id: a.id, text: a.text, type: a.type, createdAt: a.createdAt, authorName: a.authorName, assigneeName: a.assigneeName, ...extra });
+  const push = (a: ContactActivity, extra: Omit<MyNotificationEntry, 'id' | 'text' | 'type' | 'createdAt' | 'authorName' | 'authorContactId' | 'assigneeContactId' | 'assigneeName'>) => {
+    out.push({ id: a.id, text: a.text, type: a.type, createdAt: a.createdAt, authorName: a.authorName, authorContactId: a.authorContactId, assigneeContactId: a.assigneeContactId, assigneeName: a.assigneeName, ...extra });
   };
 
   mountains.forEach(m => (m.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'mountain', originLabel: m.name, mountainId: m.id })));
-  contacts.forEach(c => (c.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'contact', originLabel: c.name, mountainId: c.mountainId })));
+  contacts.forEach(c => (c.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'contact', originLabel: c.name, mountainId: c.mountainId, contactId: c.id })));
   organizations.forEach(o => (o.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'organization', originLabel: o.name, organizationId: o.id })));
   teams.forEach(t => (t.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'team', originLabel: t.name, teamId: t.id })));
-  projects.forEach(p => (p.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'project', originLabel: p.name, mountainId: p.mountainId, teamId: p.teamId })));
+  projects.forEach(p => (p.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'project', originLabel: p.name, mountainId: p.mountainId, teamId: p.teamId, projectId: p.id })));
   inspections.forEach(insp => {
     const loc = locations.find(l => l.id === insp.locationId);
-    (insp.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'inspection', originLabel: loc?.name, mountainId: insp.mountainId, locationId: insp.locationId }));
+    (insp.activities || []).filter(isRelevant).forEach(a => push(a, { origin: 'inspection', originLabel: loc?.name, mountainId: insp.mountainId, locationId: insp.locationId, inspectionId: insp.id }));
   });
   notes.filter(isRelevant).forEach(n => out.push({
     id: n.id, text: n.text, type: 'note', createdAt: n.createdAt,
     origin: 'mountain', originLabel: mountains.find(m => m.id === n.mountainId)?.name, mountainId: n.mountainId,
+    authorName: n.authorName, authorContactId: n.authorContactId, assigneeContactId: n.assigneeContactId, assigneeName: n.assigneeName,
   }));
 
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -715,6 +764,57 @@ export function getMyNotifications(contactId: string | undefined, data: Activity
 // homepage-wide counterpart to a single mountain's rollup.
 export function getAllOpenActivities(data: ActivitySweepData): MyNotificationEntry[] {
   return sweepActivities(data, a => a.type === 'action' ? !a.completed : !a.archived);
+}
+
+// Writes a completion/archive update back to wherever a MyNotificationEntry
+// actually lives. Unlike useMountainRollupUpdater (scoped to one mountain's
+// rollup), this resolves entries from anywhere in the app — the homepage's
+// "assigned to me" feed spans every mountain (or none) at once. A 'mountain'
+// origin can mean either a ContactActivity on Mountain.activities or a
+// standalone MountainNote in the notes collection, so it checks the former
+// first and falls back to the latter.
+export function useGlobalActivityUpdater() {
+  const { mountains, contacts, teams, organizations, projects, inspections, updateMountain, updateContact, updateTeam, updateOrganization, updateProject, updateInspection, updateNote } = useData();
+
+  return (entry: MyNotificationEntry, updates: Partial<ContactActivity> & Partial<MountainNote>) => {
+    const apply = (list: ContactActivity[]) => list.map(a => a.id === entry.id ? { ...a, ...updates } : a);
+    switch (entry.origin) {
+      case 'mountain': {
+        const m = mountains.find(mm => mm.id === entry.mountainId);
+        if (m && (m.activities || []).some(a => a.id === entry.id)) {
+          updateMountain(m.id, { activities: apply(m.activities || []) });
+        } else {
+          updateNote(entry.id, updates);
+        }
+        break;
+      }
+      case 'contact': {
+        const c = contacts.find(cc => cc.id === entry.contactId);
+        if (c) updateContact(c.id, { activities: apply(c.activities || []) });
+        break;
+      }
+      case 'organization': {
+        const o = organizations.find(oo => oo.id === entry.organizationId);
+        if (o) updateOrganization(o.id, { activities: apply(o.activities || []) });
+        break;
+      }
+      case 'team': {
+        const t = teams.find(tt => tt.id === entry.teamId);
+        if (t) updateTeam(t.id, { activities: apply(t.activities || []) });
+        break;
+      }
+      case 'project': {
+        const p = projects.find(pp => pp.id === entry.projectId);
+        if (p) updateProject(p.id, { activities: apply(p.activities || []) });
+        break;
+      }
+      case 'inspection': {
+        const insp = inspections.find(i => i.id === entry.inspectionId);
+        if (insp) updateInspection(insp.id, { activities: apply(insp.activities || []) });
+        break;
+      }
+    }
+  };
 }
 
 export type NoteTopic = 'Demo' | 'Site Visit' | 'Proposal' | 'Install' | 'Training' | 'Updates' | 'Follow-up';
@@ -765,6 +865,8 @@ interface DataContextType {
   teams: CRMTeam[];
   options: Record<string, string[]>;
   itemPrices: Record<string, number>;
+  proposalTerms: string[];
+  updateProposalTerms: (terms: string[]) => void;
   addMountain: (mountain: Omit<Mountain, 'id'>) => string;
   updateMountain: (id: string, mountain: Partial<Mountain>) => void;
   addLocation: (location: Omit<Location, 'id'>) => string;
@@ -795,6 +897,15 @@ interface DataContextType {
   deleteProposal: (id: string) => Promise<void>;
   getProposalsByMountainId: (mountainId: string) => Proposal[];
   getProposalById: (id: string) => Proposal | undefined;
+  sendProposal: (id: string, opts: { to?: string; toName?: string; cc?: string }) => Promise<any>;
+  countersignProposal: (id: string, name: string, signatureImage?: string | null) => Promise<any>;
+  refreshProposal: (id: string) => Promise<void>;
+  customerAgreements: CustomerAgreement[];
+  addCustomerAgreement: (mountainId: string, formData: CAFormData) => string;
+  updateCustomerAgreement: (id: string, updates: Partial<CustomerAgreement>) => void;
+  getCustomerAgreementByMountainId: (mountainId: string) => CustomerAgreement | undefined;
+  countersignCustomerAgreement: (id: string, name: string, signatureImage?: string | null) => Promise<any>;
+  refreshCustomerAgreement: (id: string) => Promise<void>;
   getAssetById: (id: string) => Asset | undefined;
   getLocationsByMountainId: (mountainId: string) => Location[];
   getAssetsByLocationId: (locationId: string) => Asset[];
@@ -822,7 +933,8 @@ interface DataContextType {
   updateTeam: (id: string, updates: Partial<CRMTeam>) => void;
   deleteTeam: (id: string) => void;
   importContactsFromMountains: () => void;
-  logActivity: (mountainId: string | undefined, type: string, summary: string, path?: string, slackText?: string) => void;
+  logActivity: (mountainId: string | undefined, type: string, summary: string, path?: string, slackText?: string, tagged?: boolean) => void;
+  lookupUpc: (upc: string) => Promise<{ brand?: string; model?: string } | null>;
 }
 
 // Persist the context object on globalThis so that Vite's React Fast Refresh
@@ -845,13 +957,32 @@ const STORAGE_KEYS = {
   TRAILS: 'yullrLocal_trails',
   PROJECTS: 'yullrLocal_projects',
   PROPOSALS: 'yullrLocal_proposals',
+  CUSTOMER_AGREEMENTS: 'yullrLocal_customer_agreements',
   OPTIONS: 'yullrLocal_options',
   ITEM_PRICES: 'yullrLocal_item_prices',
+  PROPOSAL_TERMS: 'yullrLocal_proposal_terms',
   PENDING_PHOTOS: 'yullrLocal_pendingPhotoSync',
   CONTACTS: 'yullrLocal_crm_contacts',
   ORGANIZATIONS: 'yullrLocal_crm_organizations',
   TEAMS: 'yullrLocal_crm_teams',
 };
+
+// Seeded onto every new proposal's own editable `terms` list (super-admin can
+// change these defaults from here on; already-created proposals keep their
+// own copy). `{{termYears}}`/`{{termYearsWord}}` are resolved at render time
+// from that proposal's own Contract Term field, so the wording stays correct
+// even if a proposal's term length changes after its terms were seeded.
+export const DEFAULT_PROPOSAL_TERMS: string[] = [
+  'This proposal is valid for 30 days from the date of issue. After this period, pricing may be subject to change.',
+  'Acceptance of this proposal constitutes agreement to execute the Customer Agreement and Order Form within 30 days.',
+  'All hardware remains the property of YULLR.',
+  'Installation dates are subject to availability and will be confirmed upon receipt of deposit.',
+  'YULLR is not responsible for delays caused by site conditions that do not meet the requirements outlined in Section 4.',
+  'Subscription and pass pricing is subject to change at the start of each new ski season.',
+  'An annual maintenance fee of $250.00 will apply to each Capture Point starting in year 2.',
+  'The YULLR Customer Agreement is for a {{termYearsWord}} ({{termYears}}) year Initial Term.',
+  'Where Customer does not own or operate the Facility, a Facility Authorization Addendum signed by the Facility operator will be required prior to installation.',
+];
 
 // Remove the old Supabase-era caches entirely (housekeeping). The prefix change
 // above is what actually guarantees the fresh start; this just frees the space.
@@ -1036,9 +1167,21 @@ function removePendingPhoto(assetId: string) {
 // `slackText` is optional and only used for the Slack mirror — when it
 // differs from `summary` (e.g. a real @mention instead of a plain name),
 // the app's own Updates feed still only ever shows `summary`.
-function logActivity(mountainId: string | undefined, type: string, summary: string, path?: string, slackText?: string) {
+function logActivity(mountainId: string | undefined, type: string, summary: string, path?: string, slackText?: string, tagged?: boolean) {
   const resolvedPath = path ?? (mountainId ? `/mountains/${mountainId}` : undefined);
-  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId: mountainId ?? null, type, summary, path: resolvedPath ?? null, slackText: slackText ?? null }) }).catch(() => {});
+  apiCall('/activity', { method: 'POST', body: JSON.stringify({ mountainId: mountainId ?? null, type, summary, path: resolvedPath ?? null, slackText: slackText ?? null, tagged: !!tagged }) }).catch(() => {});
+}
+
+// Routed through our own server (server/routes/legacy.ts) instead of calling
+// upcitemdb directly — upcitemdb only allows CORS from its own domain, so a
+// browser-side fetch silently fails.
+async function lookupUpc(upc: string): Promise<{ brand?: string; model?: string } | null> {
+  try {
+    const res = await apiCall(`/upc-lookup/${encodeURIComponent(upc)}`);
+    return { brand: res.brand ?? undefined, model: res.model ?? undefined };
+  } catch {
+    return null;
+  }
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
@@ -1083,6 +1226,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.PROPOSALS) || '[]'); }
     catch { return []; }
   });
+  const [customerAgreements, setCustomerAgreements] = useState<CustomerAgreement[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOMER_AGREEMENTS) || '[]'); }
+    catch { return []; }
+  });
   const [options, setOptions] = useState<Record<string, string[]>>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.OPTIONS) || '{}'); }
     catch { return {}; }
@@ -1090,6 +1237,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [itemPrices, setItemPrices] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.ITEM_PRICES) || '{}'); }
     catch { return {}; }
+  });
+  const [proposalTerms, setProposalTerms] = useState<string[]>(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEYS.PROPOSAL_TERMS);
+      return cached ? JSON.parse(cached) : DEFAULT_PROPOSAL_TERMS;
+    } catch { return DEFAULT_PROPOSAL_TERMS; }
   });
   const [contacts, setContacts] = useState<CRMContact[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || '[]'); }
@@ -1130,6 +1283,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let localTrails: Trail[] = [];
         let localProjects: Project[] = [];
         let localProposals: Proposal[] = [];
+        let localCustomerAgreements: CustomerAgreement[] = [];
         let localContacts: CRMContact[] = [];
         let localOrganizations: CRMOrganization[] = [];
         let localTeams: CRMTeam[] = [];
@@ -1141,6 +1295,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         try { localTrails = JSON.parse(localStorage.getItem(STORAGE_KEYS.TRAILS) || '[]'); } catch {}
         try { localProjects = JSON.parse(localStorage.getItem(STORAGE_KEYS.PROJECTS) || '[]'); } catch {}
         try { localProposals = JSON.parse(localStorage.getItem(STORAGE_KEYS.PROPOSALS) || '[]'); } catch {}
+        try { localCustomerAgreements = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOMER_AGREEMENTS) || '[]'); } catch {}
         try { localContacts = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || '[]'); } catch {}
         try { localOrganizations = JSON.parse(localStorage.getItem(STORAGE_KEYS.ORGANIZATIONS) || '[]'); } catch {}
         try { localTeams = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEAMS) || '[]'); } catch {}
@@ -1152,12 +1307,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let backendUnreachable = false;
 
         // Batch 1: lightweight/config endpoints — run in parallel
-        const [mountainsRes, locationsRes, trailsRes, optionsRes, pricesRes] = await Promise.all([
+        const [mountainsRes, locationsRes, trailsRes, optionsRes, pricesRes, proposalTermsRes] = await Promise.all([
           apiCall('/mountains').catch(() => { backendUnreachable = true; return silent(); }),
           apiCall('/locations').catch(() => silent()),
           apiCall('/trails').catch(() => silent()),
           apiCall('/options').catch(() => silent()),
           apiCall('/item-prices').catch(() => silent()),
+          apiCall('/proposal-terms').catch(() => silent()),
         ]);
 
         if (backendUnreachable) {
@@ -1165,11 +1321,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
 
         // Batch 2: large collections
-        const [assetsRes, notesRes, projectsRes, proposalsRes, contactsRes, organizationsRes, teamsRes, inspectionsRes] = await Promise.all([
+        const [assetsRes, notesRes, projectsRes, proposalsRes, customerAgreementsRes, contactsRes, organizationsRes, teamsRes, inspectionsRes] = await Promise.all([
           apiCall('/assets').catch(() => silent()),
           apiCall('/notes').catch(() => silent()),
           apiCall('/projects').catch(() => silent()),
           apiCall('/proposals').catch(() => silent()),
+          apiCall('/customer-agreements').catch(() => silent()),
           apiCall('/contacts').catch(() => silent()),
           apiCall('/organizations').catch(() => silent()),
           apiCall('/teams').catch(() => silent()),
@@ -1258,6 +1415,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (notesRes) setNotes(mergeById(notesRes.notes || [], localNotes, 'notes'));
         if (projectsRes) setProjects(mergeById(projectsRes.projects || [], localProjects, 'projects'));
         if (proposalsRes) setProposals(mergeById(proposalsRes.proposals || [], localProposals, 'proposals'));
+        if (customerAgreementsRes) setCustomerAgreements(mergeById(customerAgreementsRes.customerAgreements || [], localCustomerAgreements, 'customerAgreements'));
         if (contactsRes) setContacts(mergeById(contactsRes.contacts || [], localContacts, 'contacts'));
         if (organizationsRes) setOrganizations(mergeById(organizationsRes.organizations || [], localOrganizations, 'organizations'));
         if (teamsRes) setTeams(mergeById(teamsRes.teams || [], localTeams, 'teams'));
@@ -1276,6 +1434,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         if (pricesRes?.prices) {
           setItemPrices(prev => ({ ...prev, ...pricesRes.prices }));
+        }
+        if (Array.isArray(proposalTermsRes?.proposalTerms) && proposalTermsRes.proposalTerms.length > 0) {
+          setProposalTerms(proposalTermsRes.proposalTerms);
         }
         console.log('Data loaded successfully (mountains, locations, trails, assets, notes, projects, proposals, contacts, organizations, teams, options, prices)');
       } catch (error) {
@@ -1505,6 +1666,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.CUSTOMER_AGREEMENTS, JSON.stringify(customerAgreements)); }
+      catch (e) { console.error('Error saving customer agreements:', e); }
+    }
+  }, [customerAgreements, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
       try { localStorage.setItem(STORAGE_KEYS.OPTIONS, JSON.stringify(options)); }
       catch (e) { console.error('Error saving options:', e); }
     }
@@ -1516,6 +1684,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       catch (e) { console.error('Error saving item prices:', e); }
     }
   }, [itemPrices, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.PROPOSAL_TERMS, JSON.stringify(proposalTerms)); }
+      catch (e) { console.error('Error saving proposal terms:', e); }
+    }
+  }, [proposalTerms, isLoading]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts)); }
@@ -1806,6 +1981,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setProposals(prev => [...prev, newProposal]);
     syncOrQueue('/proposals', 'POST', JSON.stringify(newProposal))
       .catch(e => console.error('Proposal sync error:', e));
+    logActivity(newProposal.mountainId, 'proposal_created', `Created proposal "${newProposal.title || 'Proposal'}"`);
     return id;
   };
 
@@ -1825,6 +2001,78 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const getProposalsByMountainId = (mountainId: string) => proposals.filter(p => p.mountainId === mountainId);
   const getProposalById = (id: string) => proposals.find(p => p.id === id);
+
+  // Emails the proposal's signing link to the customer via the local server
+  // (Postmark), replacing the old dead Supabase-function call. `to` omitted
+  // just (re)generates the signing link/token without emailing it.
+  const sendProposal = async (id: string, opts: { to?: string; toName?: string; cc?: string }) => {
+    const res = await apiCall(`/proposals/${id}/send`, { method: 'POST', body: JSON.stringify(opts) });
+    setProposals(prev => prev.map(p => p.id === id
+      ? { ...p, signToken: res.token, ...(opts.to ? { sentAt: new Date().toISOString(), sentTo: opts.to, sentToName: opts.toName } : {}) }
+      : p));
+    return res;
+  };
+
+  // Records YULLR's countersignature; if the customer already signed, the
+  // server emails them the completed link and this resolves bothSigned.
+  const countersignProposal = async (id: string, name: string, signatureImage?: string | null) => {
+    const res = await apiCall(`/proposals/${id}/countersign`, { method: 'POST', body: JSON.stringify({ name, signatureImage }) });
+    setProposals(prev => prev.map(p => p.id === id ? { ...p, yullrSignature: { name, signatureImage, signedAt: new Date().toISOString() } } : p));
+    return res;
+  };
+
+  // Picks up changes made on the public /sign/:token page (e.g. the
+  // customer's signature), which the authenticated app never sees otherwise.
+  const refreshProposal = async (id: string) => {
+    try {
+      const res = await apiCall('/proposals');
+      const fresh = (res.proposals || []).find((p: Proposal) => p.id === id);
+      if (fresh) setProposals(prev => prev.map(p => p.id === id ? { ...p, ...fresh } : p));
+    } catch { /* best-effort */ }
+  };
+
+  // ─── Customer Agreements ────────────────────────────────────────────────────
+  // Same lifecycle as Proposals: archive instead of hard-delete (never reuses
+  // an old agreement's signatures), a signToken generated up front (no email
+  // step for CAs yet, so the link is just copy/share), YULLR countersign +
+  // refresh to pick up the customer's signature from the public sign page.
+
+  const addCustomerAgreement = (mountainId: string, formData: CAFormData) => {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const newAgreement: CustomerAgreement = { id, mountainId, formData, signToken: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    setCustomerAgreements(prev => [...prev, newAgreement]);
+    syncOrQueue('/customer-agreements', 'POST', JSON.stringify(newAgreement))
+      .catch(e => console.error('Customer agreement sync error:', e));
+    logActivity(mountainId, 'agreement_created', 'Created Customer Agreement');
+    return id;
+  };
+
+  const updateCustomerAgreement = (id: string, updates: Partial<CustomerAgreement>) => {
+    const patch = { ...updates, updatedAt: new Date().toISOString() };
+    setCustomerAgreements(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    syncOrQueue(`/customer-agreements/${id}`, 'PUT', JSON.stringify(patch))
+      .catch(e => console.error('Customer agreement update sync error:', e));
+  };
+
+  const getCustomerAgreementByMountainId = (mountainId: string) =>
+    customerAgreements.find(a => a.mountainId === mountainId && !a.archived);
+
+  const countersignCustomerAgreement = async (id: string, name: string, signatureImage?: string | null) => {
+    const res = await apiCall(`/customer-agreements/${id}/countersign`, { method: 'POST', body: JSON.stringify({ name, signatureImage }) });
+    setCustomerAgreements(prev => prev.map(a => a.id === id ? { ...a, yullrSignature: { name, signatureImage, signedAt: new Date().toISOString() } } : a));
+    return res;
+  };
+
+  // Picks up the customer's signature/form edits from the public
+  // /agreement-sign/:token page.
+  const refreshCustomerAgreement = async (id: string) => {
+    try {
+      const res = await apiCall('/customer-agreements');
+      const fresh = (res.customerAgreements || []).find((a: CustomerAgreement) => a.id === id);
+      if (fresh) setCustomerAgreements(prev => prev.map(a => a.id === id ? { ...a, ...fresh } : a));
+    } catch { /* best-effort */ }
+  };
 
   // ─── Notes ──────────────────────────────────────────────────────────────────
 
@@ -1858,6 +2106,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     // Auto-generate invoice when proposal is signed
     if (wasProposalJustSigned && note?.mountainId) {
+      logActivity(note.mountainId, 'proposal_signed', `Proposal signed: "${note.text}"`);
       setTimeout(() => generateInvoiceFromProposal(note.mountainId!), 500);
     }
   };
@@ -2023,6 +2272,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Option delete sync error:', e));
   };
 
+  const updateProposalTerms = (terms: string[]) => {
+    setProposalTerms(terms);
+    syncOrQueue('/proposal-terms', 'PUT', JSON.stringify({ terms }))
+      .catch(e => console.error('Proposal terms sync error:', e));
+  };
+
   const setItemPrice = (name: string, price: number | null) => {
     setItemPrices(prev => {
       const updated = { ...prev };
@@ -2179,6 +2434,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         teams,
         options,
         itemPrices,
+        proposalTerms,
+        updateProposalTerms,
         addMountain,
         updateMountain,
         addLocation,
@@ -2209,6 +2466,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
         deleteProposal,
         getProposalsByMountainId,
         getProposalById,
+        sendProposal,
+        countersignProposal,
+        refreshProposal,
+        customerAgreements,
+        addCustomerAgreement,
+        updateCustomerAgreement,
+        getCustomerAgreementByMountainId,
+        countersignCustomerAgreement,
+        refreshCustomerAgreement,
         getAssetById,
         getLocationsByMountainId,
         getAssetsByLocationId,
@@ -2236,6 +2502,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         deleteTeam,
         importContactsFromMountains,
         logActivity,
+        lookupUpc,
       }}
     >
       {children}

@@ -67,14 +67,14 @@ export function ExportModal({ mountainId, onClose }: ExportModalProps) {
     }, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Sheet */}
-      <div className="relative w-full max-w-lg bg-white rounded-t-[16px] px-4 pt-4 pb-8 shadow-xl">
-        {/* Handle */}
-        <div className="w-10 h-1 rounded-full bg-[#e0e0e0] mx-auto mb-4" />
+      <div className="relative w-full max-w-lg bg-white rounded-t-[16px] sm:rounded-[16px] px-4 pt-4 pb-8 shadow-xl">
+        {/* Handle — mobile bottom-sheet affordance only, not shown when centered */}
+        <div className="w-10 h-1 rounded-full bg-[#e0e0e0] mx-auto mb-4 sm:hidden" />
 
         <div className="flex items-center justify-between mb-4">
           <div>

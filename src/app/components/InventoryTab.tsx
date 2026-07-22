@@ -69,6 +69,7 @@ interface AssetFormData {
   serialNumber: string;
   upc: string;
   dateOfPurchase: string;
+  deployedDate: string;
   vendor: string;
   cost: string;
   assetClass: 'Asset' | 'Expense';
@@ -106,6 +107,7 @@ const EMPTY_FORM: AssetFormData = {
   serialNumber: '',
   upc: '',
   dateOfPurchase: '',
+  deployedDate: '',
   vendor: '',
   cost: '',
   assetClass: 'Asset',
@@ -142,6 +144,7 @@ function assetToForm(a: Asset, assets: Asset[]): AssetFormData {
     serialNumber: a.serialNumber || '',
     upc: a.upc || '',
     dateOfPurchase: a.dateOfPurchase || '',
+    deployedDate: a.deployedDate || '',
     vendor: a.vendor || '',
     cost: a.cost !== undefined ? String(a.cost) : '',
     assetClass: a.assetClass || 'Asset',
@@ -323,7 +326,7 @@ function AddEditModal({
   onClose: () => void;
   onDeleted?: () => void;
 }) {
-  const { addAsset, updateAsset, deleteAsset, assets, options, addOption, mountains, getLocationsByMountainId } = useData();
+  const { addAsset, updateAsset, deleteAsset, assets, options, addOption, mountains, getLocationsByMountainId, lookupUpc } = useData();
   const isSuperAdmin = useIsSuperAdmin();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const mountainOptions = useMemo(
@@ -444,18 +447,28 @@ function AddEditModal({
   }, [stopScan]);
 
   const lookupUpcCode = useCallback(async (upc: string) => {
+    // Prefer a match already in our own inventory — it's free, instant, and
+    // reflects how we actually name this item (custom manufacturer/model).
+    const localMatch = assets.find(a => a.upc === upc && (a.manufacturer || a.customManufacturer || a.model || a.customModel));
+    if (localMatch) {
+      const brand = localMatch.customManufacturer || localMatch.manufacturer;
+      const model = localMatch.customModel || localMatch.model;
+      setForm(p => ({ ...p, manufacturer: p.manufacturer || brand || '', model: p.model || model || '' }));
+      toast.success('Matched an item already in inventory');
+      return;
+    }
     setUpcLooking(true);
     try {
-      const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${upc}`);
-      const data = await res.json();
-      const item = data?.items?.[0];
-      if (item) {
-        if (item.brand) setForm(p => ({ ...p, manufacturer: p.manufacturer || item.brand }));
-        if (item.model) setForm(p => ({ ...p, model: p.model || item.model }));
+      const item = await lookupUpc(upc);
+      if (item?.brand || item?.model) {
+        if (item.brand) setForm(p => ({ ...p, manufacturer: p.manufacturer || item.brand! }));
+        if (item.model) setForm(p => ({ ...p, model: p.model || item.model! }));
         toast.success('Product info found');
+      } else {
+        toast.error('No product info found for that UPC');
       }
-    } catch { /* silent */ } finally { setUpcLooking(false); }
-  }, []);
+    } catch { toast.error('UPC lookup failed'); } finally { setUpcLooking(false); }
+  }, [assets, lookupUpc]);
 
   // ── Save ─────────────────────────────────────────────────────────────────────
 
@@ -480,6 +493,7 @@ function AddEditModal({
       serialNumber: form.serialNumber || undefined,
       upc: form.upc || undefined,
       dateOfPurchase: form.dateOfPurchase || undefined,
+      deployedDate: form.deployedDate || undefined,
       vendor: form.vendor || undefined,
       cost: costVal,
       assetClass: form.assetClass || 'Asset',
@@ -639,15 +653,16 @@ function AddEditModal({
           <>
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
-              {/* YIN + Date Added — always shown */}
+              {/* UPC + Date Added — always shown; UPC first so scanning it can look up/prefill make & model below */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">YULLR Inventory #</label>
+                  <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">UPC</label>
                   <div className="flex gap-1.5">
-                    <input type="text" value={form.yullrInventoryNumber} onChange={e => set('yullrInventoryNumber', e.target.value)} placeholder="YIN-000001" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
-                    <ScanBtn target="yin" />
+                    <input type="text" value={form.upc} onChange={e => { set('upc', e.target.value); if (e.target.value.length >= 12) lookupUpcCode(e.target.value); }} placeholder="Barcode" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
+                    <ScanBtn target="upc" />
                   </div>
-                  {scanTarget === 'yin' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
+                  {upcLooking && <p className="text-[11px] text-[#8992a0] mt-1">Looking up…</p>}
+                  {scanTarget === 'upc' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
                 </div>
                 <div>
                   <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Date Added</label>
@@ -688,12 +703,12 @@ function AddEditModal({
                     {scanTarget === 'serial' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
                   </div>
                   <div>
-                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">UPC</label>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">YULLR Inventory #</label>
                     <div className="flex gap-1.5">
-                      <input type="text" value={form.upc} onChange={e => { set('upc', e.target.value); if (e.target.value.length >= 12) lookupUpcCode(e.target.value); }} placeholder="Barcode" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
-                      <ScanBtn target="upc" />
+                      <input type="text" value={form.yullrInventoryNumber} onChange={e => set('yullrInventoryNumber', e.target.value)} placeholder="YIN-000001" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
+                      <ScanBtn target="yin" />
                     </div>
-                    {scanTarget === 'upc' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
+                    {scanTarget === 'yin' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -704,6 +719,11 @@ function AddEditModal({
                       <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Date of Purchase</label>
                       <input type="date" value={form.dateOfPurchase} onChange={e => set('dateOfPurchase', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Deployed Date</label>
+                    <input type="date" value={form.deployedDate} onChange={e => set('deployedDate', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+                    <p className="text-[11px] text-[#8992a0] mt-1">Set automatically by the Deploy button on the mountain page. Clear it here to mark the item un-deployed.</p>
                   </div>
                   <div>
                     <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Cost</label>
@@ -783,12 +803,12 @@ function AddEditModal({
                     {scanTarget === 'serial' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
                   </div>
                   <div>
-                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">UPC</label>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">YULLR Inventory #</label>
                     <div className="flex gap-1.5">
-                      <input type="text" value={form.upc} onChange={e => { set('upc', e.target.value); if (e.target.value.length >= 12) lookupUpcCode(e.target.value); }} placeholder="Barcode" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
-                      <ScanBtn target="upc" />
+                      <input type="text" value={form.yullrInventoryNumber} onChange={e => set('yullrInventoryNumber', e.target.value)} placeholder="YIN-000001" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
+                      <ScanBtn target="yin" />
                     </div>
-                    {scanTarget === 'upc' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
+                    {scanTarget === 'yin' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -799,6 +819,11 @@ function AddEditModal({
                       <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Date of Purchase</label>
                       <input type="date" value={form.dateOfPurchase} onChange={e => set('dateOfPurchase', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Deployed Date</label>
+                    <input type="date" value={form.deployedDate} onChange={e => set('deployedDate', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+                    <p className="text-[11px] text-[#8992a0] mt-1">Set automatically by the Deploy button on the mountain page. Clear it here to mark the item un-deployed.</p>
                   </div>
                   <div>
                     <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Cost</label>
@@ -827,6 +852,14 @@ function AddEditModal({
               {/* ── SERVER BUILD FORM ── */}
               {isServer && (
                 <>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">YULLR Inventory #</label>
+                    <div className="flex gap-1.5">
+                      <input type="text" value={form.yullrInventoryNumber} onChange={e => set('yullrInventoryNumber', e.target.value)} placeholder="YIN-000001" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
+                      <ScanBtn target="yin" />
+                    </div>
+                    {scanTarget === 'yin' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
+                  </div>
                   <div className="flex items-center justify-between bg-[#f9fafb] border border-[rgba(0,0,0,0.08)] rounded-[8px] px-4 py-3">
                     <span className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide">Total Build Cost</span>
                     <span className="text-[16px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
@@ -863,6 +896,11 @@ function AddEditModal({
                         );
                       })}
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Deployed Date</label>
+                    <input type="date" value={form.deployedDate} onChange={e => set('deployedDate', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+                    <p className="text-[11px] text-[#8992a0] mt-1">Set automatically by the Deploy button on the mountain page. Clear it here to mark the item un-deployed.</p>
                   </div>
                   <div>
                     <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
@@ -914,12 +952,12 @@ function AddEditModal({
                       {scanTarget === 'serial' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
                     </div>
                     <div>
-                      <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">UPC</label>
+                      <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">YULLR Inventory #</label>
                       <div className="flex gap-1.5">
-                        <input type="text" value={form.upc} onChange={e => { set('upc', e.target.value); if (e.target.value.length >= 12) lookupUpcCode(e.target.value); }} placeholder="Barcode" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
-                        <ScanBtn target="upc" />
+                        <input type="text" value={form.yullrInventoryNumber} onChange={e => set('yullrInventoryNumber', e.target.value)} placeholder="YIN-000001" className="flex-1 min-w-0 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none font-mono" />
+                        <ScanBtn target="yin" />
                       </div>
-                      {scanTarget === 'upc' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
+                      {scanTarget === 'yin' && <ScanViewfinder onStop={stopScan} videoRef={videoRef} canvasRef={canvasRef} />}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -931,6 +969,11 @@ function AddEditModal({
                       <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Date of Purchase</label>
                       <input type="date" value={form.dateOfPurchase} onChange={e => set('dateOfPurchase', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Deployed Date</label>
+                    <input type="date" value={form.deployedDate} onChange={e => set('deployedDate', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
+                    <p className="text-[11px] text-[#8992a0] mt-1">Set automatically by the Deploy button on the mountain page. Clear it here to mark the item un-deployed.</p>
                   </div>
                   <div>
                     <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Cost</label>
@@ -1134,6 +1177,9 @@ function AssetDetailModal({
             )}
             {asset.dateAddedToInventory && (
               <Row icon={<Calendar size={14} />} label="Date Added to Inventory" value={asset.dateAddedToInventory} />
+            )}
+            {asset.deployedDate && (
+              <Row icon={<Calendar size={14} />} label="Deployed Date" value={asset.deployedDate} />
             )}
             {asset.assetClass && (
               <Row icon={<DollarSign size={14} />} label="Class" value={asset.assetClass} />

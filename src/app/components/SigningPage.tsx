@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router';
 import { CheckCircle, AlertCircle, PenLine, Printer } from 'lucide-react';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
-const HEADERS = { Authorization: `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' };
+// Proposal send/view/sign, and now Customer Agreement auto-creation, run
+// through our own local server — public, token-authenticated, no Clerk
+// session (server/routes/proposalPublicSign.ts, agreementPublicSign.ts).
+const PROPOSAL_SIGN_BASE = '/api/public/proposal-sign';
+const AGREEMENT_SIGN_BASE = '/api/public/agreement-sign';
 
 function parseAmt(v: string) { return parseFloat((v || '').replace(/[$,]/g, '')) || 0; }
 function fmtMoney(n: number) { return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
@@ -16,7 +18,7 @@ function fmtDate(d: string) {
   return `${m}/${dd}/${y}`;
 }
 
-interface Signature { name: string; title?: string; legalEntity?: string; signatureImage?: string | null; signedAt: string; }
+interface Signature { name: string; title?: string | null; legalEntity?: string | null; signatureImage?: string | null; signedAt: string; }
 interface SignRecord {
   token: string;
   mountainId: string;
@@ -70,7 +72,7 @@ export function SigningPage() {
   const ensureCaExists = async (mountainId: string, snapshot: any) => {
     try {
       // Check if one already exists
-      const statusRes = await fetch(`${API_BASE}/customer-agreements/status/${mountainId}`, { headers: HEADERS });
+      const statusRes = await fetch(`${AGREEMENT_SIGN_BASE}/by-mountain/${mountainId}`);
       const statusData = await statusRes.json() as any;
       if (statusData.token) { setCaToken(statusData.token); return; }
 
@@ -89,9 +91,9 @@ export function SigningPage() {
         effectiveDate:       new Date().toISOString().split('T')[0],
         technicalAdministrators: [],
       };
-      const createRes = await fetch(`${API_BASE}/customer-agreements`, {
+      const createRes = await fetch(`${AGREEMENT_SIGN_BASE}/create-for-mountain`, {
         method: 'POST',
-        headers: HEADERS,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mountainId, formData }),
       });
       const createData = await createRes.json() as any;
@@ -101,20 +103,29 @@ export function SigningPage() {
 
   useEffect(() => {
     if (!token) { setError('Invalid signing link.'); setLoading(false); return; }
-    fetch(`${API_BASE}/proposals/sign/${token}`, { headers: HEADERS })
+    fetch(`${PROPOSAL_SIGN_BASE}/${token}`)
       .then(r => r.json())
       .then((data: any) => {
         if (data.error) throw new Error(data.error);
-        setRecord(data as SignRecord);
+        const p = data.proposal;
+        const rec: SignRecord = {
+          token: token!,
+          mountainId: p.mountainId,
+          createdAt: p.sentAt || new Date().toISOString(),
+          proposalSnapshot: p.form,
+          yullrSignature: p.yullrSignature,
+          clientSignature: p.clientSignature,
+        };
+        setRecord(rec);
         // Track that the link was opened (fire-and-forget)
-        fetch(`${API_BASE}/proposals/sign/${token}/viewed`, { method: 'POST', headers: HEADERS }).catch(() => {});
-        if (data.clientSignature) {
+        fetch(`${PROPOSAL_SIGN_BASE}/${token}/viewed`, { method: 'POST' }).catch(() => {});
+        if (rec.clientSignature) {
           setSigned(true);
-          setClientName(data.clientSignature.name);
-          setClientTitle(data.clientSignature.title || '');
-          setClientLegalEntity(data.clientSignature.legalEntity || '');
+          setClientName(rec.clientSignature.name);
+          setClientTitle(rec.clientSignature.title || '');
+          setClientLegalEntity(rec.clientSignature.legalEntity || '');
           // Already signed — ensure CA exists and load the link
-          if (data.mountainId) ensureCaExists(data.mountainId, data.proposalSnapshot);
+          if (rec.mountainId) ensureCaExists(rec.mountainId, rec.proposalSnapshot);
         }
       })
       .catch(e => setError(e.message))
@@ -131,9 +142,9 @@ export function SigningPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch(`${API_BASE}/proposals/sign/${token}/client`, {
+      const res = await fetch(`${PROPOSAL_SIGN_BASE}/${token}/client`, {
         method: 'POST',
-        headers: HEADERS,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: clientName.trim(), title: clientTitle.trim(), legalEntity: clientLegalEntity.trim(), signatureImage }),
       });
       const data = await res.json() as any;

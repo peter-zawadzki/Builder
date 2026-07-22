@@ -251,6 +251,9 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         };
       });
 
+      // Fully-executed proposals save themselves here as a real signed PDF
+      // (see ProposalBuilder's saveSignedProposalToDocuments) — they land in
+      // uploadedDocs above like any other document, nothing extra to do here.
       setDocuments([...mediaDocs, ...uploadedDocs]);
       console.log('[MountainDocuments] Total documents loaded:', mediaDocs.length + uploadedDocs.length);
       setLoading(false);

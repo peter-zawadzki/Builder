@@ -2,21 +2,26 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import { toast } from 'sonner';
-import { Plus, X, FileText, ChevronRight } from 'lucide-react';
+import { Plus, X, FileText, ChevronRight, Archive } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
-// Proposals for a mountain — one per project. Create/open the ProposalBuilder
-// per proposal.
+// Proposals for a mountain — one active proposal per project. Create/open
+// the ProposalBuilder per proposal. Proposals are never hard-deleted —
+// archiving keeps the historical record (including signatures) while
+// freeing the project up for a brand-new proposal.
 export function ProposalsPane({ mountainId }: { mountainId: string }) {
   const { getProposalsByMountainId, getProjectsByMountainId, getProjectById, addProposal } = useData();
   const navigate = useNavigate();
   const { user } = useUser();
   const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
 
-  const proposals = getProposalsByMountainId(mountainId);
+  const allProposals = getProposalsByMountainId(mountainId);
+  const proposals = allProposals.filter(pr => !pr.archived);
+  const archivedProposals = allProposals.filter(pr => pr.archived);
   const projects = getProjectsByMountainId(mountainId);
   const projectsWithoutProposal = projects.filter(p => !proposals.some(pr => pr.projectId === p.id));
   const [showNew, setShowNew] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const create = (projectId?: string) => {
     const proj = projectId ? getProjectById(projectId) : undefined;
@@ -42,23 +47,66 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
         <div className="space-y-2">
           {proposals.map(pr => {
             const proj = pr.projectId ? getProjectById(pr.projectId) : undefined;
+            const bothSigned = !!pr.clientSignature && !!pr.yullrSignature;
+            // Draft (not yet finalized) -> Created (finalized) -> Sent (emailed,
+            // date shown) -> Signed (both parties) — matches the icon/pill
+            // color Peter asked for: gray, yellow, yellow-with-date, green.
+            const status = bothSigned
+              ? { label: 'Signed', color: 'bg-[#eaf5ef] text-[#3f7a5c]', icon: 'text-[#3f7a5c]' }
+              : pr.sentAt
+              ? { label: `Sent ${new Date(pr.sentAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}`, color: 'bg-[#fef9c3] text-[#a16207]', icon: 'text-[#ca8a04]' }
+              : pr.proposalCreated
+              ? { label: 'Created', color: 'bg-[#fef9c3] text-[#a16207]', icon: 'text-[#ca8a04]' }
+              : { label: 'Draft', color: 'bg-[#f3f3f5] text-[#6a7282]', icon: 'text-[#ff5c39]' };
             return (
               <button key={pr.id} onClick={() => navigate(`/mountains/${mountainId}/proposal/${pr.id}`)}
                 className="w-full text-left border border-[rgba(0,0,0,0.08)] rounded-[10px] p-2.5 active:bg-[#f9fafb] hover:border-[rgba(0,0,0,0.14)] flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <FileText size={15} className="text-[#ff5c39] shrink-0" />
+                  <FileText size={15} className={`shrink-0 ${status.icon}`} />
                   <div className="min-w-0">
                     <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{pr.form?.proposalNumber || pr.title || 'Proposal'}</div>
                     <div className="text-[11px] text-[#6a7282]">{proj ? proj.name : 'No project'}{pr.form?.date ? ` · ${pr.form.date}` : ''}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${pr.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>{pr.proposalCreated ? 'Sent' : 'Draft'}</span>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
                   <ChevronRight size={14} className="text-[#c0c4cc]" />
                 </div>
               </button>
             );
           })}
+        </div>
+      )}
+
+      {archivedProposals.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-[rgba(0,0,0,0.06)]">
+          <button
+            onClick={() => setShowArchived(v => !v)}
+            className="text-[12px] text-[#8992a0] font-['Inter:Medium',sans-serif] flex items-center gap-1 active:opacity-70"
+          >
+            <Archive size={12} />
+            {showArchived ? 'Hide archived' : `Archived (${archivedProposals.length})`}
+          </button>
+          {showArchived && (
+            <div className="space-y-2 mt-2">
+              {archivedProposals.map(pr => {
+                const proj = pr.projectId ? getProjectById(pr.projectId) : undefined;
+                return (
+                  <button key={pr.id} onClick={() => navigate(`/mountains/${mountainId}/proposal/${pr.id}`)}
+                    className="w-full text-left border border-[rgba(0,0,0,0.08)] rounded-[10px] p-2.5 active:bg-[#f9fafb] flex items-center justify-between gap-2 opacity-60">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={15} className="text-[#8992a0] shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{pr.form?.proposalNumber || pr.title || 'Proposal'}</div>
+                        <div className="text-[11px] text-[#6a7282]">{proj ? proj.name : 'No project'}</div>
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-[#c0c4cc]" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

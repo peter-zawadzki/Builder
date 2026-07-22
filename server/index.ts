@@ -10,6 +10,8 @@ import { locations } from "./routes/locations";
 import { assets } from "./routes/assets";
 import { catalog } from "./routes/catalog";
 import { legacy } from "./routes/legacy";
+import { proposalPublicSign } from "./routes/proposalPublicSign";
+import { agreementPublicSign } from "./routes/agreementPublicSign";
 
 const app = new Hono<HonoEnv>();
 
@@ -34,8 +36,19 @@ app.get("/api/health", async (c) => {
   }
 });
 
+// Public, token-authenticated proposal signing — a customer reaches these
+// from an emailed link with no Clerk session, so this is mounted BEFORE the
+// blanket requireAuth below (which now only applies to specific route
+// groups, not all of /api/*, so this stays exempt).
+app.route("/api/public/proposal-sign", proposalPublicSign);
+app.route("/api/public/agreement-sign", agreementPublicSign);
+
 // Everything below requires a valid Clerk session.
-app.use("/api/*", requireAuth);
+app.use("/api/mountains/*", requireAuth);
+app.use("/api/trails/*", requireAuth);
+app.use("/api/locations/*", requireAuth);
+app.use("/api/legacy/*", requireAuth);
+app.use("/api/me", requireAuth);
 
 // Who am I — verifies the auth chain and returns the synced app user.
 app.get("/api/me", (c) => c.json({ user: c.get("user") }));

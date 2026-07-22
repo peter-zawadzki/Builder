@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import {
   ArrowLeft, Plus, Trash2,
-  DollarSign, Wrench, Settings, Pencil, Check, X, Lock, Boxes,
+  DollarSign, Wrench, Settings, Pencil, Check, X, Lock, Boxes, FileText, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { InventoryTab } from './InventoryTab';
 import { toast } from 'sonner';
@@ -360,6 +360,89 @@ export function InspectionItemsPage() {
       <PageHeader icon={<Wrench size={20} className="text-[#307fe2]" />} title="Inspection Items" />
       <div className="p-4 pb-16">
         <EquipmentItemsTab />
+      </div>
+    </div>
+  );
+}
+
+// Default proposal terms — super-admin only. Seeds every NEW proposal's own
+// editable terms list; already-created proposals keep their own copy, so
+// editing here is safe and never silently rewrites a signed/sent proposal.
+export function ProposalTermsPage() {
+  const navigate = useNavigate();
+  const isSuperAdmin = useIsSuperAdmin();
+  const { proposalTerms, updateProposalTerms } = useData();
+  const [terms, setTerms] = useState(proposalTerms);
+
+  useEffect(() => { setTerms(proposalTerms); }, [proposalTerms]);
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-[#f3f3f5] flex items-center justify-center">
+          <Lock size={24} className="text-[#6a7282]" />
+        </div>
+        <div>
+          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Not available</h1>
+          <p className="text-[#6a7282] text-[14px] mt-1">Proposal terms are restricted to super admins.</p>
+        </div>
+        <button onClick={() => navigate('/')} className="bg-[#1D2930] text-white rounded-[8px] px-5 py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px]">Back to app</button>
+      </div>
+    );
+  }
+
+  const commit = (next: string[]) => { setTerms(next); updateProposalTerms(next); };
+  const setTerm = (i: number, v: string) => commit(terms.map((t, idx) => idx === i ? v : t));
+  const addTerm = () => commit([...terms, '']);
+  const removeTerm = (i: number) => commit(terms.filter((_, idx) => idx !== i));
+  const moveTerm = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= terms.length) return;
+    const next = [...terms];
+    [next[i], next[j]] = [next[j], next[i]];
+    commit(next);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f9fafb]">
+      <PageHeader icon={<FileText size={20} className="text-[#307fe2]" />} title="Proposal Terms" />
+      <div className="p-4 pb-16 max-w-2xl mx-auto space-y-3">
+        <p className="text-[13px] text-[#6a7282]">
+          These are the default terms seeded onto every new proposal (Section 7). Editing them here does not
+          change any proposal that already exists — each proposal gets its own editable copy the moment it's created.
+        </p>
+        {terms.map((term, i) => (
+          <div key={i} className="flex items-start gap-2 bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-3">
+            <span className="text-[#9ca3af] text-[13px] mt-2.5 w-4 shrink-0 text-right">{i + 1}.</span>
+            <textarea
+              value={term}
+              onChange={e => setTerm(i, e.target.value)}
+              rows={2}
+              className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[#0a0a0a] text-[13px] outline-none resize-y"
+            />
+            <div className="flex flex-col gap-1 shrink-0">
+              <button onClick={() => moveTerm(i, -1)} disabled={i === 0} className="p-1 rounded-[6px] bg-[#f3f3f5] text-[#6a7282] disabled:opacity-30 active:opacity-70">
+                <ChevronUp size={13} />
+              </button>
+              <button onClick={() => moveTerm(i, 1)} disabled={i === terms.length - 1} className="p-1 rounded-[6px] bg-[#f3f3f5] text-[#6a7282] disabled:opacity-30 active:opacity-70">
+                <ChevronDown size={13} />
+              </button>
+              <button onClick={() => removeTerm(i)} className="p-1 rounded-[6px] bg-[#fff0ee] text-[#ff5c39] active:opacity-70">
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={addTerm}
+          className="w-full border border-dashed border-[#ff5c39] text-[#ff5c39] rounded-[8px] py-2.5 text-[13px] font-['Inter:Medium',sans-serif] flex items-center justify-center gap-2 active:bg-[#fff3f0]"
+        >
+          <Plus size={14} /> Add Term
+        </button>
+        <p className="text-[11px] text-[#9ca3af]">
+          Use <code>{'{{termYears}}'}</code> / <code>{'{{termYearsWord}}'}</code> in a term to reference each
+          proposal's own Contract Term field.
+        </p>
       </div>
     </div>
   );

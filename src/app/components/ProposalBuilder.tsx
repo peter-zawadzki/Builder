@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { useData } from '../context/DataContext';
-import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
+import { useData, DEFAULT_PROPOSAL_TERMS } from '../context/DataContext';
+import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 import html2canvas from 'html2canvas';
@@ -9,6 +10,7 @@ import { jsPDF } from 'jspdf';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
+import * as mountainDocsDB from '../utils/mountainDocumentsDB';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
 const API_HEADERS = { Authorization: `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' };
@@ -56,6 +58,7 @@ interface ProposalForm {
   bulkRows: BulkRow[];
   miscFee: string;
   paymentTerms: string;
+  terms: string[];
   additionalTerms: string;
   termYears: string;
 }
@@ -88,10 +91,20 @@ function numberToWord(n: string): string {
   return map[n] || n;
 }
 
+// Resolves the `{{termYears}}`/`{{termYearsWord}}` placeholder a default term
+// can carry (see DEFAULT_PROPOSAL_TERMS) against this proposal's own Contract
+// Term field, so the wording stays correct even if termYears changes later.
+function interpolateTerm(term: string, termYears: string): string {
+  return term
+    .replace(/\{\{termYearsWord\}\}/g, numberToWord(termYears || '5'))
+    .replace(/\{\{termYears\}\}/g, termYears || '5');
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ProposalBuilder() {
   const navigate = useNavigate();
+  const { user } = useUser();
   const { mountainId, proposalId } = useParams<{ mountainId: string; proposalId: string }>();
   const {
     getMountainById, getTrailsByMountainId, getLocationsByMountainId, getInspectionsByLocationId,
@@ -99,14 +112,15 @@ export function ProposalBuilder() {
     updateMountain,
     addNote,
     getNotesByMountainId,
-    getProposalById, updateProposal, deleteProposal: removeProposal, getProjectById,
+    getProposalById, updateProposal, getProjectById,
+    getAssetsByLocationId,
+    proposalTerms,
+    sendProposal, countersignProposal, refreshProposal,
   } = useData();
 
   const mountain = mountainId ? getMountainById(mountainId) : null;
   const proposalRecord = proposalId ? getProposalById(proposalId) : undefined;
   const proposalProject = proposalRecord?.projectId ? getProjectById(proposalRecord.projectId) : undefined;
-  // Signing/persistence are keyed by the proposal, not the mountain.
-  const signId = proposalId || mountainId;
   const dbTrails = mountainId ? getTrailsByMountainId(mountainId) : [];
   const allLocations = mountainId ? getLocationsByMountainId(mountainId) : [];
 
@@ -121,9 +135,11 @@ export function ProposalBuilder() {
   const alreadySaved = !!proposalRecord?.proposalCreated;
   const [isEditMode, setIsEditMode] = useState(!alreadySaved);
 
-  // ── Signing state ──────────────────────────────────────────────────────────
-  const [signToken, setSignToken] = useState<string | null>(null);
-  const [signRecord, setSignRecord] = useState<any | null>(null);
+  // ── Signing state — this now lives on the Proposal record itself (synced
+  // through the local server), not a separately-fetched record from a dead
+  // Supabase function. The customer's own signature is written by the public
+  // /sign/:token page, which this authenticated view never sees live, so
+  // refreshProposal() is called on mount/refresh to pick it up.
   const [signLoading, setSignLoading] = useState(false);
   const [yullrSignerName, setYullrSignerName] = useState('');
   const [yullrSigning, setYullrSigning] = useState(false);
@@ -139,35 +155,58 @@ export function ProposalBuilder() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailRecipient, setEmailRecipient] = useState('');
   const [emailRecipientName, setEmailRecipientName] = useState('');
-  const [emailCc, setEmailCc] = useState('support@yullr.com');
+  const myEmail = user?.primaryEmailAddress?.emailAddress || '';
+  const [emailCc, setEmailCc] = useState(myEmail);
+  // Clerk's user profile can still be loading on first render; backfill once
+  // it resolves, but only if the field hasn't been hand-edited already.
+  useEffect(() => {
+    if (myEmail) setEmailCc(prev => prev || myEmail);
+  }, [myEmail]);
   const [emailSending, setEmailSending] = useState(false);
 
-  // Derived state - signature status (must come after signRecord/signToken state declarations)
+  // Derived state — signature status straight from the Proposal record.
+  // Aliased as `signRecord` since that's what the (many) preview/detail JSX
+  // blocks below already reference for .clientSignature/.yullrSignature.
+  const signRecord = proposalRecord;
+  const signToken = proposalRecord?.signToken ?? null;
   const signingUrl = signToken ? `${window.location.origin}/sign/${signToken}` : null;
-  const yullrSigned = !!signRecord?.yullrSignature;
-  const clientSigned = !!signRecord?.clientSignature;
+  const yullrSigned = !!proposalRecord?.yullrSignature;
+  const clientSigned = !!proposalRecord?.clientSignature;
   const bothSigned = yullrSigned && clientSigned;
   const ro = !isEditMode || bothSigned;
 
-  // Capture points for a trail come from inspections tied to this proposal's
-  // project (camera counts on that trail's locations). Falls back to counting
-  // Install Site locations when there's no project or no inspection data yet.
+  // Capture points for a trail default from the real Camera assets sitting at
+  // this trail's Install Site locations for the selected project (an
+  // install-site location is "this project's" when an inspection ties it to
+  // that project). Falls back to that project's inspection camera-item tally
+  // when the cameras haven't been logged as Assets yet, then to a flat count
+  // of Install Site locations when there's no project data at all.
   const capturePointsForTrail = (trailId: string): number => {
     const trailLocations = allLocations.filter(l => l.trailId === trailId);
+    const installLocations = trailLocations.filter(l => l.locationType === 'Install Site');
     const projectId = proposalRecord?.projectId;
+
     if (projectId) {
+      const projectInstallLocations = installLocations.filter(loc =>
+        getInspectionsByLocationId(loc.id).some(insp => insp.projectId === projectId)
+      );
+      if (projectInstallLocations.length > 0) {
+        const cameraCount = projectInstallLocations.reduce(
+          (sum, loc) => sum + getAssetsByLocationId(loc.id).filter(a => a.type === 'Camera').length, 0
+        );
+        if (cameraCount > 0) return cameraCount;
+      }
       let sawInspection = false;
       let total = 0;
       trailLocations.forEach(loc => {
-        const inspections = getInspectionsByLocationId(loc.id);
-        inspections.filter(insp => insp.projectId === projectId).forEach(insp => {
+        getInspectionsByLocationId(loc.id).filter(insp => insp.projectId === projectId).forEach(insp => {
           sawInspection = true;
           total += insp.items.filter(i => i.type === 'Camera').reduce((s, i) => s + i.count, 0);
         });
       });
       if (sawInspection) return total;
     }
-    return trailLocations.filter(l => l.locationType === 'Install Site').length;
+    return installLocations.length;
   };
 
   // Seed trails from DB Trail records (falling back to a blank row)
@@ -190,8 +229,12 @@ export function ProposalBuilder() {
 
   const today = todayISO();
   const [form, setForm] = useState<ProposalForm>(() => {
-    // Load this proposal's saved content, if any.
-    if (proposalRecord?.form) return proposalRecord.form as ProposalForm;
+    // Load this proposal's saved content, if any. Older proposals saved before
+    // per-proposal terms existed get the (admin-editable) defaults as of now.
+    if (proposalRecord?.form) {
+      const loaded = proposalRecord.form as ProposalForm;
+      return loaded.terms ? loaded : { ...loaded, terms: DEFAULT_PROPOSAL_TERMS };
+    }
     // Fresh form
     const mountainPrefix = (mountain?.name || '').replace(/\s+/g, '').toUpperCase().slice(0, 4);
     const [y, m, dd] = today.split('-');
@@ -218,6 +261,7 @@ export function ProposalBuilder() {
       ],
       miscFee: '',
       paymentTerms: `50% deposit is due upon execution of the Customer Agreement. The remaining 50% balance is due on or before November 1, ${new Date().getFullYear()}.`,
+      terms: proposalTerms.length > 0 ? proposalTerms : DEFAULT_PROPOSAL_TERMS,
       additionalTerms: '',
       termYears: '5',
     };
@@ -261,6 +305,22 @@ export function ProposalBuilder() {
   // ── Field helpers ──
   const setField = (k: keyof ProposalForm, v: string) =>
     setForm(prev => ({ ...prev, [k]: v }));
+
+  // ── Terms helpers — this proposal's own editable copy of the base terms ──
+  const setTerm = (i: number, v: string) =>
+    setForm(prev => ({ ...prev, terms: prev.terms.map((t, idx) => idx === i ? v : t) }));
+  const addTerm = () =>
+    setForm(prev => ({ ...prev, terms: [...prev.terms, ''] }));
+  const removeTerm = (i: number) =>
+    setForm(prev => ({ ...prev, terms: prev.terms.filter((_, idx) => idx !== i) }));
+  const moveTerm = (i: number, dir: -1 | 1) =>
+    setForm(prev => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.terms.length) return prev;
+      const terms = [...prev.terms];
+      [terms[i], terms[j]] = [terms[j], terms[i]];
+      return { ...prev, terms };
+    });
 
   // ── Trail helpers ── (prefixed to avoid conflict with DataContext addTrail)
   const addProposalTrail = () =>
@@ -342,12 +402,10 @@ export function ProposalBuilder() {
     setForm(prev => ({ ...prev, bulkRows: prev.bulkRows.map(b => b.id === id ? { ...b, [k]: v } : b) }));
 
   // ── Print / PDF export ──
-  async function handlePrint() {
-    if (!printRef.current) return;
-    setPrintLoading(true);
-    try {
-      const el = printRef.current;
-
+  // Renders a proposal preview element to a paginated jsPDF instance — shared
+  // by the manual "Print / Download PDF" button and the automatic signed-copy
+  // save-to-Documents that runs once both signatures are in place.
+  async function buildProposalPdf(el: HTMLDivElement) {
       // ── Step 1: Proxy all <img> through the server so CORS is never an issue ──
       const imgEls = Array.from(el.querySelectorAll('img')) as HTMLImageElement[];
       const origSrcs: string[] = imgEls.map(i => i.src);
@@ -468,6 +526,14 @@ export function ProposalBuilder() {
         );
       }
 
+      return pdf;
+  }
+
+  async function handlePrint() {
+    if (!printRef.current) return;
+    setPrintLoading(true);
+    try {
+      const pdf = await buildProposalPdf(printRef.current);
       const filename = `YULLR-Proposal-${form.proposalNumber || 'Draft'}-${(form.mountainName || 'Mountain').replace(/\s+/g, '-')}.pdf`;
       pdf.save(filename);
       toast.success('PDF downloaded');
@@ -476,6 +542,44 @@ export function ProposalBuilder() {
       toast.error(`PDF export failed: ${e.message}`);
     } finally {
       setPrintLoading(false);
+    }
+  }
+
+  // Once both signatures are in — regardless of who signed last, staff or
+  // customer — render the fully-signed proposal to a PDF and drop it into
+  // this mountain's Documents pane, same as a manual upload would. Guarded
+  // by a fixed doc id so revisiting the page doesn't regenerate/duplicate it.
+  async function saveSignedProposalToDocuments() {
+    if (!mountainId || !proposalId) return;
+    const docId = `signed-proposal-${proposalId}`;
+    const existing = await mountainDocsDB.getDocuments(mountainId);
+    if (existing.some(d => d.id === docId)) return;
+
+    setPdfGenerationMode(true);
+    try {
+      let el = hiddenPrintRef.current || printRef.current;
+      let attempts = 0;
+      while (!el && attempts < 20) {
+        await new Promise(r => setTimeout(r, 100));
+        el = hiddenPrintRef.current || printRef.current;
+        attempts++;
+      }
+      if (!el) { console.error('Signed-PDF auto-save: preview element never became available'); return; }
+
+      const pdf = await buildProposalPdf(el);
+      const dataUrl = pdf.output('datauristring');
+      const blob = await (await fetch(dataUrl)).blob();
+      const filename = `YULLR-Proposal-${form.proposalNumber || 'Signed'}-${(form.mountainName || 'Mountain').replace(/\s+/g, '-')} (Signed).pdf`;
+
+      await mountainDocsDB.saveDocuments(mountainId, [
+        ...existing,
+        { id: docId, name: filename, type: 'application/pdf', size: blob.size, data: dataUrl, uploadedAt: new Date().toISOString() },
+      ]);
+      toast.success('Signed proposal saved to Documents');
+    } catch (e) {
+      console.error('Signed-PDF auto-save failed:', e);
+    } finally {
+      setPdfGenerationMode(false);
     }
   }
 
@@ -490,249 +594,26 @@ export function ProposalBuilder() {
   const section = "bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-4";
   const sectionH = "text-[12px] font-['Inter:Medium',sans-serif] font-semibold uppercase tracking-wider text-[#ff5c39] mb-3";
 
-  // Load existing sign status when proposal is already saved
+  // Pick up anything the customer did on the public /sign/:token page (their
+  // signature, viewedAt) — that page writes straight to the server and this
+  // authenticated view has no other way to see it live.
   useEffect(() => {
-    if (!alreadySaved || !signId) return;
-    fetch(`${API_BASE}/proposals/sign-status/${signId}`, { headers: API_HEADERS })
-      .then(r => r.json())
-      .then((data: any) => {
-        if (data.token) setSignToken(data.token);
-        if (data.record) {
-          setSignRecord(data.record);
+    if (!alreadySaved || !proposalId) return;
+    refreshProposal(proposalId);
+  }, [alreadySaved, proposalId]);
 
-          // Check if proposal is signed and add note if not already tracked
-          if (data.record.clientSignature && data.record.yullrSignature) {
-            // Both signed - proposal is fully executed
-            const signerName = data.record.clientSignature.name || 'Client';
-            const signedDate = new Date(data.record.clientSignature.signedAt).toLocaleDateString();
-            const existingNotes = getNotesByMountainId(mountainId);
-            const isDuplicate = existingNotes.some(note =>
-              note.text.includes(`Proposal #${form.proposalNumber}`) &&
-              (note.text.includes('signed') || note.text.includes('executed'))
-            );
-
-            if (!isDuplicate) {
-              addNote(
-                mountainId,
-                `Proposal #${form.proposalNumber} fully executed - signed by ${signerName} on ${signedDate}`,
-                'Proposal',
-                false,
-                true
-              );
-            }
-          }
-        }
-      })
-      .catch(e => console.error('Error loading sign status:', e));
-  }, [alreadySaved, mountainId]);
-
-  async function sendSignedProposalPDF() {
-    console.log('[sendSignedProposalPDF] Called with signToken:', signToken, 'mountainId:', mountainId);
-
-    if (!signToken || !mountainId) {
-      console.log('[sendSignedProposalPDF] Missing signToken or mountainId, aborting');
-      return;
-    }
-
-    console.log('[sendSignedProposalPDF] Starting PDF generation...');
-    toast('Generating signed proposal PDF...', { duration: Infinity, id: 'pdf-gen' });
-
-    try {
-      // Enable PDF generation mode to render hidden preview
-      setPdfGenerationMode(true);
-
-      // Wait for DOM to update and ref to be available
-      let el = hiddenPrintRef.current || printRef.current;
-      let attempts = 0;
-      while (!el && attempts < 20) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        el = hiddenPrintRef.current || printRef.current;
-        attempts++;
-      }
-
-      if (!el) {
-        console.error('[sendSignedProposalPDF] Neither hidden nor visible print ref available after waiting');
-        toast.dismiss('pdf-gen');
-        toast.error('Unable to generate PDF - preview rendering failed');
-        setPdfGenerationMode(false);
-        return;
-      }
-
-      console.log('[sendSignedProposalPDF] Preview element ready, generating PDF...');
-
-      // Proxy images
-      const imgEls = Array.from(el.querySelectorAll('img')) as HTMLImageElement[];
-      const origSrcs: string[] = imgEls.map(i => i.src);
-      await Promise.all(imgEls.map(async (imgEl, idx) => {
-        const src = origSrcs[idx];
-        if (!src || src.startsWith('data:') || src.startsWith('blob:')) return;
-        try {
-          const proxyUrl = `${API_BASE}/proxy-image?url=${encodeURIComponent(src)}`;
-          const resp = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${publicAnonKey}` } });
-          if (!resp.ok) return;
-          const blob = await resp.blob();
-          const dataUrl = await new Promise<string>((res) => {
-            const fr = new FileReader();
-            fr.onloadend = () => res(fr.result as string);
-            fr.readAsDataURL(blob);
-          });
-          imgEl.src = dataUrl;
-          await new Promise<void>((res) => {
-            if (imgEl.complete) { res(); return; }
-            imgEl.onload = () => res();
-            imgEl.onerror = () => res();
-            setTimeout(res, 3000);
-          });
-        } catch (e) {
-          console.warn('Image proxy failed for', src, e);
-        }
-      }));
-
-      // Expand container
-      const origStyle = el.style.cssText;
-      el.style.maxWidth = 'none';
-      el.style.width = '860px';
-      el.style.margin = '0';
-      el.style.boxShadow = 'none';
-      void el.offsetHeight;
-
-      const expandedWidth = el.offsetWidth;
-      const containerTop = el.getBoundingClientRect().top;
-      const sectionEls = Array.from(el.querySelectorAll('[data-pdf-section]')) as HTMLElement[];
-      const sectionCssTops = sectionEls.map(s => s.getBoundingClientRect().top - containerTop);
-
-      // Capture canvas
-      const fullCanvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: false,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 15000,
-      });
-
-      // Restore DOM
-      el.style.cssText = origStyle;
-      imgEls.forEach((imgEl, idx) => { imgEl.src = origSrcs[idx]; });
-
-      // PDF constants
-      const PDF_W_MM = 210;
-      const PDF_H_MM = 297;
-      const MARGIN_MM = 14;
-      const CONTENT_W_MM = PDF_W_MM - MARGIN_MM * 2;
-      const CONTENT_H_MM = PDF_H_MM - MARGIN_MM * 2;
-
-      const cssToCanvas = fullCanvas.width / expandedWidth;
-      const pxPerMM = fullCanvas.width / CONTENT_W_MM;
-      const contentHeightPx = CONTENT_H_MM * pxPerMM;
-
-      const sectionPxTops = sectionCssTops.map(t => t * cssToCanvas);
-
-      // Build pages
-      const totalPx = fullCanvas.height;
-      const pageStarts: number[] = [0];
-
-      while (true) {
-        const last = pageStarts[pageStarts.length - 1];
-        const ideal = last + contentHeightPx;
-        if (ideal >= totalPx) break;
-
-        const minBreak = last + contentHeightPx * 0.25;
-        let bestBreak = ideal;
-        for (const st of sectionPxTops) {
-          if (st >= minBreak && st <= ideal) bestBreak = st;
-        }
-        pageStarts.push(Math.round(bestBreak));
-      }
-
-      // Render PDF
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-      for (let p = 0; p < pageStarts.length; p++) {
-        if (p > 0) pdf.addPage();
-
-        const yStart = pageStarts[p];
-        const yEnd = p + 1 < pageStarts.length ? pageStarts[p + 1] : totalPx;
-        const sliceH = yEnd - yStart;
-
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = fullCanvas.width;
-        sliceCanvas.height = Math.ceil(sliceH);
-        const ctx = sliceCanvas.getContext('2d')!;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-        ctx.drawImage(fullCanvas, 0, yStart, fullCanvas.width, sliceH, 0, 0, fullCanvas.width, sliceH);
-
-        const sliceHeightMM = sliceH / pxPerMM;
-        pdf.addImage(
-          sliceCanvas.toDataURL('image/jpeg', 0.93),
-          'JPEG',
-          MARGIN_MM,
-          MARGIN_MM,
-          CONTENT_W_MM,
-          sliceHeightMM,
-        );
-      }
-
-      // Convert to base64
-      const pdfBase64 = pdf.output('dataurlstring').split(',')[1];
-
-      // Get client email from the email log or use a placeholder
-      let clientEmail = 'customer@example.com';
-      if (signRecord?.emailLog && Array.isArray(signRecord.emailLog) && signRecord.emailLog.length > 0) {
-        // Use the most recent email recipient
-        clientEmail = signRecord.emailLog[signRecord.emailLog.length - 1].recipientEmail;
-      }
-
-      const res = await fetch(`${API_BASE}/proposals/send-signed-pdf`, {
-        method: 'POST',
-        headers: API_HEADERS,
-        body: JSON.stringify({
-          mountainId: signId,
-          proposalNumber: form.proposalNumber,
-          mountainName: form.mountainName,
-          recipientEmail: clientEmail,
-          pdfBase64,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to send PDF');
-
-      toast.dismiss('pdf-gen');
-      toast.success('Signed proposal PDF emailed to customer');
-      console.log('[sendSignedProposalPDF] PDF sent successfully to:', clientEmail);
-
-      // Add note
-      const noteText = `Signed proposal PDF #${form.proposalNumber} emailed to customer`;
-      const existingNotes = getNotesByMountainId(mountainId);
-      const isDuplicate = existingNotes.some(note => note.text.includes(noteText));
-
-      if (!isDuplicate) {
-        addNote(mountainId, noteText, 'Proposal', false, true);
-      }
-    } catch (e: any) {
-      toast.dismiss('pdf-gen');
-      console.error('[sendSignedProposalPDF] PDF send error:', e);
-      toast.error(`Failed to send PDF: ${e.message}`);
-    } finally {
-      setPdfGenerationMode(false);
-    }
-  }
+  // Fires whichever moment the proposal actually becomes fully executed —
+  // whether that's this countersign action or a refreshProposal() pulling in
+  // a customer signature that landed after YULLR had already signed.
+  useEffect(() => {
+    if (bothSigned) saveSignedProposalToDocuments();
+  }, [bothSigned, mountainId, proposalId]);
 
   async function generateSignLink() {
-    if (!signId) return;
+    if (!proposalId) return;
     setSignLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/proposals/sign-request`, {
-        method: 'POST',
-        headers: API_HEADERS,
-        body: JSON.stringify({ mountainId: signId, proposalSnapshot: form }),
-      });
-      const data = await res.json() as any;
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to generate link');
-      setSignToken(data.token);
-      setSignRecord({ token: data.token, mountainId: signId, createdAt: new Date().toISOString(), proposalSnapshot: form, yullrSignature: null, clientSignature: null });
+      await sendProposal(proposalId, {});
       toast.success('Signing link generated');
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
@@ -742,66 +623,20 @@ export function ProposalBuilder() {
   }
 
   async function refreshSignStatus() {
-    if (!signToken || !mountainId) return;
-    try {
-      const res = await fetch(`${API_BASE}/proposals/sign/${signToken}`, { headers: API_HEADERS });
-      const data = await res.json() as any;
-      if (!data.error) {
-        // Check if client just signed
-        const wasClientSigned = !!signRecord?.clientSignature;
-        const wasYullrSigned = !!signRecord?.yullrSignature;
-        const isClientSigned = !!data.clientSignature;
-        const isYullrSigned = !!data.yullrSignature;
-
-        if (!wasClientSigned && isClientSigned) {
-          // Client just signed - add note
-          const signerName = data.clientSignature.name || 'Client';
-          const noteText = `Proposal #${form.proposalNumber} signed by ${signerName}`;
-          const existingNotes = getNotesByMountainId(mountainId);
-          const isDuplicate = existingNotes.some(note => note.text.includes(`Proposal #${form.proposalNumber} signed`));
-
-          if (!isDuplicate) {
-            addNote(mountainId, noteText, 'Proposal', false, true);
-          }
-
-          // If YULLR already signed and client just signed, both are now signed - send PDF
-          if (wasYullrSigned) {
-            await sendSignedProposalPDF();
-          }
-        }
-
-        setSignRecord(data);
-        toast('Status refreshed');
-      }
-    } catch (e) { console.error('Error refreshing sign status:', e); }
+    if (!proposalId) return;
+    await refreshProposal(proposalId);
+    toast('Status refreshed');
   }
 
   async function signAsYullr() {
-    if (!signToken || !yullrSignerName.trim()) { toast.error('Please enter your name'); return; }
+    if (!proposalId || !yullrSignerName.trim()) { toast.error('Please enter your name'); return; }
     if (yullrSigEmpty) { toast.error('Please draw your signature'); return; }
     const signatureImage = yullrSigPadRef.current?.getDataURL() ?? null;
 
-    // Check if client has already signed BEFORE we update state
-    const clientAlreadySigned = !!signRecord?.clientSignature;
-
     setYullrSigning(true);
     try {
-      const res = await fetch(`${API_BASE}/proposals/sign/${signToken}/yullr`, {
-        method: 'POST',
-        headers: API_HEADERS,
-        body: JSON.stringify({ name: yullrSignerName.trim(), signatureImage }),
-      });
-      const data = await res.json() as any;
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to sign');
-      const newSignature = { name: yullrSignerName.trim(), signatureImage, signedAt: new Date().toISOString() };
-      setSignRecord((prev: any) => prev ? { ...prev, yullrSignature: newSignature } : prev);
+      await countersignProposal(proposalId, yullrSignerName.trim(), signatureImage);
       toast.success('Signed as YULLR');
-
-      // Check if both parties have now signed - if so, email PDF
-      if (clientAlreadySigned && mountainId) {
-        console.log('[signAsYullr] Both parties signed, triggering PDF email...');
-        await sendSignedProposalPDF();
-      }
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
     } finally {
@@ -818,16 +653,15 @@ export function ProposalBuilder() {
   }
 
   async function clearSignatures() {
-    if (!signToken) return;
+    if (!proposalId) return;
+    if (bothSigned) {
+      toast.error("A fully-executed proposal can't be cleared — archive it and start a new one instead.");
+      setConfirmModal(null);
+      return;
+    }
     setConfirmBusy(true);
     try {
-      const res = await fetch(`${API_BASE}/proposals/sign/${signToken}/clear-signatures`, {
-        method: 'POST',
-        headers: API_HEADERS,
-      });
-      const data = await res.json() as any;
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to clear signatures');
-      setSignRecord((prev: any) => prev ? { ...prev, yullrSignature: null, clientSignature: null } : prev);
+      updateProposal(proposalId, { clientSignature: null as any, yullrSignature: null as any });
       setConfirmModal(null);
       toast.success('Signatures cleared — proposal unlocked for editing');
     } catch (e: any) {
@@ -837,24 +671,16 @@ export function ProposalBuilder() {
     }
   }
 
-  async function deleteProposal() {
-    // Prevent deletion if any signatures exist
-    if (yullrSigned || clientSigned) {
-      toast.error('Cannot delete a signed proposal');
-      setConfirmModal(null);
-      return;
-    }
-
+  // Proposals are never hard-deleted once created — archiving keeps the
+  // historical record (including any signatures) intact and lets a fresh
+  // proposal be created for the same project without any risk of an old
+  // record's signature state bleeding into the new one.
+  async function archiveProposal() {
+    if (!proposalId) return;
     setConfirmBusy(true);
     try {
-      if (signToken) {
-        await fetch(`${API_BASE}/proposals/sign/${signToken}`, {
-          method: 'DELETE',
-          headers: API_HEADERS,
-        });
-      }
-      if (proposalId) await removeProposal(proposalId);
-      toast.success('Proposal deleted');
+      updateProposal(proposalId, { archived: true });
+      toast.success('Proposal archived');
       navigate(mountainId ? `/mountains/${mountainId}` : '/');
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
@@ -863,52 +689,21 @@ export function ProposalBuilder() {
   }
 
   async function sendProposalEmail() {
-    if (!signId || !emailRecipient.trim()) {
+    if (!proposalId || !emailRecipient.trim()) {
       toast.error('Please enter recipient email');
       return;
     }
     setEmailSending(true);
     try {
-      const res = await fetch(`${API_BASE}/proposals/send-email`, {
-        method: 'POST',
-        headers: API_HEADERS,
-        body: JSON.stringify({
-          mountainId: signId,
-          recipientEmail: emailRecipient.trim(),
-          recipientName: emailRecipientName.trim() || undefined,
-          ccEmails: emailCc.trim() || undefined,
-          proposalSnapshot: form,
-        }),
+      await sendProposal(proposalId, {
+        to: emailRecipient.trim(),
+        toName: emailRecipientName.trim() || undefined,
+        cc: emailCc.trim() || undefined,
       });
-      const data = await res.json() as any;
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to send email');
-
-      // Update local state with new token if created
-      if (data.token && !signToken) {
-        setSignToken(data.token);
-        // Refresh sign record
-        const signRes = await fetch(`${API_BASE}/proposals/sign/${data.token}`, { headers: API_HEADERS });
-        const signData = await signRes.json() as any;
-        if (!signData.error) setSignRecord(signData);
-      } else if (signToken) {
-        // Refresh to get updated emailLog
-        await refreshSignStatus();
-      }
-
-      // Add note about proposal being sent
-      const recipientDisplay = emailRecipientName.trim() || emailRecipient.trim();
-      const noteText = `Proposal #${form.proposalNumber} emailed to ${recipientDisplay}`;
-      const existingNotes = getNotesByMountainId(mountainId);
-      const isDuplicate = existingNotes.some(note => note.text === noteText);
-
-      if (!isDuplicate) {
-        addNote(mountainId, noteText, 'Proposal', true, false);
-      }
-
       setShowEmailModal(false);
       setEmailRecipient('');
       setEmailRecipientName('');
-      setEmailCc('support@yullr.com');
+      setEmailCc(myEmail);
       toast.success(`Proposal sent to ${emailRecipient.trim()}`);
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
@@ -1114,15 +909,7 @@ export function ProposalBuilder() {
           <PreviewH2>7. Terms</PreviewH2>
           <ol style={{ listStyle: 'none', counterReset: 'terms' } as React.CSSProperties}>
             {[
-              'This proposal is valid for 30 days from the date of issue. After this period, pricing may be subject to change.',
-              'Acceptance of this proposal constitutes agreement to execute the Customer Agreement and Order Form within 30 days.',
-              'All hardware remains the property of YULLR.',
-              'Installation dates are subject to availability and will be confirmed upon receipt of deposit.',
-              'YULLR is not responsible for delays caused by site conditions that do not meet the requirements outlined in Section 4.',
-              'Subscription and pass pricing is subject to change at the start of each new ski season.',
-              'An annual maintenance fee of $250.00 will apply to each Capture Point starting in year 2.',
-              `The YULLR Customer Agreement is for a ${numberToWord(form.termYears || '5')} (${form.termYears || '5'}) year Initial Term.`,
-              'Where Customer does not own or operate the Facility, a Facility Authorization Addendum signed by the Facility operator will be required prior to installation.',
+              ...(form.terms || DEFAULT_PROPOSAL_TERMS).map(t => interpolateTerm(t, form.termYears)),
               ...extraTermsArr,
             ].map((term, i) => (
               <li key={i} style={{ counterIncrement: 'terms', padding: '7px 0 7px 26px', position: 'relative', borderBottom: '1px solid #f0f0f0', fontSize: 12.5, lineHeight: 1.6, color: '#444' }}>
@@ -1311,7 +1098,7 @@ export function ProposalBuilder() {
         <div className="bg-[#fff7ed] border-b border-[#fed7aa] px-4 py-2.5 flex items-center gap-2">
           <Lock size={13} className="text-[#c2410c] flex-shrink-0" />
           <p className="text-[#c2410c] font-['Inter:Regular',sans-serif] text-[13px] flex-1">
-            This proposal is fully executed and cannot be edited. Clear signatures to make changes.
+            This proposal is fully executed and cannot be edited. Archive this proposal to create a new one.
           </p>
         </div>
       ) : ro && (
@@ -1631,6 +1418,49 @@ export function ProposalBuilder() {
           </div>
         </div>
 
+        {/* ── Terms ── */}
+        <div className={section}>
+          <h2 className={sectionH}>Terms <span className="text-[#9ca3af] font-normal normal-case tracking-normal">(this proposal's own copy — edit freely; new proposals start from the admin defaults)</span></h2>
+          <div className="space-y-2">
+            {form.terms.map((term, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-[#9ca3af] text-[13px] mt-2.5 w-4 shrink-0 text-right">{i + 1}.</span>
+                <textarea
+                  className={`${inp(ro)} flex-1 min-h-[44px] resize-y`}
+                  readOnly={ro}
+                  value={term}
+                  onChange={e => setTerm(i, e.target.value)}
+                />
+                {!ro && (
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button type="button" onClick={() => moveTerm(i, -1)} disabled={i === 0} className="p-1 rounded-[6px] bg-[#f3f3f5] text-[#6a7282] disabled:opacity-30 active:opacity-70">
+                      <ChevronUp size={13} />
+                    </button>
+                    <button type="button" onClick={() => moveTerm(i, 1)} disabled={i === form.terms.length - 1} className="p-1 rounded-[6px] bg-[#f3f3f5] text-[#6a7282] disabled:opacity-30 active:opacity-70">
+                      <ChevronDown size={13} />
+                    </button>
+                    <button type="button" onClick={() => removeTerm(i)} className="p-1 rounded-[6px] bg-[#fff0ee] text-[#ff5c39] active:opacity-70">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {!ro && (
+            <button
+              type="button"
+              onClick={addTerm}
+              className="mt-2 w-full border border-dashed border-[#ff5c39] text-[#ff5c39] rounded-[8px] py-2.5 text-[13px] font-['Inter:Medium',sans-serif] flex items-center justify-center gap-2 active:bg-[#fff3f0]"
+            >
+              <Plus size={14} /> Add Term
+            </button>
+          )}
+          <p className="text-[11px] text-[#9ca3af] mt-2">
+            Use <code>{'{{termYears}}'}</code> / <code>{'{{termYearsWord}}'}</code> in a term to reference the Contract Term field above.
+          </p>
+        </div>
+
         {/* ── Additional Terms ── */}
         <div className={section}>
           <h2 className={sectionH}>Additional Terms <span className="text-[#9ca3af] font-normal normal-case tracking-normal">(optional — one per line)</span></h2>
@@ -1676,7 +1506,7 @@ export function ProposalBuilder() {
                     <CheckCircle size={11} /> Fully Executed
                   </span>
                 )}
-                {(yullrSigned || clientSigned) && (
+                {!bothSigned && (yullrSigned || clientSigned) && (
                   <button
                     onClick={() => setConfirmModal('clearSigs')}
                     className="flex items-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] font-medium text-[#d97706] bg-[#fffbeb] border border-[#fde68a] px-2.5 py-1 rounded-full active:opacity-70"
@@ -1685,15 +1515,13 @@ export function ProposalBuilder() {
                     <XCircle size={11} /> Clear Signatures
                   </button>
                 )}
-                {signToken && !yullrSigned && !clientSigned && (
-                  <button
-                    onClick={() => setConfirmModal('deleteProposal')}
-                    className="flex items-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] px-2.5 py-1 rounded-full active:opacity-70"
-                    title="Delete this proposal"
-                  >
-                    <Trash2 size={11} /> Delete
-                  </button>
-                )}
+                <button
+                  onClick={() => setConfirmModal('deleteProposal')}
+                  className="flex items-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] bg-[#f3f3f5] border border-[rgba(0,0,0,0.08)] px-2.5 py-1 rounded-full active:opacity-70"
+                  title={bothSigned ? "Archive this proposal — fully-executed proposals can't be cleared, only archived" : "Archive this proposal"}
+                >
+                  <Archive size={11} /> Archive
+                </button>
               </div>
             </div>
 
@@ -1749,41 +1577,27 @@ export function ProposalBuilder() {
               </div>
             )}
 
-            {/* Email send log - hide when both parties have signed */}
-            {!bothSigned && signRecord && Array.isArray((signRecord as any).emailLog) && (signRecord as any).emailLog.length > 0 && (
+            {/* Sent status - hide when both parties have signed */}
+            {!bothSigned && signRecord?.sentAt && (
               <div className="mt-3 bg-[#f0fdf4] border border-[#bbf7d0] rounded-[10px] px-3 py-2.5">
-                <p className="text-[11px] font-['Inter:SemiBold',sans-serif] font-semibold text-[#15803d] uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <CheckCircle size={11} /> Email Sent · {(signRecord as any).emailLog.length} {(signRecord as any).emailLog.length === 1 ? 'time' : 'times'}
+                <p className="text-[11px] font-['Inter:SemiBold',sans-serif] font-semibold text-[#15803d] uppercase tracking-wider flex items-center gap-1">
+                  <CheckCircle size={11} /> Sent
                 </p>
-                <div className="space-y-1">
-                  {[...(signRecord as any).emailLog].reverse().slice(0, 3).map((log: any, i: number) => (
-                    <p key={i} className="text-[11px] text-[#166534] font-['Inter:Regular',sans-serif]">
-                      {log.recipientName ? `${log.recipientName} (${log.recipientEmail})` : log.recipientEmail} · {new Date(log.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(log.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                    </p>
-                  ))}
-                  {(signRecord as any).emailLog.length > 3 && (
-                    <p className="text-[11px] text-[#22c55e] font-['Inter:Regular',sans-serif]">+ {(signRecord as any).emailLog.length - 3} earlier</p>
-                  )}
-                </div>
+                <p className="text-[11px] text-[#166534] font-['Inter:Regular',sans-serif] mt-1">
+                  {signRecord.sentToName ? `${signRecord.sentToName} (${signRecord.sentTo})` : signRecord.sentTo} · {new Date(signRecord.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(signRecord.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </p>
               </div>
             )}
 
-            {/* View activity log - hide when both parties have signed */}
-            {!bothSigned && signRecord && Array.isArray((signRecord as any).viewLog) && (signRecord as any).viewLog.length > 0 && (
+            {/* View status - hide when both parties have signed */}
+            {!bothSigned && signRecord?.viewedAt && (
               <div className="mt-3 bg-[#f9f9fb] border border-[rgba(0,0,0,0.07)] rounded-[10px] px-3 py-2.5">
-                <p className="text-[11px] font-['Inter:SemiBold',sans-serif] font-semibold text-[#6a7282] uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#22c55e]" /> Link Opened · {(signRecord as any).viewLog.length} {(signRecord as any).viewLog.length === 1 ? 'view' : 'views'}
+                <p className="text-[11px] font-['Inter:SemiBold',sans-serif] font-semibold text-[#6a7282] uppercase tracking-wider flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#22c55e]" /> Link Opened
                 </p>
-                <div className="space-y-1">
-                  {[...(signRecord as any).viewLog].reverse().slice(0, 5).map((v: any, i: number) => (
-                    <p key={i} className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif]">
-                      {new Date(v.viewedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(v.viewedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                    </p>
-                  ))}
-                  {(signRecord as any).viewLog.length > 5 && (
-                    <p className="text-[11px] text-[#9ca3af] font-['Inter:Regular',sans-serif]">+ {(signRecord as any).viewLog.length - 5} earlier views</p>
-                  )}
-                </div>
+                <p className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif] mt-1">
+                  {new Date(signRecord.viewedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(signRecord.viewedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </p>
               </div>
             )}
 
@@ -1816,45 +1630,21 @@ export function ProposalBuilder() {
                     </div>
                   </div>
 
-                  {/* Email sent log */}
-                  {Array.isArray((signRecord as any).emailLog) && (signRecord as any).emailLog.length > 0 && (
-                    <div className="mb-3 bg-white/60 rounded-[8px] p-3">
-                      <p className="text-[10px] font-['Inter:SemiBold',sans-serif] font-semibold text-[#15803d] uppercase tracking-wider mb-2">
-                        Email Sent · {(signRecord as any).emailLog.length} {(signRecord as any).emailLog.length === 1 ? 'time' : 'times'}
-                      </p>
-                      <div className="space-y-1">
-                        {[...(signRecord as any).emailLog].reverse().slice(0, 2).map((log: any, i: number) => (
-                          <p key={i} className="text-[11px] text-[#166534] font-['Inter:Regular',sans-serif]">
-                            {log.recipientName ? `${log.recipientName} (${log.recipientEmail})` : log.recipientEmail}
-                            <br />
-                            <span className="text-[10px] text-[#6a7282]">
-                              {new Date(log.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(log.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                            </span>
-                          </p>
-                        ))}
-                        {(signRecord as any).emailLog.length > 2 && (
-                          <p className="text-[10px] text-[#22c55e] font-['Inter:Regular',sans-serif]">+ {(signRecord as any).emailLog.length - 2} earlier</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Link opened log */}
-                  {Array.isArray((signRecord as any).viewLog) && (signRecord as any).viewLog.length > 0 && (
-                    <div className="mb-3 bg-white/60 rounded-[8px] p-3">
-                      <p className="text-[10px] font-['Inter:SemiBold',sans-serif] font-semibold text-[#6a7282] uppercase tracking-wider mb-2">
-                        Link Opened · {(signRecord as any).viewLog.length} {(signRecord as any).viewLog.length === 1 ? 'view' : 'views'}
-                      </p>
-                      <div className="space-y-1">
-                        {[...(signRecord as any).viewLog].reverse().slice(0, 3).map((v: any, i: number) => (
-                          <p key={i} className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif]">
-                            {new Date(v.viewedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(v.viewedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                          </p>
-                        ))}
-                        {(signRecord as any).viewLog.length > 3 && (
-                          <p className="text-[10px] text-[#9ca3af] font-['Inter:Regular',sans-serif]">+ {(signRecord as any).viewLog.length - 3} earlier</p>
-                        )}
-                      </div>
+                  {/* Sent / viewed summary */}
+                  {(signRecord?.sentAt || signRecord?.viewedAt) && (
+                    <div className="mb-3 bg-white/60 rounded-[8px] p-3 space-y-2">
+                      {signRecord?.sentAt && (
+                        <p className="text-[11px] text-[#166534] font-['Inter:Regular',sans-serif]">
+                          <span className="font-['Inter:SemiBold',sans-serif] font-semibold uppercase tracking-wider text-[10px] block mb-0.5">Sent</span>
+                          {signRecord.sentToName ? `${signRecord.sentToName} (${signRecord.sentTo})` : signRecord.sentTo} · {new Date(signRecord.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                      )}
+                      {signRecord?.viewedAt && (
+                        <p className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif]">
+                          <span className="font-['Inter:SemiBold',sans-serif] font-semibold uppercase tracking-wider text-[10px] block mb-0.5">Link Opened</span>
+                          {new Date(signRecord.viewedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(signRecord.viewedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -2000,18 +1790,18 @@ export function ProposalBuilder() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="bg-white rounded-[16px] w-full max-w-sm shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className={`px-6 pt-6 pb-4 ${confirmModal === 'deleteProposal' ? 'bg-[#fef2f2]' : 'bg-[#fffbeb]'}`}>
+            <div className={`px-6 pt-6 pb-4 ${confirmModal === 'deleteProposal' ? 'bg-[#f3f3f5]' : 'bg-[#fffbeb]'}`}>
               <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${confirmModal === 'deleteProposal' ? 'bg-[#fee2e2]' : 'bg-[#fef3c7]'}`}>
-                  <AlertTriangle size={20} className={confirmModal === 'deleteProposal' ? 'text-[#dc2626]' : 'text-[#d97706]'} />
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${confirmModal === 'deleteProposal' ? 'bg-[#e5e7eb]' : 'bg-[#fef3c7]'}`}>
+                  <AlertTriangle size={20} className={confirmModal === 'deleteProposal' ? 'text-[#6a7282]' : 'text-[#d97706]'} />
                 </div>
                 <div>
                   <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-semibold text-[16px] leading-snug">
-                    {confirmModal === 'deleteProposal' ? 'Delete Proposal?' : 'Clear Signatures?'}
+                    {confirmModal === 'deleteProposal' ? 'Archive Proposal?' : 'Clear Signatures?'}
                   </h3>
                   <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mt-1 leading-relaxed">
                     {confirmModal === 'deleteProposal'
-                      ? 'This will permanently delete the proposal and all signature data. This cannot be undone.'
+                      ? 'This proposal (including any signatures) is kept for the historical record but hidden from the active list. Start a fresh proposal for this project any time — it will never inherit this one\'s data.'
                       : 'This will clear both the YULLR and client signatures. The proposal will be unlocked for editing and can be re-submitted for signatures.'}
                   </p>
                 </div>
@@ -2028,14 +1818,14 @@ export function ProposalBuilder() {
                 Cancel
               </button>
               <button
-                onClick={confirmModal === 'deleteProposal' ? deleteProposal : clearSignatures}
+                onClick={confirmModal === 'deleteProposal' ? archiveProposal : clearSignatures}
                 disabled={confirmBusy}
-                className={`flex-1 text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 ${confirmModal === 'deleteProposal' ? 'bg-[#dc2626]' : 'bg-[#d97706]'}`}
+                className={`flex-1 text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[14px] active:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 ${confirmModal === 'deleteProposal' ? 'bg-[#1D2930]' : 'bg-[#d97706]'}`}
               >
                 {confirmBusy
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   : confirmModal === 'deleteProposal'
-                    ? <><Trash2 size={15} /> Delete Proposal</>
+                    ? <><Archive size={15} /> Archive Proposal</>
                     : <><XCircle size={15} /> Clear Signatures</>
                 }
               </button>

@@ -12,7 +12,7 @@ import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
   Download, FileText, Camera, Wifi, Box, Server, Package,
   ChevronRight, GitMerge, X, DollarSign, Tag, Hash, Globe,
-  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Maximize2, Pencil, Check,
+  Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Maximize2, Pencil, Check, Rocket,
 } from 'lucide-react';
 
 type ContactSlot =
@@ -137,10 +137,11 @@ export function MountainDetail() {
   const [showMap, setShowMap] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [assigningLocationId, setAssigningLocationId] = useState<string | null>(null);
-  const [selectedInventoryItem, setSelectedInventoryItem] = useState<Asset | null>(null);
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null);
   const [contactSlot, setContactSlot] = useState<ContactSlot | null>(null);
   const [crmContact, setCrmContact] = useState<CRMContact | null>(null);
   const [showAddContact, setShowAddContact] = useState(false);
+  const [showAddTrail, setShowAddTrail] = useState(false);
   const [showCheckInOut, setShowCheckInOut] = useState(false);
   const [showAddAction, setShowAddAction] = useState(false);
   const [openTrailId, setOpenTrailId] = useState<string | null>(null);
@@ -219,7 +220,7 @@ export function MountainDetail() {
     };
     updateMountain(mountainId!, { activities: [...(mountain.activities || []), entry] });
     const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountain.name]);
-    logActivity(mountainId, 'action_added', summary, undefined, slackText);
+    logActivity(mountainId, 'action_added', summary, undefined, slackText, !!entry.assigneeContactId);
   };
 
   // Inventory class subtotals + inspection reconciliation.
@@ -495,6 +496,12 @@ export function MountainDetail() {
                   )}
                 </h2>
               </button>
+              <button
+                onClick={() => setShowAddTrail(true)}
+                className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+              >
+                <Plus size={14} /> New
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -502,7 +509,7 @@ export function MountainDetail() {
                 <div className="py-8 text-center">
                   <MapPin className="mx-auto mb-3 text-[#6a7282]" size={32} />
                   <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">
-                    No trails yet — add them from Edit Mountain (pencil above).
+                    No trails yet — add one above or from Edit Mountain (pencil above).
                   </p>
                 </div>
               ) : (
@@ -726,7 +733,7 @@ export function MountainDetail() {
                       key={asset.id}
                       onClick={() => {
                         if (asset.inventoryCategory || asset.yullrInventoryNumber) {
-                          setSelectedInventoryItem(asset);
+                          setSelectedInventoryItemId(asset.id);
                         } else if (asset.locationId) {
                           navigate(`/mountains/${mountainId}/locations/${asset.locationId}/assets/${asset.id}`);
                         }
@@ -774,11 +781,12 @@ export function MountainDetail() {
 
       {showMap && <MountainMapView mountainId={mountainId!} onClose={() => setShowMap(false)} />}
       {showExport && <ExportModal mountainId={mountainId!} onClose={() => setShowExport(false)} />}
-      {selectedInventoryItem && (
+      {showAddTrail && <AddTrailModal mountainId={mountainId!} onClose={() => setShowAddTrail(false)} />}
+      {selectedInventoryItemId && assets.find(a => a.id === selectedInventoryItemId) && (
         <InventoryItemDetailModal
-          asset={selectedInventoryItem}
+          asset={assets.find(a => a.id === selectedInventoryItemId)!}
           allAssets={assets}
-          onClose={() => setSelectedInventoryItem(null)}
+          onClose={() => setSelectedInventoryItemId(null)}
         />
       )}
       {showCheckInOut && <AssignInventoryModal mountainId={mountainId!} onClose={() => setShowCheckInOut(false)} />}
@@ -863,6 +871,97 @@ export function MountainDetail() {
   );
 }
 
+// ─── Add Trail Modal ──────────────────────────────────────────────────────────
+
+function AddTrailModal({ mountainId, onClose }: { mountainId: string; onClose: () => void }) {
+  const { addTrail } = useData();
+  const [name, setName] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isNastar, setIsNastar] = useState(false);
+
+  const handleSave = () => {
+    if (!name.trim()) { toast.error('Trail name is required'); return; }
+    addTrail({ mountainId, name: name.trim(), notes: notes.trim() || undefined, isNastar: isNastar || undefined });
+    toast.success('Trail added');
+    onClose();
+  };
+
+  const inp = "w-full bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px] outline-none";
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-t-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
+          <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[17px]">Add Trail</p>
+          <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5] active:bg-[#e5e7eb] shrink-0">
+            <X size={16} className="text-[#6a7282]" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+          <div>
+            <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-1">
+              Trail Name <span className="text-[#ff5c39]">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Upper Meadow"
+              autoFocus
+              className={inp}
+            />
+          </div>
+
+          <div>
+            <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-1">Notes</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Any notes about this trail…"
+              rows={3}
+              className={`${inp} resize-none`}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsNastar(v => !v)}
+            className="flex items-center gap-3 w-full active:opacity-70"
+          >
+            <div className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center flex-shrink-0 transition-colors ${isNastar ? 'bg-[#ff5c39] border-[#ff5c39]' : 'bg-white border-[#d1d5db]'}`}>
+              {isNastar && (
+                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                  <path d="M1 5L4.5 8.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            <span className="text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[15px]">NASTAR trail</span>
+            {isNastar && (
+              <span className="ml-auto bg-[#ff5c39] text-white text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">
+                NASTAR
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="px-5 py-4 border-t border-[rgba(0,0,0,0.08)]">
+          <button
+            type="button"
+            onClick={handleSave}
+            className="w-full bg-[#ff5c39] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:opacity-80"
+          >
+            Save Trail
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Inventory Item Detail Modal ─────────────────────────────────────────────
 
 function InventoryItemDetailModal({
@@ -874,6 +973,8 @@ function InventoryItemDetailModal({
   allAssets: Asset[];
   onClose: () => void;
 }) {
+  const { updateAsset } = useData();
+  const [showDeployConfirm, setShowDeployConfirm] = useState(false);
   const fmt = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
   const isServer = asset.inventorySubcategory === 'Complete Server';
@@ -959,6 +1060,22 @@ function InventoryItemDetailModal({
             {asset.mountainDeployment && (
               <Row icon={<Building2 size={14} />} label="Deployed At" value={asset.mountainDeployment} />
             )}
+            {asset.deployedDate ? (
+              <Row icon={<Rocket size={14} />} label="Deployed Date" value={asset.deployedDate} />
+            ) : (
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 shrink-0 text-[#6a7282]"><Rocket size={14} /></div>
+                  <p className="text-[11px] text-[#6a7282] uppercase tracking-wide font-['Inter:Medium',sans-serif]">Deployed Date</p>
+                </div>
+                <button
+                  onClick={() => setShowDeployConfirm(true)}
+                  className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80"
+                >
+                  <Rocket size={14} /> Deploy
+                </button>
+              </div>
+            )}
             {asset.notes && (
               <Row icon={<FileText size={14} />} label="Notes" value={asset.notes} />
             )}
@@ -1016,6 +1133,46 @@ function InventoryItemDetailModal({
           </button>
         </div>
       </div>
+
+      {showDeployConfirm && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
+          onClick={e => { if (e.target === e.currentTarget) setShowDeployConfirm(false); }}
+        >
+          <div className="bg-white w-full max-w-lg rounded-t-[20px] p-6 space-y-5">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-14 h-14 rounded-full bg-[#fff0ee] flex items-center justify-center flex-shrink-0">
+                <Rocket size={28} className="text-[#ff5c39]" />
+              </div>
+              <div>
+                <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Deploy this item?</h2>
+                <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px] mt-1 leading-relaxed">
+                  This sets today's date ({new Date().toLocaleDateString()}) as the Deployed Date. It can only be changed
+                  from the item's edit form in the main Inventory section.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeployConfirm(false)}
+                className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:bg-[#e5e7eb]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  updateAsset(asset.id, { deployedDate: new Date().toISOString().slice(0, 10) });
+                  setShowDeployConfirm(false);
+                  toast.success('Marked as deployed');
+                }}
+                className="flex-1 bg-[#ff5c39] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px] active:opacity-80"
+              >
+                Deploy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

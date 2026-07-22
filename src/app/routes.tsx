@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, useParams } from "react-router";
 import { RootLayout } from "./components/RootLayout";
 import { MountainsList } from "./components/MountainsList";
 import { MountainDetail } from "./components/MountainDetail";
@@ -10,7 +10,7 @@ import { EditMountain } from "./components/EditMountain";
 import { CreateLocation } from "./components/CreateLocation";
 import { EditLocation } from "./components/EditLocation";
 import { AddInspection } from "./components/AddInspection";
-import { InventoryPage, InspectionItemsPage } from "./components/AdminCatalog";
+import { InventoryPage, InspectionItemsPage, ProposalTermsPage } from "./components/AdminCatalog";
 import { ProposalBuilder } from "./components/ProposalBuilder";
 import { InvoiceViewer } from "./components/InvoiceViewer";
 import { CreateTrail } from "./components/CreateTrail";
@@ -26,6 +26,16 @@ import { SignInPage } from "./components/SignInPage";
 import { SignUpPage } from "./components/SignUpPage";
 import { TeamPage } from "./components/TeamPage";
 import { SystemCheck } from "./components/SystemCheck";
+
+// react-router reuses the same component instance across param-only
+// navigations (e.g. /proposal/A -> /proposal/B) — ProposalBuilder holds a lot
+// of derived signature/state per proposal, so key it by proposalId to force
+// a clean remount whenever you switch proposals, instead of relying on every
+// piece of that state to individually notice the id changed.
+function ProposalBuilderRoute() {
+  const { proposalId } = useParams<{ proposalId: string }>();
+  return <ProposalBuilder key={proposalId} />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -65,13 +75,14 @@ export const router = createBrowserRouter([
           { path: "/mountains", Component: MountainsList },
           { path: "/inventory", Component: InventoryPage },
           { path: "/inspection-items", Component: InspectionItemsPage },
+          { path: "/proposal-terms", Component: ProposalTermsPage },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
           { path: "/system-check", Component: SystemCheck },
           { path: "/mountains/new", Component: CreateMountain },
           { path: "/mountains/:mountainId", Component: MountainDetail },
           { path: "/mountains/:mountainId/edit", Component: EditMountain },
-          { path: "/mountains/:mountainId/proposal/:proposalId", Component: ProposalBuilder },
+          { path: "/mountains/:mountainId/proposal/:proposalId", Component: ProposalBuilderRoute },
           { path: "/mountains/:mountainId/agreement", Component: CustomerAgreementBuilder },
           { path: "/mountains/:mountainId/invoice", Component: InvoiceViewer },
           // ── Trails ────────────────────────────────────────────────────────
