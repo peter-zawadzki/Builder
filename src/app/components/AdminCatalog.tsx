@@ -371,10 +371,13 @@ export function InspectionItemsPage() {
 export function ProposalTermsPage() {
   const navigate = useNavigate();
   const isSuperAdmin = useIsSuperAdmin();
-  const { proposalTerms, updateProposalTerms } = useData();
+  const { proposalTerms, updateProposalTerms, defaultPaymentTerms, updateDefaultPaymentTerms } = useData();
   const [terms, setTerms] = useState(proposalTerms);
+  const [paymentTerms, setPaymentTerms] = useState(defaultPaymentTerms);
+  const [paymentTermsDirty, setPaymentTermsDirty] = useState(false);
 
   useEffect(() => { setTerms(proposalTerms); }, [proposalTerms]);
+  useEffect(() => { setPaymentTerms(defaultPaymentTerms); }, [defaultPaymentTerms]);
 
   if (!isSuperAdmin) {
     return (
@@ -407,6 +410,29 @@ export function ProposalTermsPage() {
     <div className="min-h-screen bg-[#f9fafb]">
       <PageHeader icon={<FileText size={20} className="text-[#307fe2]" />} title="Proposal Terms" />
       <div className="p-4 pb-16 max-w-2xl mx-auto space-y-3">
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Default Payment Terms</h2>
+            <button
+              onClick={() => { updateDefaultPaymentTerms(paymentTerms); setPaymentTermsDirty(false); }}
+              disabled={!paymentTermsDirty}
+              className="bg-[#ff5c39] text-white text-[12px] font-['Inter:Medium',sans-serif] px-3 py-1.5 rounded-[8px] active:opacity-80 disabled:opacity-40"
+            >
+              {paymentTermsDirty ? 'Save' : 'Saved'}
+            </button>
+          </div>
+          <textarea
+            value={paymentTerms}
+            onChange={e => { setPaymentTerms(e.target.value); setPaymentTermsDirty(true); }}
+            rows={2}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[#0a0a0a] text-[13px] outline-none resize-y"
+          />
+          <p className="text-[11px] text-[#9ca3af]">
+            Seeded onto every new proposal's Payment Terms field. Use <code>{'{{year}}'}</code> to reference the
+            calendar year the proposal is created in.
+          </p>
+        </div>
+
         <p className="text-[13px] text-[#6a7282]">
           These are the default terms seeded onto every new proposal (Section 7). Editing them here does not
           change any proposal that already exists — each proposal gets its own editable copy the moment it's created.

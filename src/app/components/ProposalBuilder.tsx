@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
-import { useData, DEFAULT_PROPOSAL_TERMS } from '../context/DataContext';
+import { useData, DEFAULT_PROPOSAL_TERMS, DEFAULT_PAYMENT_TERMS } from '../context/DataContext';
 import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -117,6 +117,7 @@ export function ProposalBuilder() {
     getProposalById, updateProposal, getProjectById,
     getAssetsByLocationId,
     proposalTerms,
+    defaultPaymentTerms,
     sendProposal, countersignProposal, refreshProposal,
     getCustomerAgreementByMountainId,
   } = useData();
@@ -272,7 +273,7 @@ export function ProposalBuilder() {
       miscFee: '',
       selfInstall: false,
       selfInstallDiscount: '',
-      paymentTerms: `50% deposit is due upon execution of the Customer Agreement. The remaining 50% balance is due on or before November 1, ${new Date().getFullYear()}.`,
+      paymentTerms: (defaultPaymentTerms || DEFAULT_PAYMENT_TERMS).replace(/\{\{year\}\}/g, String(new Date().getFullYear())),
       terms: proposalTerms.length > 0 ? proposalTerms : DEFAULT_PROPOSAL_TERMS,
       additionalTerms: '',
       termYears: '5',

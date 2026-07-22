@@ -893,6 +893,8 @@ interface DataContextType {
   itemPrices: Record<string, number>;
   proposalTerms: string[];
   updateProposalTerms: (terms: string[]) => void;
+  defaultPaymentTerms: string;
+  updateDefaultPaymentTerms: (text: string) => void;
   addMountain: (mountain: Omit<Mountain, 'id'>) => string;
   updateMountain: (id: string, mountain: Partial<Mountain>) => void;
   addLocation: (location: Omit<Location, 'id'>) => string;
@@ -987,6 +989,7 @@ const STORAGE_KEYS = {
   OPTIONS: 'yullrLocal_options',
   ITEM_PRICES: 'yullrLocal_item_prices',
   PROPOSAL_TERMS: 'yullrLocal_proposal_terms',
+  DEFAULT_PAYMENT_TERMS: 'yullrLocal_default_payment_terms',
   PENDING_PHOTOS: 'yullrLocal_pendingPhotoSync',
   CONTACTS: 'yullrLocal_crm_contacts',
   ORGANIZATIONS: 'yullrLocal_crm_organizations',
@@ -1009,6 +1012,13 @@ export const DEFAULT_PROPOSAL_TERMS: string[] = [
   'The YULLR Customer Agreement is for a {{termYearsWord}} ({{termYears}}) year Initial Term.',
   'Where Customer does not own or operate the Facility, a Facility Authorization Addendum signed by the Facility operator will be required prior to installation.',
 ];
+
+// Seeded onto every new proposal's own editable Payment Terms field (Dev
+// Story 10.2 — Super Admin can edit this default without engineering
+// involvement, same as DEFAULT_PROPOSAL_TERMS). {{year}} is resolved at
+// proposal-creation time to that year's actual calendar year.
+export const DEFAULT_PAYMENT_TERMS =
+  '50% deposit is due upon execution of the Customer Agreement. The remaining 50% balance is due on or before November 1, {{year}}.';
 
 // Remove the old Supabase-era caches entirely (housekeeping). The prefix change
 // above is what actually guarantees the fresh start; this just frees the space.
@@ -1270,6 +1280,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return cached ? JSON.parse(cached) : DEFAULT_PROPOSAL_TERMS;
     } catch { return DEFAULT_PROPOSAL_TERMS; }
   });
+  const [defaultPaymentTerms, setDefaultPaymentTerms] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.DEFAULT_PAYMENT_TERMS) || DEFAULT_PAYMENT_TERMS;
+    } catch { return DEFAULT_PAYMENT_TERMS; }
+  });
   const [contacts, setContacts] = useState<CRMContact[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || '[]'); }
     catch { return []; }
@@ -1333,13 +1348,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let backendUnreachable = false;
 
         // Batch 1: lightweight/config endpoints — run in parallel
-        const [mountainsRes, locationsRes, trailsRes, optionsRes, pricesRes, proposalTermsRes] = await Promise.all([
+        const [mountainsRes, locationsRes, trailsRes, optionsRes, pricesRes, proposalTermsRes, paymentTermsRes] = await Promise.all([
           apiCall('/mountains').catch(() => { backendUnreachable = true; return silent(); }),
           apiCall('/locations').catch(() => silent()),
           apiCall('/trails').catch(() => silent()),
           apiCall('/options').catch(() => silent()),
           apiCall('/item-prices').catch(() => silent()),
           apiCall('/proposal-terms').catch(() => silent()),
+          apiCall('/payment-terms').catch(() => silent()),
         ]);
 
         if (backendUnreachable) {
@@ -1463,6 +1479,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         if (Array.isArray(proposalTermsRes?.proposalTerms) && proposalTermsRes.proposalTerms.length > 0) {
           setProposalTerms(proposalTermsRes.proposalTerms);
+        }
+        if (typeof paymentTermsRes?.defaultPaymentTerms === 'string' && paymentTermsRes.defaultPaymentTerms) {
+          setDefaultPaymentTerms(paymentTermsRes.defaultPaymentTerms);
         }
         console.log('Data loaded successfully (mountains, locations, trails, assets, notes, projects, proposals, contacts, organizations, teams, options, prices)');
       } catch (error) {
@@ -1717,6 +1736,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       catch (e) { console.error('Error saving proposal terms:', e); }
     }
   }, [proposalTerms, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.DEFAULT_PAYMENT_TERMS, defaultPaymentTerms); }
+      catch (e) { console.error('Error saving default payment terms:', e); }
+    }
+  }, [defaultPaymentTerms, isLoading]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts)); }
@@ -2304,6 +2330,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Proposal terms sync error:', e));
   };
 
+  const updateDefaultPaymentTerms = (text: string) => {
+    setDefaultPaymentTerms(text);
+    syncOrQueue('/payment-terms', 'PUT', JSON.stringify({ text }))
+      .catch(e => console.error('Default payment terms sync error:', e));
+  };
+
   const setItemPrice = (name: string, price: number | null) => {
     setItemPrices(prev => {
       const updated = { ...prev };
@@ -2462,6 +2494,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         itemPrices,
         proposalTerms,
         updateProposalTerms,
+        defaultPaymentTerms,
+        updateDefaultPaymentTerms,
         addMountain,
         updateMountain,
         addLocation,

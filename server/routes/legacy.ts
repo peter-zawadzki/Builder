@@ -41,6 +41,7 @@ const SINGLETON_KEY: Record<string, string> = {
   options: "options",
   "item-prices": "prices",
   "proposal-terms": "proposalTerms",
+  "payment-terms": "defaultPaymentTerms",
 };
 
 async function listArray(collection: string) {
@@ -174,6 +175,16 @@ legacy.put("/proposal-terms", async (c) => {
   const terms = Array.isArray(body?.terms) ? body.terms.filter((t: unknown) => typeof t === "string") : [];
   await upsert("proposal-terms", "__all__", terms);
   return c.json({ ok: true, terms });
+});
+
+// Default Payment Terms boilerplate seeded onto every new proposal — same
+// super-admin-only template-copy editing as /proposal-terms (Dev Story
+// 10.2), just a single string instead of an ordered array.
+legacy.put("/payment-terms", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const text = typeof body?.text === "string" ? body.text : "";
+  await upsert("payment-terms", "__all__", text);
+  return c.json({ ok: true, text });
 });
 
 // Slack mirror — Builder is the record; Slack is a notification mirror. Peter
