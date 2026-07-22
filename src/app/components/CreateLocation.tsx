@@ -221,10 +221,24 @@ function MapPicker({ mountainAddress, initialCoords, onSelect, onClose }: MapPic
 
 // ─── Main CreateLocation Component ───────────────────────────────────────────
 
-export function CreateLocation() {
-  const { mountainId, trailId } = useParams();
+export function CreateLocation({
+  mountainIdProp, trailIdProp, onClose, embedded,
+}: {
+  mountainIdProp?: string;
+  trailIdProp?: string;
+  onClose?: () => void;
+  embedded?: boolean;
+} = {}) {
+  const params = useParams();
+  const mountainId = mountainIdProp || params.mountainId;
+  const trailId = trailIdProp || params.trailId;
   const navigate = useNavigate();
   const { getMountainById, addLocation, getMountainTrailNames, trails } = useData();
+
+  // When embedded (opened as a modal from TrailDetailModal), "back"/"not
+  // now" closes the modal instead of navigating away from the page it was
+  // opened over.
+  const goBack = () => { if (onClose) onClose(); else navigate(-1); };
 
   const mountain = getMountainById(mountainId!);
   // If coming from a trail, pre-populate trail name
@@ -458,7 +472,7 @@ export function CreateLocation() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f9fafb] pb-8">
+    <div className={embedded ? 'pb-2' : 'min-h-screen bg-[#f9fafb] pb-8'}>
       {/* Hidden file inputs */}
       <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
         multiple className="hidden" onChange={handlePhotoCapture} />
@@ -466,10 +480,10 @@ export function CreateLocation() {
         className="hidden" onChange={handleVideoCapture} />
 
       {/* Header */}
-      <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
+      <div className={`bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 ${embedded ? 'rounded-t-[16px] sm:rounded-t-[16px]' : 'sticky top-0 z-10'}`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-1 active:opacity-60">
-            <ArrowLeft size={24} className="text-[#0a0a0a]" />
+          <button onClick={goBack} className="p-1 active:opacity-60">
+            {embedded ? <X size={24} className="text-[#0a0a0a]" /> : <ArrowLeft size={24} className="text-[#0a0a0a]" />}
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
@@ -758,13 +772,13 @@ export function CreateLocation() {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => navigate(trailId ? `/mountains/${mountainId}/trails/${trailId}` : `/mountains/${mountainId}/locations/${savedLocationId}`)}
+                onClick={() => onClose ? onClose() : navigate(trailId ? `/mountains/${mountainId}/trails/${trailId}` : `/mountains/${mountainId}/locations/${savedLocationId}`)}
                 className="flex-1 bg-[#f3f3f5] text-[#6a7282] rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]"
               >
                 Not now
               </button>
               <button
-                onClick={() => navigate(`/mountains/${mountainId}/locations/${savedLocationId}/inspection`)}
+                onClick={() => { onClose?.(); navigate(`/mountains/${mountainId}/locations/${savedLocationId}/inspection`); }}
                 className="flex-1 bg-[#ff5c39] text-white rounded-[10px] py-3 font-['Inter:Medium',sans-serif] font-medium text-[15px]"
               >
                 Add inspection

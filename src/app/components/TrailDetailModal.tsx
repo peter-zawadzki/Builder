@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
 import * as locMediaDB from '../utils/locationMediaDB';
 import {
   X, Plus, MapPin, Pencil, Trash2, ClipboardList,
@@ -9,6 +8,7 @@ import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { LocationDetail } from './LocationDetail';
+import { CreateLocation } from './CreateLocation';
 
 // Trail detail now opens as a modal (matching the rest of the app's detail
 // patterns) instead of navigating to a full page. Drilling into a location
@@ -21,7 +21,6 @@ export function TrailDetailModal({
   trailId: string;
   onClose: () => void;
 }) {
-  const navigate = useNavigate();
   const {
     trails, locations, getMountainById, updateTrail, deleteTrail, getAssetsByLocationId, getInspectionsByLocationId,
   } = useData();
@@ -38,6 +37,7 @@ export function TrailDetailModal({
   const [editName, setEditName] = useState(trail?.name || '');
   const [editNotes, setEditNotes] = useState(trail?.notes || '');
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  const [showAddLocation, setShowAddLocation] = useState(false);
   const [mediaCounts, setMediaCounts] = useState<Record<string, { photos: number; videos: number }>>({});
 
   useEffect(() => {
@@ -75,7 +75,16 @@ export function TrailDetailModal({
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-2xl h-[90vh] sm:h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        {activeLocationId ? (
+        {showAddLocation ? (
+          <div className="overflow-y-auto flex-1">
+            <CreateLocation
+              mountainIdProp={mountainId}
+              trailIdProp={trailId}
+              onClose={() => setShowAddLocation(false)}
+              embedded
+            />
+          </div>
+        ) : activeLocationId ? (
           <div className="overflow-y-auto flex-1">
             <LocationDetail
               mountainIdProp={mountainId}
@@ -159,7 +168,7 @@ export function TrailDetailModal({
                 </div>
 
                 <button
-                  onClick={() => navigate(`/mountains/${mountainId}/trails/${trailId}/locations/new`)}
+                  onClick={() => setShowAddLocation(true)}
                   className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:opacity-80"
                 >
                   <Plus size={18} />
