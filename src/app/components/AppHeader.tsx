@@ -1,12 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag } from 'lucide-react';
+import { toast } from 'sonner';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsAdminOrAbove } from '../hooks/useRole';
 import { useData, getMyNotifications } from '../context/DataContext';
 import type { MyNotificationEntry } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
+
+// Version / latest-release info shown at the bottom of the profile menu —
+// fetched fresh on mount from /api/version (computed live from git +
+// package.json server-side) rather than baked in at client build time, so
+// it reflects the actual latest commit.
+function useVersionInfo() {
+  const [info, setInfo] = useState<{ version: string; commitDate: string | null; commitHash: string | null } | null>(null);
+  useEffect(() => {
+    fetch('/api/version')
+      .then(r => r.json())
+      .then(setInfo)
+      .catch(() => {});
+  }, []);
+  return info;
+}
 
 // The one nav header shared across every page and sub-page. The icon for the
 // section you're on is highlighted orange. Projects live inside each mountain,
@@ -22,6 +38,7 @@ export function AppHeader() {
   const { pathname } = useLocation();
   const canManageTeam = useIsAdminOrAbove();
   const me = useMyContact();
+  const versionInfo = useVersionInfo();
   const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = useData();
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -71,15 +88,32 @@ export function AppHeader() {
           </button>
           <div className="flex items-center h-9 pl-1">
             <UserButton appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }}>
-              {canManageTeam && (
-                <UserButton.MenuItems>
-                  <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
-                  <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
-                  <UserButton.Action label="Proposal terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />
-                  <UserButton.Action label="Proposal template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />
-                  <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />
-                </UserButton.MenuItems>
-              )}
+              <UserButton.MenuItems>
+                {canManageTeam && (
+                  <>
+                    <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
+                    <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
+                    <UserButton.Action label="Proposal terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />
+                    <UserButton.Action label="Proposal template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />
+                    <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />
+                  </>
+                )}
+                <UserButton.Action
+                  label={
+                    versionInfo
+                      ? `v${versionInfo.version} · ${versionInfo.commitDate
+                          ? new Date(versionInfo.commitDate).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                          : 'unknown date'}`
+                      : 'Loading version…'
+                  }
+                  labelIcon={<Tag size={16} />}
+                  onClick={() => {
+                    if (!versionInfo) return;
+                    const text = `v${versionInfo.version}${versionInfo.commitHash ? ` (${versionInfo.commitHash})` : ''} · ${versionInfo.commitDate ? new Date(versionInfo.commitDate).toLocaleString() : 'unknown date'}`;
+                    navigator.clipboard?.writeText(text).then(() => toast.success('Copied version info')).catch(() => {});
+                  }}
+                />
+              </UserButton.MenuItems>
             </UserButton>
           </div>
         </div>

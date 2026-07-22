@@ -2,6 +2,9 @@ import "./env";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { pool } from "./db";
 import { requireAuth, type HonoEnv } from "./auth";
 import { mountains } from "./routes/mountains";
@@ -35,6 +38,29 @@ app.get("/api/health", async (c) => {
   } catch (err) {
     return c.json({ ok: false, error: String(err) }, 500);
   }
+});
+
+// Version / latest-release info — no auth (shown in the profile menu).
+// Computed fresh per request (not baked in at build time) so it reflects
+// the actual last commit even though the API process itself doesn't
+// restart on every client-only code change.
+const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
+app.get("/api/version", (c) => {
+  let version = "0.0.0";
+  try {
+    version = JSON.parse(readFileSync(packageJsonPath, "utf-8")).version;
+  } catch { /* fall back to 0.0.0 */ }
+
+  let commitDate: string | null = null;
+  let commitHash: string | null = null;
+  try {
+    // %x09 (tab) instead of a literal "|" — execSync runs this through a
+    // shell, where "|" would be parsed as a pipe rather than passed to git.
+    const out = execSync("git log -1 --format=%cI%x09%h", { encoding: "utf-8" }).trim();
+    [commitDate, commitHash] = out.split("\t");
+  } catch { /* not running from a git checkout — omit */ }
+
+  return c.json({ version, commitDate, commitHash });
 });
 
 // Public, token-authenticated proposal signing — a customer reaches these
