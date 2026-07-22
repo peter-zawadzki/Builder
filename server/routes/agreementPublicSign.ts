@@ -14,6 +14,18 @@ async function findAgreementByToken(token: string) {
   );
 }
 
+// The admin-editable raw agreement template (Super Admin "edit the entire
+// raw content" feature) — plain boilerplate text, not sensitive, so this is
+// safe to expose without a token. The customer-facing sign page has no
+// Clerk session and can't hit the authenticated /api/legacy/agreement-template
+// route, so it reads the same underlying value through here instead.
+agreementPublicSign.get("/template", async (c) => {
+  const row = await queryOne<{ data: any }>(
+    `SELECT data FROM legacy_records WHERE collection = 'agreement-template' AND id = '__all__'`
+  );
+  return c.json({ agreementTemplate: typeof row?.data === "string" ? row.data : null });
+});
+
 // Lets the proposal-signing page auto-create (or find the existing) Customer
 // Agreement for this mountain right after the customer signs the proposal —
 // same "guided straight into the next document" flow the CA template

@@ -7,6 +7,7 @@ import * as cloudPhotos from '../utils/cloudPhotoSync';
 import * as cloudLocSync from '../utils/cloudLocationSync';
 import * as cloudAnnotationSync from '../utils/cloudAnnotationSync';
 import * as offlineQueue from '../utils/offlineQueue';
+import { CA_INTRO_PARAGRAPHS, CA_BODY_PARAGRAPHS } from '../data/customerAgreementText';
 import { toast } from 'sonner';
 
 export interface ContactNote {
@@ -906,6 +907,10 @@ interface DataContextType {
   updateProposalTerms: (terms: string[]) => void;
   defaultPaymentTerms: string;
   updateDefaultPaymentTerms: (text: string) => void;
+  proposalTemplate: string;
+  updateProposalTemplate: (text: string) => void;
+  agreementTemplate: string;
+  updateAgreementTemplate: (text: string) => void;
   addMountain: (mountain: Omit<Mountain, 'id'>) => string;
   updateMountain: (id: string, mountain: Partial<Mountain>) => void;
   addLocation: (location: Omit<Location, 'id'>) => string;
@@ -1001,6 +1006,8 @@ const STORAGE_KEYS = {
   ITEM_PRICES: 'yullrLocal_item_prices',
   PROPOSAL_TERMS: 'yullrLocal_proposal_terms',
   DEFAULT_PAYMENT_TERMS: 'yullrLocal_default_payment_terms',
+  PROPOSAL_TEMPLATE: 'yullrLocal_proposal_template',
+  AGREEMENT_TEMPLATE: 'yullrLocal_agreement_template',
   PENDING_PHOTOS: 'yullrLocal_pendingPhotoSync',
   CONTACTS: 'yullrLocal_crm_contacts',
   ORGANIZATIONS: 'yullrLocal_crm_organizations',
@@ -1030,6 +1037,85 @@ export const DEFAULT_PROPOSAL_TERMS: string[] = [
 // proposal-creation time to that year's actual calendar year.
 export const DEFAULT_PAYMENT_TERMS =
   '50% deposit is due upon execution of the Customer Agreement. The remaining 50% balance is due on or before November 1, {{year}}.';
+
+// Super Admin "edit the entire raw content" template for the Proposal
+// document — every static heading/paragraph/bullet/box/plan-card the
+// customer-facing proposal is built from, reproduced exactly as it renders
+// today. Tables and per-proposal computed data (trails, site requirements,
+// final quote line items, the Terms list, Payment Terms box) stay code-
+// driven — they're spliced in via {{splice:name}} tokens rather than
+// flattened into text, since they're loops/conditionals that can't become
+// plain prose. See src/app/utils/templateRenderer.tsx for the markup this
+// text understands (## headings, - bullets, !!plan cards, !!box- callouts,
+// {{splice:x}}, {{mergeField}}, **bold**).
+export const DEFAULT_PROPOSAL_TEMPLATE = `## 1. Project Summary
+
+This proposal outlines the scope, hardware, subscription services, and associated costs for deploying the YULLR platform at **{{mountainName}}**, located at **{{clientAddress}}**.
+
+Built for demanding alpine environments, the YULLR system is designed to operate reliably in sub-zero temperatures, high winds, and heavy snowfall. Each camera is remotely managed through the YULLR cloud platform, providing real-time monitoring, firmware updates, and centralized footage management with minimal on-site maintenance.
+
+## 2. Trails
+
+The following trails have been identified for YULLR Capture Points. Capture Point quantities and positioning are subject to adjustment based on site conditions.
+
+{{splice:trailsTable}}
+
+## 3. Installation Notes
+
+Installation will be carried out by a YULLR technician or approved installation partner. The following conditions apply:
+
+- Installation is estimated to take **{{installDays}}** to complete.
+- All installations will be scheduled and coordinated with designated on mountain contact.
+- Each Capture Point will be mounted, aligned, and tested on-site before sign-off.
+- YULLR will provide full system commissioning and staff orientation prior to the start of the season.
+
+{{splice:installNotesExtra}}
+
+## 4. Site Requirements
+
+The following requirements must be in place at each designated location prior to the installation date. Unless otherwise agreed in writing.
+
+{{splice:requirementsTable}}
+
+## 5. YULLR Subscriptions
+
+Skiers and riders at {{mountainName}} can purchase YULLR subscriptions to receive their footage. The following subscription types are available at published rates:
+
+!!plan Day Pass | $20 | 1 Mountain · 1 Day | Access to all YULLR footage captured at {{mountainName}} for a single visit day.
+!!plan Mountain Pass | $150 | 1 Mountain · Full Season | Unlimited footage access at {{mountainName}} for the entire ski season.
+!!plan Season Pass | $200 | All YULLR Mountains · Full Season | Unlimited footage access across all YULLR-enabled mountains for the full season.
+
+!!box-orange Bulk Purchase Program
+- A 50% discount applies to all bulk purchases of 25 or more passes of any type.
+- Bulk passes may be resold up to the published retail rate.
+- Bulk passes are non-refundable and valid for the current season only.
+- Additional bulk pass purchases after the initial order must be made in increments of 25.
+
+!!box-green Revenue Share — YULLR.COM Sales
+{{mountainName}} will receive a **15% profit share** on all pass purchases completed through YULLR.COM that are attributable to {{mountainName}}. This includes all sales tracked through referral links, promo codes, QR codes, on-mountain signage, and any other trackable attribution method. Revenue share payments will be calculated per season and remitted within **30 days** of the end of the season, accompanied by a detailed sales report.
+
+## 6. Final Quote
+
+{{splice:finalQuoteTable}}
+
+{{splice:paymentTermsBox}}
+
+## 7. Terms
+
+{{splice:termsList}}`;
+
+// Super Admin "edit the entire raw content" template for the Customer
+// Agreement — collapses the previous CA_INTRO_PARAGRAPHS/CA_BODY_PARAGRAPHS
+// (src/app/data/customerAgreementText.ts) into one big editable text block.
+// {{splice:parties}} marks where the Parties/Technical-Administrator(s)
+// block (per-mountain data — customer legal name, facility, signatories,
+// effective date) gets spliced in; that block stays code-driven since it's
+// built from that specific agreement's own form data, not static language.
+export const DEFAULT_AGREEMENT_TEMPLATE = [
+  ...CA_INTRO_PARAGRAPHS,
+  '{{splice:parties}}',
+  ...CA_BODY_PARAGRAPHS,
+].join('\n\n');
 
 // Remove the old Supabase-era caches entirely (housekeeping). The prefix change
 // above is what actually guarantees the fresh start; this just frees the space.
@@ -1296,6 +1382,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return localStorage.getItem(STORAGE_KEYS.DEFAULT_PAYMENT_TERMS) || DEFAULT_PAYMENT_TERMS;
     } catch { return DEFAULT_PAYMENT_TERMS; }
   });
+  const [proposalTemplate, setProposalTemplate] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.PROPOSAL_TEMPLATE) || DEFAULT_PROPOSAL_TEMPLATE;
+    } catch { return DEFAULT_PROPOSAL_TEMPLATE; }
+  });
+  const [agreementTemplate, setAgreementTemplate] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.AGREEMENT_TEMPLATE) || DEFAULT_AGREEMENT_TEMPLATE;
+    } catch { return DEFAULT_AGREEMENT_TEMPLATE; }
+  });
   const [contacts, setContacts] = useState<CRMContact[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || '[]'); }
     catch { return []; }
@@ -1359,7 +1455,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         let backendUnreachable = false;
 
         // Batch 1: lightweight/config endpoints — run in parallel
-        const [mountainsRes, locationsRes, trailsRes, optionsRes, pricesRes, proposalTermsRes, paymentTermsRes] = await Promise.all([
+        const [mountainsRes, locationsRes, trailsRes, optionsRes, pricesRes, proposalTermsRes, paymentTermsRes, proposalTemplateRes, agreementTemplateRes] = await Promise.all([
           apiCall('/mountains').catch(() => { backendUnreachable = true; return silent(); }),
           apiCall('/locations').catch(() => silent()),
           apiCall('/trails').catch(() => silent()),
@@ -1367,6 +1463,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           apiCall('/item-prices').catch(() => silent()),
           apiCall('/proposal-terms').catch(() => silent()),
           apiCall('/payment-terms').catch(() => silent()),
+          apiCall('/proposal-template').catch(() => silent()),
+          apiCall('/agreement-template').catch(() => silent()),
         ]);
 
         if (backendUnreachable) {
@@ -1493,6 +1591,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         if (typeof paymentTermsRes?.defaultPaymentTerms === 'string' && paymentTermsRes.defaultPaymentTerms) {
           setDefaultPaymentTerms(paymentTermsRes.defaultPaymentTerms);
+        }
+        if (typeof proposalTemplateRes?.proposalTemplate === 'string' && proposalTemplateRes.proposalTemplate) {
+          setProposalTemplate(proposalTemplateRes.proposalTemplate);
+        }
+        if (typeof agreementTemplateRes?.agreementTemplate === 'string' && agreementTemplateRes.agreementTemplate) {
+          setAgreementTemplate(agreementTemplateRes.agreementTemplate);
         }
         console.log('Data loaded successfully (mountains, locations, trails, assets, notes, projects, proposals, contacts, organizations, teams, options, prices)');
       } catch (error) {
@@ -1765,6 +1869,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
       catch (e) { console.error('Error saving default payment terms:', e); }
     }
   }, [defaultPaymentTerms, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.PROPOSAL_TEMPLATE, proposalTemplate); }
+      catch (e) { console.error('Error saving proposal template:', e); }
+    }
+  }, [proposalTemplate, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      try { localStorage.setItem(STORAGE_KEYS.AGREEMENT_TEMPLATE, agreementTemplate); }
+      catch (e) { console.error('Error saving agreement template:', e); }
+    }
+  }, [agreementTemplate, isLoading]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts)); }
@@ -2358,6 +2476,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .catch(e => console.error('Default payment terms sync error:', e));
   };
 
+  const updateProposalTemplate = (text: string) => {
+    setProposalTemplate(text);
+    syncOrQueue('/proposal-template', 'PUT', JSON.stringify({ text }))
+      .catch(e => console.error('Proposal template sync error:', e));
+  };
+
+  const updateAgreementTemplate = (text: string) => {
+    setAgreementTemplate(text);
+    syncOrQueue('/agreement-template', 'PUT', JSON.stringify({ text }))
+      .catch(e => console.error('Agreement template sync error:', e));
+  };
+
   const setItemPrice = (name: string, price: number | null) => {
     setItemPrices(prev => {
       const updated = { ...prev };
@@ -2518,6 +2648,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         updateProposalTerms,
         defaultPaymentTerms,
         updateDefaultPaymentTerms,
+        proposalTemplate,
+        updateProposalTemplate,
+        agreementTemplate,
+        updateAgreementTemplate,
         addMountain,
         updateMountain,
         addLocation,

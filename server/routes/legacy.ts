@@ -42,6 +42,8 @@ const SINGLETON_KEY: Record<string, string> = {
   "item-prices": "prices",
   "proposal-terms": "proposalTerms",
   "payment-terms": "defaultPaymentTerms",
+  "proposal-template": "proposalTemplate",
+  "agreement-template": "agreementTemplate",
 };
 
 async function listArray(collection: string) {
@@ -184,6 +186,24 @@ legacy.put("/payment-terms", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const text = typeof body?.text === "string" ? body.text : "";
   await upsert("payment-terms", "__all__", text);
+  return c.json({ ok: true, text });
+});
+
+// Full raw Proposal / Customer Agreement document templates — Super Admin
+// "edit the entire raw content and language template" feature. Each is one
+// big text blob parsed by src/app/utils/templateRenderer.tsx; the server
+// just stores/returns it verbatim, same singleton pattern as payment-terms.
+legacy.put("/proposal-template", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const text = typeof body?.text === "string" ? body.text : "";
+  await upsert("proposal-template", "__all__", text);
+  return c.json({ ok: true, text });
+});
+
+legacy.put("/agreement-template", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const text = typeof body?.text === "string" ? body.text : "";
+  await upsert("agreement-template", "__all__", text);
   return c.json({ ok: true, text });
 });
 

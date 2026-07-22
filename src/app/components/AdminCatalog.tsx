@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { useData } from '../context/DataContext';
+import { useData, DEFAULT_PROPOSAL_TEMPLATE, DEFAULT_AGREEMENT_TEMPLATE } from '../context/DataContext';
 import {
-  ArrowLeft, Plus, Trash2,
+  ArrowLeft, Plus, Trash2, RotateCcw,
   DollarSign, Wrench, Settings, Pencil, Check, X, Lock, Boxes, FileText, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { InventoryTab } from './InventoryTab';
@@ -100,7 +100,7 @@ function EditableRow({
   onSavePrice,
 }: {
   name: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   badge?: string;
   canEdit: boolean;
   canDelete: boolean;
@@ -307,7 +307,7 @@ function EquipmentItemsTab() {
 
 // ─── Pages ────────────────────────────────────────────────────────────────────
 
-function PageHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+function PageHeader({ icon, title }: { icon: ReactNode; title: string }) {
   const navigate = useNavigate();
   return (
     <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 sticky top-0 z-10">
@@ -471,5 +471,151 @@ export function ProposalTermsPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// Shared shell for the two "edit the entire raw document" template editors
+// below — same Super-Admin gate, one big raw textarea, Save/Reset, and a
+// markup legend, differing only in title/content/default/update-fn.
+function RawTemplateEditorPage({
+  title, icon, helpText, legend, value, defaultValue, onSave,
+}: {
+  title: string;
+  icon: ReactNode;
+  helpText: string;
+  legend: ReactNode;
+  value: string;
+  defaultValue: string;
+  onSave: (text: string) => void;
+}) {
+  const navigate = useNavigate();
+  const isSuperAdmin = useIsSuperAdmin();
+  const [draft, setDraft] = useState(value);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => { setDraft(value); setDirty(false); }, [value]);
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-[#f3f3f5] flex items-center justify-center">
+          <Lock size={24} className="text-[#6a7282]" />
+        </div>
+        <div>
+          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Not available</h1>
+          <p className="text-[#6a7282] text-[14px] mt-1">{title} is restricted to super admins.</p>
+        </div>
+        <button onClick={() => navigate('/')} className="bg-[#1D2930] text-white rounded-[8px] px-5 py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px]">Back to app</button>
+      </div>
+    );
+  }
+
+  const handleSave = () => { onSave(draft); setDirty(false); toast.success(`${title} saved`); };
+  const handleReset = () => {
+    if (!confirm(`Reset ${title} to the built-in default? This discards your current raw text (until you save again).`)) return;
+    setDraft(defaultValue);
+    setDirty(true);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f9fafb]">
+      <PageHeader icon={icon} title={title} />
+      <div className="p-4 pb-16 max-w-3xl mx-auto space-y-3">
+        <p className="text-[13px] text-[#6a7282]">{helpText}</p>
+
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">Raw template</h2>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-1 text-[12px] text-[#6a7282] bg-[#f3f3f5] px-3 py-1.5 rounded-[8px] active:opacity-70"
+              >
+                <RotateCcw size={12} /> Reset to default
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!dirty}
+                className="bg-[#ff5c39] text-white text-[12px] font-['Inter:Medium',sans-serif] px-3 py-1.5 rounded-[8px] active:opacity-80 disabled:opacity-40"
+              >
+                {dirty ? 'Save' : 'Saved'}
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={draft}
+            onChange={e => { setDraft(e.target.value); setDirty(true); }}
+            rows={28}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[12.5px] font-mono outline-none resize-y leading-relaxed"
+            spellCheck={false}
+          />
+        </div>
+
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-3 text-[12px] text-[#6a7282] space-y-1.5">
+          <p className="font-['Inter:Medium',sans-serif] text-[#0a0a0a] text-[13px] mb-1">Markup reference</p>
+          {legend}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const MARKUP_BASICS = (
+  <>
+    <p><code>## Section Title</code> — a section heading</p>
+    <p><code>- bullet text</code> — a bullet list item (consecutive lines group into one list)</p>
+    <p><code>**bold**</code> — inline emphasis</p>
+    <p>Blank line = new block. Blocks are the unit everything below applies to.</p>
+  </>
+);
+
+// Full raw Proposal document template — Super Admin can rewrite every
+// static heading/paragraph/bullet/box/plan-card. Tables and computed data
+// (trails, site requirements, final quote, terms list, payment terms) stay
+// code-driven and are spliced in via {{splice:x}} tokens.
+export function ProposalTemplatePage() {
+  const { proposalTemplate, updateProposalTemplate } = useData();
+  return (
+    <RawTemplateEditorPage
+      title="Proposal Document Template"
+      icon={<FileText size={20} className="text-[#307fe2]" />}
+      helpText="The entire raw content of the proposal document — every static heading, paragraph, bullet, callout box, and subscription-plan card. Changes apply to every proposal going forward (existing proposals aren't retroactively changed since they render from the template live at view time, same as the rest of the app's data)."
+      legend={
+        <>
+          {MARKUP_BASICS}
+          <p><code>{'!!plan Name | Price | Scope | Description'}</code> — a subscription-plan card (consecutive lines become a 3-up grid)</p>
+          <p><code>{'!!box-orange Title'}</code> / <code>{'!!box-green Title'}</code> — a callout box; the title line followed by bullets or a paragraph</p>
+          <p><code>{'{{mountainName}}'}</code>, <code>{'{{clientAddress}}'}</code>, <code>{'{{installDays}}'}</code> — merge fields, resolved per-proposal</p>
+          <p><code>{'{{splice:trailsTable}}'}</code>, <code>{'{{splice:requirementsTable}}'}</code>, <code>{'{{splice:finalQuoteTable}}'}</code>, <code>{'{{splice:installNotesExtra}}'}</code>, <code>{'{{splice:paymentTermsBox}}'}</code>, <code>{'{{splice:termsList}}'}</code> — where the real computed tables/lists get inserted; don't delete these, but you can move/reorder them</p>
+        </>
+      }
+      value={proposalTemplate}
+      defaultValue={DEFAULT_PROPOSAL_TEMPLATE}
+      onSave={updateProposalTemplate}
+    />
+  );
+}
+
+// Full raw Customer Agreement document template — collapses the previous
+// CA_INTRO_PARAGRAPHS/CA_BODY_PARAGRAPHS static arrays into one editable
+// block. {{splice:parties}} marks where the per-agreement Parties/Technical
+// Administrator(s) data gets inserted.
+export function AgreementTemplatePage() {
+  const { agreementTemplate, updateAgreementTemplate } = useData();
+  return (
+    <RawTemplateEditorPage
+      title="Customer Agreement Template"
+      icon={<FileText size={20} className="text-[#307fe2]" />}
+      helpText="The entire raw legal text of the Customer Agreement. Changes apply to every agreement going forward — already-signed agreements are unaffected since a signed PDF was already generated and saved at signing time."
+      legend={
+        <>
+          {MARKUP_BASICS}
+          <p><code>{'{{splice:parties}}'}</code> — where the Parties / Technical Administrator(s) block (customer legal name, facility, signatories, effective date — that specific agreement's own data) gets inserted; don't delete this, but you can move it</p>
+        </>
+      }
+      value={agreementTemplate}
+      defaultValue={DEFAULT_AGREEMENT_TEMPLATE}
+      onSave={updateAgreementTemplate}
+    />
   );
 }

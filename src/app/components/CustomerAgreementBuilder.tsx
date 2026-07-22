@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
-import { CA_INTRO_PARAGRAPHS, CA_BODY_PARAGRAPHS } from '../data/customerAgreementText';
 import { buildPdfFromElement, savePdfToDocuments } from '../utils/pdfExport';
+import { renderTemplate } from '../utils/templateRenderer';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -80,6 +80,7 @@ export function CustomerAgreementBuilder() {
   const {
     getMountainById, addCustomerAgreement, updateCustomerAgreement,
     getCustomerAgreementByMountainId, countersignCustomerAgreement, refreshCustomerAgreement,
+    agreementTemplate,
   } = useData();
   const mountain = getMountainById(mountainId || '');
   const agreement = mountainId ? getCustomerAgreementByMountainId(mountainId) : undefined;
@@ -436,8 +437,7 @@ export function CustomerAgreementBuilder() {
         <div className={SECTION}>
           <h2 className={SECTION_H}>Agreement Terms</h2>
           <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1 text-[12.5px] text-[#374151] leading-relaxed font-['Inter:Regular',sans-serif]">
-            {CA_INTRO_PARAGRAPHS.map((p, i) => <p key={`intro-${i}`}>{p}</p>)}
-            {CA_BODY_PARAGRAPHS.map((p, i) => <p key={`body-${i}`}>{p}</p>)}
+            {renderTemplate(agreementTemplate, { paragraphStyle: {} })}
           </div>
         </div>
 
@@ -591,26 +591,28 @@ export function CustomerAgreementBuilder() {
               </div>
             </div>
 
-            <div data-pdf-section style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.7 }}>
-              {CA_INTRO_PARAGRAPHS.map((p, i) => <p key={`p-intro-${i}`} style={{ marginBottom: 10 }}>{p}</p>)}
-            </div>
+            {renderTemplate(agreementTemplate, {
+              paragraphStyle: { fontSize: 12.5, color: '#374151', lineHeight: 1.7, marginBottom: 10 },
+              pdfSectionEvery: 6,
+              spliceNodes: {
+                parties: (
+                  <>
+                    <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', marginTop: 20, marginBottom: 10 }}>1. Parties</h2>
+                    <p style={{ fontSize: 12.5, color: '#374151' }}><strong>YULLR:</strong> YULLR, Inc., 173 Tin Mountain Road, Jackson, NH 03846 — {form.yullrEmail}</p>
+                    <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}>
+                      <strong>Customer:</strong> {form.customerLegalName} ({form.entityType}, {form.stateOfFormation}) — Authorized Signatory: {form.authorizedSignatory}
+                    </p>
+                    <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Facility:</strong> {form.facilityName} — {form.facilityLocation}</p>
+                    <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Effective Date:</strong> {fmtDate(form.effectiveDate)}</p>
 
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', marginTop: 20, marginBottom: 10 }}>1. Parties</h2>
-            <p style={{ fontSize: 12.5, color: '#374151' }}><strong>YULLR:</strong> YULLR, Inc., 173 Tin Mountain Road, Jackson, NH 03846 — {form.yullrEmail}</p>
-            <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}>
-              <strong>Customer:</strong> {form.customerLegalName} ({form.entityType}, {form.stateOfFormation}) — Authorized Signatory: {form.authorizedSignatory}
-            </p>
-            <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Facility:</strong> {form.facilityName} — {form.facilityLocation}</p>
-            <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Effective Date:</strong> {fmtDate(form.effectiveDate)}</p>
-
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', marginTop: 24, marginBottom: 10 }}>Technical Administrator(s)</h2>
-            {form.technicalAdministrators.map((a, i) => (
-              <p key={a.id || i} style={{ fontSize: 12.5, color: '#374151', marginBottom: 4 }}>{a.name} — {a.role}{a.email ? ` · ${a.email}` : ''}{a.phone ? ` · ${a.phone}` : ''}</p>
-            ))}
-
-            {CA_BODY_PARAGRAPHS.map((p, i) => (
-              <p key={`p-body-${i}`} data-pdf-section={i % 6 === 0 ? true : undefined} style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.7, marginTop: i === 0 ? 24 : 0, marginBottom: 10 }}>{p}</p>
-            ))}
+                    <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', marginTop: 24, marginBottom: 10 }}>Technical Administrator(s)</h2>
+                    {form.technicalAdministrators.map((a, i) => (
+                      <p key={a.id || i} style={{ fontSize: 12.5, color: '#374151', marginBottom: 4 }}>{a.name} — {a.role}{a.email ? ` · ${a.email}` : ''}{a.phone ? ` · ${a.phone}` : ''}</p>
+                    ))}
+                  </>
+                ),
+              },
+            })}
 
             <div data-pdf-section style={{ marginTop: 40, paddingTop: 20, borderTop: '2px solid #FF5C39', display: 'flex', justifyContent: 'space-between' }}>
               <div style={{ fontSize: 12, color: '#555', width: 340 }}>

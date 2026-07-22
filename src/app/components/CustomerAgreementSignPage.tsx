@@ -3,6 +3,13 @@ import { useParams } from 'react-router';
 import { CheckCircle, AlertCircle, PenLine, Plus, X } from 'lucide-react';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import { CA_INTRO_PARAGRAPHS, CA_BODY_PARAGRAPHS } from '../data/customerAgreementText';
+import { renderTemplate } from '../utils/templateRenderer';
+
+// Falls back to the built-in default (same shape as DataContext's
+// DEFAULT_AGREEMENT_TEMPLATE, without the {{splice:parties}} token since
+// this page has never rendered party info) until the admin-editable
+// template loads from the public /template endpoint.
+const FALLBACK_AGREEMENT_TEMPLATE = [...CA_INTRO_PARAGRAPHS, ...CA_BODY_PARAGRAPHS].join('\n\n');
 
 // Public — token-authenticated, no Clerk session (server/routes/agreementPublicSign.ts).
 const API_BASE = '/api/public/agreement-sign';
@@ -75,6 +82,7 @@ export function CustomerAgreementSignPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [agreementTemplate, setAgreementTemplate] = useState(FALLBACK_AGREEMENT_TEMPLATE);
 
   const [customerLegalName, setCustomerLegalName] = useState('');
   const [entityType, setEntityType] = useState('LLC');
@@ -92,6 +100,13 @@ export function CustomerAgreementSignPage() {
   const sigPadRef = useRef<SignaturePadHandle>(null);
   const [sigEmpty, setSigEmpty] = useState(true);
   const [capturedSigUrl, setCapturedSigUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/template`)
+      .then(r => r.json())
+      .then((data: any) => { if (typeof data?.agreementTemplate === 'string' && data.agreementTemplate) setAgreementTemplate(data.agreementTemplate); })
+      .catch(() => { /* keep fallback */ });
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -352,8 +367,7 @@ export function CustomerAgreementSignPage() {
           <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Agreement Terms</h2>
           <div style={{ height: 2, background: '#f0f0f0', marginBottom: 16 }} />
           <div style={{ maxHeight: 420, overflowY: 'auto', paddingRight: 6 }}>
-            {CA_INTRO_PARAGRAPHS.map((p, i) => <p key={`intro-${i}`} style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.7, marginBottom: 10 }}>{p}</p>)}
-            {CA_BODY_PARAGRAPHS.map((p, i) => <p key={`body-${i}`} style={{ fontSize: 12.5, color: '#374151', lineHeight: 1.7, marginBottom: 10 }}>{p}</p>)}
+            {renderTemplate(agreementTemplate, { paragraphStyle: { fontSize: 12.5, color: '#374151', lineHeight: 1.7, marginBottom: 10 } })}
           </div>
         </div>
 

@@ -76,6 +76,8 @@ export function AppHeader() {
                   <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
                   <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
                   <UserButton.Action label="Proposal terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />
+                  <UserButton.Action label="Proposal template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />
+                  <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />
                 </UserButton.MenuItems>
               )}
             </UserButton>

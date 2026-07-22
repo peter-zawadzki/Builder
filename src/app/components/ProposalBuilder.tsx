@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import { useData, DEFAULT_PROPOSAL_TERMS, DEFAULT_PAYMENT_TERMS } from '../context/DataContext';
+import { renderTemplate } from '../utils/templateRenderer';
 import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -118,6 +119,7 @@ export function ProposalBuilder() {
     getAssetsByLocationId,
     proposalTerms,
     defaultPaymentTerms,
+    proposalTemplate,
     sendProposal, countersignProposal, refreshProposal,
     getCustomerAgreementByMountainId,
   } = useData();
@@ -735,6 +737,149 @@ export function ProposalBuilder() {
     const installNotesArr = form.installNotes.split('\n').filter(l => l.trim());
     const extraTermsArr = form.additionalTerms.split('\n').filter(l => l.trim());
 
+    // Splice nodes for the admin-editable template (Sections 1-7 below) —
+    // these are the tables/lists that stay code-driven (loops/conditionals
+    // that can't flatten into plain text) rather than raw template text.
+    // See src/app/utils/templateRenderer.tsx and DataContext.tsx's
+    // DEFAULT_PROPOSAL_TEMPLATE for the {{splice:x}} tokens these fill in.
+    const spliceNodes = {
+      trailsTable: (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <Th>Trail Name</Th>
+              <Th right>Capture Points</Th>
+              <Th>Notes</Th>
+              <Th right>Unit Price</Th>
+              <Th right>Total</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {form.trails.map((t, i) => (
+              <tr key={t.id} style={i % 2 === 1 ? evenRow : {}}>
+                <td style={td}>{t.name || '—'}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{t.capturePoints || '—'}</td>
+                <td style={td}>{t.notes || '—'}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{parseAmt(t.unitPrice) ? fmtMoney(parseAmt(t.unitPrice)) : '—'}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{trailTotal(t) ? fmtMoney(trailTotal(t)) : '—'}</td>
+              </tr>
+            ))}
+            <tr style={totalRow}>
+              <td style={td} colSpan={4}>Trail Capture Points Total</td>
+              <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(trailSubtotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+      ),
+      installNotesExtra: installNotesArr.length > 0 ? (
+        <ul style={{ marginLeft: 18, lineHeight: 2.2, color: '#444', fontSize: 12.5 }}>
+          {installNotesArr.map((n, i) => <li key={i}>{n}</li>)}
+        </ul>
+      ) : null,
+      requirementsTable: (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <Th>Location</Th>
+              <Th>Requirement</Th>
+              <Th>Details</Th>
+              <Th>Responsibility</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {form.requirements.map((r, i) => (
+              <tr key={r.id} style={i % 2 === 1 ? evenRow : {}}>
+                <td style={td}>{r.location}</td>
+                <td style={td}>{r.requirement}</td>
+                <td style={td}>{r.details}</td>
+                <td style={td}>{r.responsibility}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ),
+      finalQuoteTable: (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <Th>Item</Th>
+              <Th right>Qty</Th>
+              <Th right>Unit Price</Th>
+              <Th right>Amount</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={sectionRow}>
+              <td colSpan={4} style={{ ...td, fontWeight: 600, color: '#FF5C39', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 12px', background: '#fff3f0' }}>Hardware &amp; Installation</td>
+            </tr>
+            {form.trails.filter(t => trailTotal(t) > 0).map(t => (
+              <tr key={t.id}>
+                <td style={{ ...td, paddingLeft: 24 }}>{t.name || '—'}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{t.capturePoints}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(t.unitPrice))}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(trailTotal(t))}</td>
+              </tr>
+            ))}
+            {parseAmt(form.integrationFee) > 0 && (
+              <tr><td style={td}>Integration Fee</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(form.integrationFee))}</td></tr>
+            )}
+            {parseAmt(form.installFee) > 0 && (
+              <tr><td style={td}>Installation &amp; Commissioning</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(form.installFee))}</td></tr>
+            )}
+            {parseAmt(form.miscFee) > 0 && (
+              <tr><td style={td}>Miscellaneous / Travel</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(form.miscFee))}</td></tr>
+            )}
+            {selfInstallDiscountAmt > 0 && (
+              <tr><td style={td}>Self Install Discount</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>-{fmtMoney(selfInstallDiscountAmt)}</td></tr>
+            )}
+            <tr style={subtotalRow}>
+              <td colSpan={3} style={{ ...td, paddingLeft: 12 }}>Hardware &amp; Installation Total</td>
+              <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(hwTotal)}</td>
+            </tr>
+            {bulkSubtotal > 0 && (
+              <>
+                <tr><td colSpan={4} style={{ background: '#fff', border: 'none', padding: 6 }}>&nbsp;</td></tr>
+                <tr style={sectionRow}>
+                  <td colSpan={4} style={{ ...td, fontWeight: 600, color: '#FF5C39', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 12px', background: '#fff3f0' }}>Annual Bulk Subscriptions (Optional)</td>
+                </tr>
+                {form.bulkRows.filter(b => bulkTotal(b) > 0).map(b => (
+                  <tr key={b.id}>
+                    <td style={{ ...td, paddingLeft: 24 }}>{b.passType}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>{b.qty}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(b.unitPrice))}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(bulkTotal(b))}</td>
+                  </tr>
+                ))}
+                <tr style={subtotalRow}>
+                  <td colSpan={3} style={{ ...td, paddingLeft: 12 }}>Annual Bulk Subscriptions Total</td>
+                  <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(bulkSubtotal)}</td>
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
+      ),
+      paymentTermsBox: (
+        <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '10px 14px', marginTop: 10, fontSize: 12, color: '#78350f' }}>
+          <strong style={{ display: 'block', marginBottom: 3 }}>Payment Terms</strong>
+          {form.paymentTerms}
+        </div>
+      ),
+      termsList: (
+        <ol style={{ listStyle: 'none', counterReset: 'terms' } as React.CSSProperties}>
+          {[
+            ...(form.terms || DEFAULT_PROPOSAL_TERMS).map(t => interpolateTerm(t, form.termYears)),
+            ...extraTermsArr,
+          ].map((term, i) => (
+            <li key={i} style={{ counterIncrement: 'terms', padding: '7px 0 7px 26px', position: 'relative', borderBottom: '1px solid #f0f0f0', fontSize: 12.5, lineHeight: 1.6, color: '#444' }}>
+              <span style={{ position: 'absolute', left: 0, fontWeight: 700, color: '#FF5C39' }}>{i + 1}.</span>
+              {term}
+            </li>
+          ))}
+        </ol>
+      ),
+    };
+
     return (
       <div ref={ref} style={{ maxWidth: 860, margin: '24px auto', background: '#fff', padding: '60px 70px 100px', boxShadow: '0 2px 20px rgba(0,0,0,0.10)' }}>
           {/* Header */}
@@ -756,189 +901,16 @@ export function ProposalBuilder() {
             )}
           </div>
 
-          {/* 1. Project Summary */}
-          <PreviewH2>1. Project Summary</PreviewH2>
-          <p style={pStyle}>This proposal outlines the scope, hardware, subscription services, and associated costs for deploying the YULLR platform at <strong>{form.mountainName}</strong>, located at <strong>{form.clientAddress}</strong>.</p>
-          <p style={pStyle}>Built for demanding alpine environments, the YULLR system is designed to operate reliably in sub-zero temperatures, high winds, and heavy snowfall. Each camera is remotely managed through the YULLR cloud platform, providing real-time monitoring, firmware updates, and centralized footage management with minimal on-site maintenance.</p>
-
-          {/* 2. Trails */}
-          <PreviewH2>2. Trails</PreviewH2>
-          <p style={pStyle}>The following trails have been identified for YULLR Capture Points. Capture Point quantities and positioning are subject to adjustment based on site conditions.</p>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <Th>Trail Name</Th>
-                <Th right>Capture Points</Th>
-                <Th>Notes</Th>
-                <Th right>Unit Price</Th>
-                <Th right>Total</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {form.trails.map((t, i) => (
-                <tr key={t.id} style={i % 2 === 1 ? evenRow : {}}>
-                  <td style={td}>{t.name || '—'}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{t.capturePoints || '—'}</td>
-                  <td style={td}>{t.notes || '—'}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{parseAmt(t.unitPrice) ? fmtMoney(parseAmt(t.unitPrice)) : '—'}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{trailTotal(t) ? fmtMoney(trailTotal(t)) : '—'}</td>
-                </tr>
-              ))}
-              <tr style={totalRow}>
-                <td style={td} colSpan={4}>Trail Capture Points Total</td>
-                <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(trailSubtotal)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* 3. Installation Notes */}
-          <PreviewH2>3. Installation Notes</PreviewH2>
-          <p style={pStyle}>Installation will be carried out by a YULLR technician or approved installation partner. The following conditions apply:</p>
-          <ul style={{ marginLeft: 18, lineHeight: 2.2, color: '#444', fontSize: 12.5 }}>
-            <li>Installation is estimated to take <strong>{form.installDays || '[X]'}</strong> to complete.</li>
-            <li>All installations will be scheduled and coordinated with designated on mountain contact.</li>
-            <li>Each Capture Point will be mounted, aligned, and tested on-site before sign-off.</li>
-            <li>YULLR will provide full system commissioning and staff orientation prior to the start of the season.</li>
-            {installNotesArr.map((n, i) => <li key={i}>{n}</li>)}
-          </ul>
-
-          {/* 4. Site Requirements */}
-          <PreviewH2>4. Site Requirements</PreviewH2>
-          <p style={pStyle}>The following requirements must be in place at each designated location prior to the installation date. Unless otherwise agreed in writing.</p>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <Th>Location</Th>
-                <Th>Requirement</Th>
-                <Th>Details</Th>
-                <Th>Responsibility</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {form.requirements.map((r, i) => (
-                <tr key={r.id} style={i % 2 === 1 ? evenRow : {}}>
-                  <td style={td}>{r.location}</td>
-                  <td style={td}>{r.requirement}</td>
-                  <td style={td}>{r.details}</td>
-                  <td style={td}>{r.responsibility}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* 5. YULLR Subscriptions */}
-          <PreviewH2>5. YULLR Subscriptions</PreviewH2>
-          <p style={pStyle}>Skiers and riders at {form.mountainName} can purchase YULLR subscriptions to receive their footage. The following subscription types are available at published rates:</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 10 }}>
-            {[
-              { name: 'Day Pass', price: '$20', scope: '1 Mountain · 1 Day', desc: `Access to all YULLR footage captured at ${form.mountainName} for a single visit day.` },
-              { name: 'Mountain Pass', price: '$150', scope: '1 Mountain · Full Season', desc: `Unlimited footage access at ${form.mountainName} for the entire ski season.` },
-              { name: 'Season Pass', price: '$200', scope: 'All YULLR Mountains · Full Season', desc: `Unlimited footage access across all YULLR-enabled mountains for the full season.` },
-            ].map(s => (
-              <div key={s.name} style={{ border: '1px solid #ffd5cc', borderRadius: 8, padding: 16, textAlign: 'center' }}>
-                <h3 style={{ fontSize: 13, color: '#FF5C39', marginBottom: 4 }}>{s.name}</h3>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1a1a' }}>{s.price}</div>
-                <div style={{ fontSize: 11, color: '#777', marginBottom: 6 }}>{s.scope}</div>
-                <p style={{ fontSize: 11.5, color: '#555', textAlign: 'left' }}>{s.desc}</p>
-              </div>
-            ))}
-          </div>
-          <div style={{ background: '#fff3f0', border: '2px solid #FF5C39', borderRadius: 8, padding: '14px 18px', marginTop: 14 }}>
-            <h3 style={{ color: '#FF5C39', fontSize: 12.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Bulk Purchase Program</h3>
-            <ul style={{ listStyle: 'none', fontSize: 12.5, color: '#333', lineHeight: 2 }}>
-              {['A 50% discount applies to all bulk purchases of 25 or more passes of any type.',
-                'Bulk passes may be resold up to the published retail rate.',
-                'Bulk passes are non-refundable and valid for the current season only.',
-                'Additional bulk pass purchases after the initial order must be made in increments of 25.']
-                .map((item, i) => <li key={i} style={{ paddingLeft: 14, position: 'relative' }}><span style={{ color: '#FF5C39', fontWeight: 700, position: 'absolute', left: 0 }}>-</span>{item}</li>)}
-            </ul>
-          </div>
-          <div style={{ background: '#f0fdf4', border: '2px solid #22c55e', borderRadius: 8, padding: '14px 18px', marginTop: 12 }}>
-            <h3 style={{ color: '#15803d', fontSize: 12.5, fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Revenue Share — YULLR.COM Sales</h3>
-            <p style={{ color: '#166534', fontSize: 12.5, lineHeight: 1.8 }}>
-              {form.mountainName} will receive a <strong>15% profit share</strong> on all pass purchases completed through YULLR.COM that are attributable to {form.mountainName}. This includes all sales tracked through referral links, promo codes, QR codes, on-mountain signage, and any other trackable attribution method. Revenue share payments will be calculated per season and remitted within <strong>30 days</strong> of the end of the season, accompanied by a detailed sales report.
-            </p>
-          </div>
-
-          {/* 6. Final Quote */}
-          <PreviewH2>6. Final Quote</PreviewH2>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <Th>Item</Th>
-                <Th right>Qty</Th>
-                <Th right>Unit Price</Th>
-                <Th right>Amount</Th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style={sectionRow}>
-                <td colSpan={4} style={{ ...td, fontWeight: 600, color: '#FF5C39', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 12px', background: '#fff3f0' }}>Hardware &amp; Installation</td>
-              </tr>
-              {form.trails.filter(t => trailTotal(t) > 0).map(t => (
-                <tr key={t.id}>
-                  <td style={{ ...td, paddingLeft: 24 }}>{t.name || '—'}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{t.capturePoints}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(t.unitPrice))}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(trailTotal(t))}</td>
-                </tr>
-              ))}
-              {parseAmt(form.integrationFee) > 0 && (
-                <tr><td style={td}>Integration Fee</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(form.integrationFee))}</td></tr>
-              )}
-              {parseAmt(form.installFee) > 0 && (
-                <tr><td style={td}>Installation &amp; Commissioning</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(form.installFee))}</td></tr>
-              )}
-              {parseAmt(form.miscFee) > 0 && (
-                <tr><td style={td}>Miscellaneous / Travel</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(form.miscFee))}</td></tr>
-              )}
-              {selfInstallDiscountAmt > 0 && (
-                <tr><td style={td}>Self Install Discount</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>—</td><td style={{ ...td, textAlign: 'right' }}>-{fmtMoney(selfInstallDiscountAmt)}</td></tr>
-              )}
-              <tr style={subtotalRow}>
-                <td colSpan={3} style={{ ...td, paddingLeft: 12 }}>Hardware &amp; Installation Total</td>
-                <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(hwTotal)}</td>
-              </tr>
-              {bulkSubtotal > 0 && (
-                <>
-                  <tr><td colSpan={4} style={{ background: '#fff', border: 'none', padding: 6 }}>&nbsp;</td></tr>
-                  <tr style={sectionRow}>
-                    <td colSpan={4} style={{ ...td, fontWeight: 600, color: '#FF5C39', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 12px', background: '#fff3f0' }}>Annual Bulk Subscriptions (Optional)</td>
-                  </tr>
-                  {form.bulkRows.filter(b => bulkTotal(b) > 0).map(b => (
-                    <tr key={b.id}>
-                      <td style={{ ...td, paddingLeft: 24 }}>{b.passType}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{b.qty}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(parseAmt(b.unitPrice))}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(bulkTotal(b))}</td>
-                    </tr>
-                  ))}
-                  <tr style={subtotalRow}>
-                    <td colSpan={3} style={{ ...td, paddingLeft: 12 }}>Annual Bulk Subscriptions Total</td>
-                    <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(bulkSubtotal)}</td>
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
-          <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '10px 14px', marginTop: 10, fontSize: 12, color: '#78350f' }}>
-            <strong style={{ display: 'block', marginBottom: 3 }}>Payment Terms</strong>
-            {form.paymentTerms}
-          </div>
-
-          {/* 7. Terms */}
-          <PreviewH2>7. Terms</PreviewH2>
-          <ol style={{ listStyle: 'none', counterReset: 'terms' } as React.CSSProperties}>
-            {[
-              ...(form.terms || DEFAULT_PROPOSAL_TERMS).map(t => interpolateTerm(t, form.termYears)),
-              ...extraTermsArr,
-            ].map((term, i) => (
-              <li key={i} style={{ counterIncrement: 'terms', padding: '7px 0 7px 26px', position: 'relative', borderBottom: '1px solid #f0f0f0', fontSize: 12.5, lineHeight: 1.6, color: '#444' }}>
-                <span style={{ position: 'absolute', left: 0, fontWeight: 700, color: '#FF5C39' }}>{i + 1}.</span>
-                {term}
-              </li>
-            ))}
-          </ol>
+          {renderTemplate(proposalTemplate, {
+            mergeFields: {
+              mountainName: form.mountainName,
+              clientAddress: form.clientAddress,
+              installDays: form.installDays || '[X]',
+            },
+            spliceNodes,
+            Heading: PreviewH2,
+            paragraphStyle: pStyle,
+          })}
 
           {/* Footer / Signatures */}
           <div data-pdf-section style={{ marginTop: 40, paddingTop: 20, borderTop: '2px solid #FF5C39', display: 'flex', justifyContent: 'space-between' }}>
