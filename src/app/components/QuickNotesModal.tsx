@@ -137,12 +137,12 @@ export function QuickNotesModal({ mountainId, onClose }: QuickNotesModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-end"
+      className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4"
       onClick={onClose}
     >
       {/* Modal */}
       <div
-        className="bg-white rounded-t-[16px] w-full max-h-[85vh] overflow-y-auto"
+        className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full sm:max-w-lg max-h-[85vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

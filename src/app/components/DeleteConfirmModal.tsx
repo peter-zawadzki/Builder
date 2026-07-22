@@ -20,8 +20,8 @@ export function DeleteConfirmModal({
   const confirmed = typed === 'DELETE';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
-      <div className="bg-white w-full max-w-lg rounded-t-[20px] p-6 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
+      <div className="bg-white w-full max-w-lg rounded-t-[20px] sm:rounded-[20px] p-6 space-y-5">
         {/* Icon + headline */}
         <div className="flex flex-col items-center text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-[#fff0ee] flex items-center justify-center flex-shrink-0">

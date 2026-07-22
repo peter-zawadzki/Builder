@@ -890,10 +890,10 @@ function AddTrailModal({ mountainId, onClose }: { mountainId: string; onClose: (
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-t-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
           <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[17px]">Add Trail</p>
           <button onClick={onClose} className="p-1.5 rounded-full bg-[#f3f3f5] active:bg-[#e5e7eb] shrink-0">
@@ -999,10 +999,10 @@ function InventoryItemDetailModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-t-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
           <div className="flex-1 min-w-0 pr-3">
@@ -1136,10 +1136,10 @@ function InventoryItemDetailModal({
 
       {showDeployConfirm && (
         <div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 sm:p-4"
           onClick={e => { if (e.target === e.currentTarget) setShowDeployConfirm(false); }}
         >
-          <div className="bg-white w-full max-w-lg rounded-t-[20px] p-6 space-y-5">
+          <div className="bg-white w-full max-w-lg rounded-t-[20px] sm:rounded-[20px] p-6 space-y-5">
             <div className="flex flex-col items-center text-center gap-3">
               <div className="w-14 h-14 rounded-full bg-[#fff0ee] flex items-center justify-center flex-shrink-0">
                 <Rocket size={28} className="text-[#ff5c39]" />
@@ -1240,10 +1240,10 @@ function ContactDetailModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-t-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.08)]">
           <div className="flex-1 min-w-0 pr-3">

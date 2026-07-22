@@ -901,8 +901,8 @@ export function AddAsset() {
 
       {/* Update Confirmation Modal */}
       {showUpdateConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
-          <div className="bg-white w-full max-w-lg rounded-t-[20px] p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
+          <div className="bg-white w-full max-w-lg rounded-t-[20px] sm:rounded-[20px] p-6 space-y-4">
             <div className="flex flex-col items-center text-center gap-3">
               <div className="w-14 h-14 rounded-full bg-[#fff8ee] flex items-center justify-center">
                 <span className="text-[28px]">✏️</span>

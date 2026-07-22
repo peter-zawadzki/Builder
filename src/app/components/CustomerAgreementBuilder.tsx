@@ -624,8 +624,8 @@ export function CustomerAgreementBuilder() {
 
       {/* ── Confirm modal (clear signatures / archive) ── */}
       {confirmModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <div className="bg-white rounded-[16px] w-full max-w-sm shadow-2xl overflow-hidden mb-2">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="bg-white rounded-[16px] w-full max-w-sm shadow-2xl overflow-hidden mb-2 sm:mb-0">
             <div className={`px-6 pt-6 pb-4 ${confirmModal === 'archive' ? 'bg-[#f3f3f5]' : 'bg-[#fffbeb]'}`}>
               {confirmModal === 'archive' ? <Archive size={24} className="text-[#6a7282] mb-2" /> : <AlertTriangle size={24} className="text-[#d97706] mb-2" />}
               <p className="text-[#0a0a0a] font-['Inter:SemiBold',sans-serif] font-semibold text-[16px]">
