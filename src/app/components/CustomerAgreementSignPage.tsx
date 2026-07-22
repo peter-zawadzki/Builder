@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Fragment, useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router';
 import { CheckCircle, AlertCircle, PenLine, Printer } from 'lucide-react';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
@@ -80,6 +80,8 @@ export function CustomerAgreementSignPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [agreementTemplate, setAgreementTemplate] = useState(FALLBACK_AGREEMENT_TEMPLATE);
+  const [hasTechnicalContact, setHasTechnicalContact] = useState(false);
+  const [hasPreferredInstallWindows, setHasPreferredInstallWindows] = useState(false);
 
   const [customerLegalName, setCustomerLegalName] = useState('');
   const [entityType, setEntityType] = useState('LLC');
@@ -112,6 +114,8 @@ export function CustomerAgreementSignPage() {
         if (data.error) { setError(data.error); return; }
         const rec = data.agreement as AgreementRecord;
         setRecord(rec);
+        setHasTechnicalContact(!!data.hasTechnicalContact);
+        setHasPreferredInstallWindows(!!data.hasPreferredInstallWindows);
         const fd = rec.formData || {};
         setCustomerLegalName(fd.customerLegalName || '');
         setEntityType(ENTITY_TYPES.includes(fd.entityType || '') ? fd.entityType! : 'LLC');
@@ -202,6 +206,53 @@ export function CustomerAgreementSignPage() {
   const yullrEmail = fd.yullrEmail || 'support@yullr.com';
   const yullrSigned = !!record.yullrSignature;
 
+  // Same 4-step progress bar shown on the proposal signing page, carried
+  // over here so the customer sees consistent progress across both public
+  // pages. Reaching this page at all means the proposal was already signed.
+  const progressBar = (() => {
+    const steps = [
+      { label: 'Sign Proposal', done: true },
+      { label: 'Technical Contact', done: hasTechnicalContact },
+      { label: 'Install Preferences', done: hasPreferredInstallWindows },
+      { label: 'Sign Agreement', done: submitted },
+    ];
+    const nextIdx = steps.findIndex(s => !s.done);
+    return (
+      <div className="no-print" style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.08)', padding: '16px 24px' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'flex-start' }}>
+          {steps.map((s, i) => (
+            <Fragment key={s.label}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 84, flexShrink: 0 }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: s.done ? '#22c55e' : i === nextIdx ? '#FF5C39' : '#e5e7eb',
+                  color: s.done || i === nextIdx ? '#fff' : '#9ca3af',
+                  fontSize: 11, fontWeight: 700,
+                }}>
+                  {s.done ? '✓' : i + 1}
+                </div>
+                <span style={{
+                  marginTop: 6,
+                  textAlign: 'center',
+                  fontSize: 10.5,
+                  lineHeight: 1.3,
+                  fontWeight: s.done || i === nextIdx ? 600 : 400,
+                  color: s.done ? '#166534' : i === nextIdx ? '#c2410c' : '#9ca3af',
+                }}>
+                  {s.label}
+                </span>
+              </div>
+              {i < steps.length - 1 && (
+                <div style={{ flex: 1, height: 3, background: s.done ? '#22c55e' : '#e5e7eb', marginTop: 11 }} />
+              )}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  })();
+
   if (submitted) {
     return (
       <div style={{ minHeight: '100vh', background: '#F2F3F5' }}>
@@ -212,6 +263,7 @@ export function CustomerAgreementSignPage() {
             <CheckCircle size={13} /> Signed
           </span>
         </div>
+        {progressBar}
         <div style={{ maxWidth: 520, margin: '48px auto', padding: '0 20px' }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '36px 32px', textAlign: 'center', boxShadow: '0 2px 20px rgba(0,0,0,0.08)' }}>
             <div style={{ width: 68, height: 68, background: '#f0fdf4', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
@@ -272,6 +324,7 @@ export function CustomerAgreementSignPage() {
           </button>
         </div>
       </div>
+      {progressBar}
 
       <div style={{ maxWidth: 720, margin: '28px auto 60px', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.10)', padding: '48px 52px' }}>
 
