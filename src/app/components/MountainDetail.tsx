@@ -263,7 +263,7 @@ export function MountainDetail() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <button onClick={() => navigate('/')} className="p-1.5 active:opacity-60 shrink-0">
+              <button onClick={() => navigate('/mountains')} className="p-1.5 active:opacity-60 shrink-0">
                 <ArrowLeft size={22} className="text-[#0a0a0a]" />
               </button>
               <h1 className="min-w-0 truncate text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
@@ -438,7 +438,7 @@ export function MountainDetail() {
               return (
                 <div className="space-y-2">
                   {crmContacts.map((c) => {
-                    const noteCount = c.activities?.filter((a) => a.type === 'note').length || 0;
+                    const noteCount = c.activities?.filter((a) => a.type === 'note' && !a.archived).length || 0;
                     const openActions = c.activities?.filter((a) => a.type === 'action' && !a.completed).length || 0;
                     return (
                       <div

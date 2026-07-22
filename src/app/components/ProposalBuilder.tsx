@@ -1593,10 +1593,9 @@ export function ProposalBuilder() {
               </div>
             </div>
 
-            {/* Email and Signing link - hide when both parties have signed */}
+            {/* Send via Email — only useful before both parties have signed */}
             {!bothSigned && (
               <div className="mt-3 space-y-2">
-                {/* Send via Email button */}
                 <button
                   onClick={() => setShowEmailModal(true)}
                   className="w-full flex items-center justify-center gap-2 bg-[#ff5c39] text-white rounded-[8px] py-3 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
@@ -1610,37 +1609,6 @@ export function ProposalBuilder() {
                   <div className="flex-1 border-t border-[rgba(0,0,0,0.08)]" />
                   <span className="text-[11px] text-[#9ca3af] font-['Inter:Medium',sans-serif]">OR</span>
                   <div className="flex-1 border-t border-[rgba(0,0,0,0.08)]" />
-                </div>
-
-                {/* Copy link */}
-                <div>
-                  <p className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif] mb-1.5">
-                    Copy link to share manually
-                  </p>
-                  {signingUrl ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[12px] text-[#6a7282] font-['Inter:Regular',sans-serif] truncate min-w-0">
-                        {signingUrl}
-                      </div>
-                      <button
-                        onClick={copySignLink}
-                        className={`flex items-center gap-1.5 px-3 py-2.5 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] font-medium flex-shrink-0 transition-colors ${linkCopied ? 'bg-[#f0fdf4] text-[#22c55e]' : 'bg-[#1D2930] text-white active:opacity-80'}`}
-                      >
-                        {linkCopied ? <><CheckCircle size={13} /> Copied!</> : <><Copy size={13} /> Copy</>}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={generateSignLink}
-                      disabled={signLoading}
-                      className="w-full flex items-center justify-center gap-2 bg-[#1D2930] text-white rounded-[8px] py-2.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80 disabled:opacity-60"
-                    >
-                      {signLoading
-                        ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generating…</>
-                        : <>Generate Link</>
-                      }
-                    </button>
-                  )}
                 </div>
               </div>
             )}
@@ -1799,25 +1767,54 @@ export function ProposalBuilder() {
               )
             )}
 
-            {/* ── Continue to Customer Agreement CTA ── */}
-            {bothSigned && (
-              <div className="mt-4 pt-4 border-t border-[rgba(0,0,0,0.07)]">
-                <p className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif] mb-2 text-center">
-                  Proposal fully executed — next step
+            {/* ── Quick Links — always visible for quick access/review, ── */}
+            {/* regardless of where the proposal/agreement are in their      */}
+            {/* signing lifecycle.                                          */}
+            <div className="mt-4 pt-4 border-t border-[rgba(0,0,0,0.07)] space-y-3">
+              <div>
+                <p className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif] mb-1.5">
+                  Proposal link
                 </p>
-                <button
-                  onClick={() => navigate(`/mountains/${mountainId}/agreement`)}
-                  className={`w-full flex items-center justify-center gap-2 rounded-[10px] py-3.5 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80 ${
-                    agreementSigned
-                      ? 'bg-[#f0fdf4] border border-[#86efac] text-[#15803d]'
-                      : 'bg-[#fffbeb] border border-[#fde68a] text-[#b45309]'
-                  }`}
-                >
-                  <FileText size={15} />
-                  {agreementSigned ? 'View Signed Customer Agreement →' : 'Review & Sign Customer Agreement →'}
-                </button>
+                {signingUrl ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[12px] text-[#6a7282] font-['Inter:Regular',sans-serif] truncate min-w-0">
+                      {signingUrl}
+                    </div>
+                    <button
+                      onClick={copySignLink}
+                      className={`flex items-center gap-1.5 px-3 py-2.5 rounded-[8px] text-[12px] font-['Inter:Medium',sans-serif] font-medium flex-shrink-0 transition-colors ${linkCopied ? 'bg-[#f0fdf4] text-[#22c55e]' : 'bg-[#1D2930] text-white active:opacity-80'}`}
+                    >
+                      {linkCopied ? <><CheckCircle size={13} /> Copied!</> : <><Copy size={13} /> Copy</>}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={generateSignLink}
+                    disabled={signLoading}
+                    className="w-full flex items-center justify-center gap-2 bg-[#1D2930] text-white rounded-[8px] py-2.5 text-[12px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80 disabled:opacity-60"
+                  >
+                    {signLoading
+                      ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generating…</>
+                      : <>Generate Link</>
+                    }
+                  </button>
+                )}
               </div>
-            )}
+
+              <button
+                onClick={() => navigate(`/mountains/${mountainId}/agreement`)}
+                className={`w-full flex items-center justify-center gap-2 rounded-[10px] py-3.5 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80 ${
+                  agreementSigned
+                    ? 'bg-[#f0fdf4] border border-[#86efac] text-[#15803d]'
+                    : bothSigned
+                    ? 'bg-[#fffbeb] border border-[#fde68a] text-[#b45309]'
+                    : 'bg-[#f3f3f5] border border-[rgba(0,0,0,0.08)] text-[#6a7282]'
+                }`}
+              >
+                <FileText size={15} />
+                {agreementSigned ? 'View Signed Customer Agreement →' : bothSigned ? 'Review & Sign Customer Agreement →' : 'Customer Agreement →'}
+              </button>
+            </div>
           </div>
         )}
 
