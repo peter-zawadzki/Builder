@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { useOrganization } from "@clerk/clerk-react";
 import { ArrowLeft, Shield, User, Trash2, X, Loader2, Send, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { useIsSuperAdmin } from "../hooks/useRole";
+import { useIsAdminOrAbove } from "../hooks/useRole";
 
 // Custom team management: invite teammates and manage members, scoped to the
 // single YULLR organization. Intentionally renders NO organization edit / delete
@@ -33,7 +33,7 @@ function RoleBadge({ role }: { role: string }) {
 
 export function TeamPage() {
   const navigate = useNavigate();
-  const isSuperAdmin = useIsSuperAdmin();
+  const canManageTeam = useIsAdminOrAbove();
   const { organization, membership, memberships, invitations, isLoaded } =
     useOrganization({ memberships: true, invitations: true });
 
@@ -41,9 +41,10 @@ export function TeamPage() {
   const [role, setRole] = useState("org:member");
   const [inviting, setInviting] = useState(false);
 
-  // Team management is super-admin only. Members and org admins cannot see or
-  // manage users — the button is hidden for them and a direct URL is blocked.
-  if (!isSuperAdmin) {
+  // Team management is Admin/Super Admin only (Dev Story 10.1). Plain
+  // Users cannot see or manage the team — the button is hidden for them and
+  // a direct URL is blocked.
+  if (!canManageTeam) {
     return (
       <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center px-6 text-center gap-4">
         <div className="w-14 h-14 rounded-full bg-[#f3f3f5] flex items-center justify-center">
@@ -54,7 +55,7 @@ export function TeamPage() {
             Not available
           </h1>
           <p className="text-[#6a7282] text-[14px] mt-1 max-w-xs">
-            Team management is restricted to super admins.
+            Team management is restricted to admins.
           </p>
         </div>
         <button

@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
 import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText } from 'lucide-react';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
-import { useIsSuperAdmin } from '../hooks/useRole';
+import { useIsAdminOrAbove } from '../hooks/useRole';
 import { useData, getMyNotifications } from '../context/DataContext';
 import type { MyNotificationEntry } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
@@ -20,7 +20,7 @@ const NAV = [
 export function AppHeader() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const isSuperAdmin = useIsSuperAdmin();
+  const canManageTeam = useIsAdminOrAbove();
   const me = useMyContact();
   const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = useData();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -71,7 +71,7 @@ export function AppHeader() {
           </button>
           <div className="flex items-center h-9 pl-1">
             <UserButton appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }}>
-              {isSuperAdmin && (
+              {canManageTeam && (
                 <UserButton.MenuItems>
                   <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />
                   <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />
