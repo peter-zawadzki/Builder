@@ -21,6 +21,7 @@ import { useMyContact } from '../../hooks/useMyContact';
 import { ActivitySection } from '../ActivitySection';
 import { ProjectsPane } from '../projects/ProjectsPane';
 import { LogoUploader } from '../LogoUploader';
+import { AddressAutocomplete } from '../AddressAutocomplete';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -618,6 +619,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
     ]) as Phone[],
     type: contact.type,
     title: contact.title || '',
+    address: contact.address || '',
     organizationId: contact.organizationId || '',
     teamId: contact.teamId || '',
     tags: contact.tags || [] as ContactTag[],
@@ -752,6 +754,11 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
             </div>
 
             <div>
+              <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Address</label>
+              <AddressAutocomplete value={form.address} onChange={v => set('address', v)} />
+            </div>
+
+            <div>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Phone numbers</label>
               <div className="space-y-2">
                 {form.phones.map((p, i) => (
@@ -845,6 +852,7 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           ).map((p, i) => (
             <a key={i} href={`tel:${p.number}`} className="flex items-center gap-2 text-[13px] text-[#6a7282]"><Phone size={14} />{p.number}{p.label ? <span className="text-[11px] text-[#8992a0]">{p.label.toLowerCase()}</span> : null}</a>
           ))}
+          {contact.address && <span className="flex items-center gap-2 text-[13px] text-[#6a7282]"><MapPin size={14} />{contact.address}</span>}
           {mountain && (
             <button onClick={() => navigate(`/mountains/${mountain.id}`)} className="flex items-center gap-2 text-[13px] text-[#6a7282] hover:text-[#307fe2] active:opacity-70">
               {mountain.mountainLogo ? <img src={mountain.mountainLogo} alt={mountain.name} className="h-5 object-contain" /> : <><ExternalLink size={14} />{mountain.name}</>} <StageBadge stage={mountain.pipelineStage} />
@@ -1129,6 +1137,7 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
     ]) as Phone[],
     type: contact?.type || 'General' as ContactType,
     title: contact?.title || '',
+    address: contact?.address || '',
     organizationId: contact?.organizationId || defaults?.organizationId || '',
     teamId: contact?.teamId || defaults?.teamId || '',
     tags: contact?.tags || [] as ContactTag[],
@@ -1209,6 +1218,11 @@ export function ContactForm({ contact, onClose, defaults }: { contact: CRMContac
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Title</label>
               <input type="text" value={form.title} onChange={e => set('title', e.target.value)} className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none" />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Address</label>
+            <AddressAutocomplete value={form.address} onChange={v => set('address', v)} />
           </div>
 
           <div>
@@ -1579,7 +1593,7 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
               </div>
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Address</label>
-                <input type="text" value={form.address} onChange={e => set('address', e.target.value)} className={inputCls} />
+                <AddressAutocomplete value={form.address} onChange={v => set('address', v)} />
               </div>
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes</label>
@@ -1915,7 +1929,7 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
               </div>
               <div>
                 <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Address</label>
-                <input type="text" value={form.address} onChange={e => set('address', e.target.value)} className={inputCls} />
+                <AddressAutocomplete value={form.address} onChange={v => set('address', v)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

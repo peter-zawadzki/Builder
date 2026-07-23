@@ -536,6 +536,7 @@ export interface CRMContact {
   workPhone?: string;        // legacy
   type: ContactType;
   title?: string;
+  address?: string;
   organizationId?: string;
   tags: ContactTag[];
   isPrimary: boolean;
