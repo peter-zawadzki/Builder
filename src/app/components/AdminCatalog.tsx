@@ -4,6 +4,7 @@ import { useData, DEFAULT_PROPOSAL_TEMPLATE, DEFAULT_AGREEMENT_TEMPLATE } from '
 import {
   ArrowLeft, Plus, Trash2, RotateCcw,
   DollarSign, Wrench, Settings, Pencil, Check, X, Lock, Boxes, FileText, ChevronUp, ChevronDown,
+  Tag as TagIcon,
 } from 'lucide-react';
 import { InventoryTab } from './InventoryTab';
 import { toast } from 'sonner';
@@ -18,6 +19,11 @@ const BASE_EQUIPMENT_ITEMS = [
   'Transformer Required', 'Data Drop', 'Existing Fiber Drop',
   'Passive POE Adapter', 'Ethernet Cable 50Ft', 'Antenna Mount',
 ];
+
+// Must mirror CRM.tsx's CONTACT_TAGS — that's the built-in tag list shown
+// on every contact's tag picker; this page manages renaming/hiding/deleting
+// from that same set (plus any custom tags added via the picker).
+const BASE_CONTACT_TAGS = ['Decision Maker', 'Technical', 'Champion', 'Billing', 'Legal'];
 
 
 // ─── PriceInput ───────────────────────────────────────────────────────────────
@@ -170,6 +176,140 @@ function EditableRow({
           <Trash2 size={14} className="text-[#ff5c39]" />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Contact Tags Tab (CRM) ───────────────────────────────────────────────────
+
+function ContactTagsTab() {
+  const { getOptions, addOption, deleteOption, contacts, updateContact } = useData();
+  const customTags = getOptions('crm:contactTags');
+  const hiddenBuiltIns = getOptions('crm:hiddenContactTags');
+
+  const visibleBuiltIns = BASE_CONTACT_TAGS.filter(t => !hiddenBuiltIns.includes(t));
+  const allTags = [...new Set([...visibleBuiltIns, ...customTags])].sort((a, b) => a.localeCompare(b));
+
+  const [newTag, setNewTag] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [deleteTag, setDeleteTag] = useState<string | null>(null);
+
+  // Renaming/deleting a tag also updates every contact currently wearing it —
+  // unlike the equipment catalog (a picklist with no live references), tags
+  // are stored directly on each contact's `tags` array, so leaving them
+  // pointing at a since-renamed/removed tag would silently orphan them.
+  const reassignContacts = (oldTag: string, newTag: string | null) => {
+    contacts.filter(c => c.tags?.includes(oldTag)).forEach(c => {
+      const tags = c.tags.filter(t => t !== oldTag);
+      if (newTag && !tags.includes(newTag)) tags.push(newTag);
+      updateContact(c.id, { tags });
+    });
+  };
+
+  const handleAddTag = () => {
+    const trimmed = newTag.trim();
+    if (!trimmed) return;
+    if (allTags.includes(trimmed)) { toast.error('Tag already exists'); return; }
+    addOption('crm:contactTags', trimmed);
+    setNewTag('');
+    setShowAdd(false);
+    toast.success(`"${trimmed}" added`);
+  };
+
+  const handleDelete = (tag: string) => {
+    setDeleteTag(null);
+    if (BASE_CONTACT_TAGS.includes(tag)) {
+      addOption('crm:hiddenContactTags', tag);
+    } else {
+      deleteOption('crm:contactTags', tag);
+    }
+    reassignContacts(tag, null);
+    toast.success(`"${tag}" removed`);
+  };
+
+  const handleRename = (oldName: string, newName: string) => {
+    if (allTags.includes(newName)) { toast.error('A tag with that name already exists'); return; }
+    if (BASE_CONTACT_TAGS.includes(oldName)) {
+      addOption('crm:hiddenContactTags', oldName);
+      addOption('crm:contactTags', newName);
+    } else {
+      deleteOption('crm:contactTags', oldName);
+      addOption('crm:contactTags', newName);
+    }
+    reassignContacts(oldName, newName);
+    toast.success(`Renamed to "${newName}"`);
+  };
+
+  const handleRestoreDefaults = () => {
+    hiddenBuiltIns.forEach(t => deleteOption('crm:hiddenContactTags', t));
+    toast.success('Built-in tags restored');
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[#eef3fb] rounded-[8px] px-3 py-2.5">
+        <p className="text-[#307fe2] font-['Inter:Regular',sans-serif] text-[13px]">
+          Manage CRM contact tags. All tags — including built-ins — can be renamed or deleted; renaming or
+          deleting a tag updates every contact currently wearing it.
+          {hiddenBuiltIns.length > 0 && (
+            <> {' '}<button onClick={handleRestoreDefaults} className="underline font-['Inter:Medium',sans-serif] active:opacity-70">
+              Restore {hiddenBuiltIns.length} removed default{hiddenBuiltIns.length !== 1 ? 's' : ''}
+            </button>.</>
+          )}
+        </p>
+      </div>
+
+      <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] divide-y divide-[rgba(0,0,0,0.06)]">
+        {allTags.map(tag => {
+          const isBuiltIn = BASE_CONTACT_TAGS.includes(tag);
+          const usageCount = contacts.filter(c => c.tags?.includes(tag)).length;
+          return (
+            <EditableRow
+              key={tag}
+              name={tag}
+              icon={<TagIcon size={15} className="text-[#6a7282] shrink-0" />}
+              badge={[isBuiltIn ? 'Built-in' : null, usageCount > 0 ? `${usageCount} contact${usageCount !== 1 ? 's' : ''}` : null].filter(Boolean).join(' · ') || undefined}
+              canEdit
+              canDelete
+              showPrice={false}
+              onSaveEdit={newName => handleRename(tag, newName)}
+              onDelete={() => setDeleteTag(tag)}
+            />
+          );
+        })}
+        {allTags.length === 0 && (
+          <div className="px-4 py-6 text-center text-[13px] text-[#6a7282]">No tags yet.</div>
+        )}
+      </div>
+
+      {showAdd ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newTag}
+            onChange={e => setNewTag(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddTag(); if (e.key === 'Escape') setShowAdd(false); }}
+            autoFocus
+            placeholder="New tag name"
+            className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none border border-[#307fe2]"
+          />
+          <button onClick={handleAddTag} className="p-2.5 rounded-[8px] bg-[#307fe2] active:opacity-80"><Check size={16} className="text-white" /></button>
+          <button onClick={() => setShowAdd(false)} className="p-2.5 rounded-[8px] bg-[#f3f3f5] active:bg-[#e5e7eb]"><X size={16} className="text-[#6a7282]" /></button>
+        </div>
+      ) : (
+        <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 text-[#307fe2] font-['Inter:Medium',sans-serif] text-[13px] active:opacity-70">
+          <Plus size={14} /> Add tag
+        </button>
+      )}
+
+      {deleteTag && (
+        <DeleteConfirmModal
+          title="Delete tag"
+          description={`Remove "${deleteTag}"? It will be removed from any contacts currently tagged with it.`}
+          onConfirm={() => handleDelete(deleteTag)}
+          onCancel={() => setDeleteTag(null)}
+        />
+      )}
     </div>
   );
 }
@@ -360,6 +500,36 @@ export function InspectionItemsPage() {
       <PageHeader icon={<Wrench size={20} className="text-[#307fe2]" />} title="Inspection Items" />
       <div className="p-4 pb-16">
         <EquipmentItemsTab />
+      </div>
+    </div>
+  );
+}
+
+// Contact tags catalog — super-admin only (lives under the profile menu).
+export function ContactTagsPage() {
+  const navigate = useNavigate();
+  const isSuperAdmin = useIsSuperAdmin();
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="w-14 h-14 rounded-full bg-[#f3f3f5] flex items-center justify-center">
+          <Lock size={24} className="text-[#6a7282]" />
+        </div>
+        <div>
+          <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Not available</h1>
+          <p className="text-[#6a7282] text-[14px] mt-1">Contact tags are restricted to super admins.</p>
+        </div>
+        <button onClick={() => navigate('/')} className="bg-[#1D2930] text-white rounded-[8px] px-5 py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px]">Back to app</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f9fafb]">
+      <PageHeader icon={<TagIcon size={20} className="text-[#307fe2]" />} title="Contact Tags" />
+      <div className="p-4 pb-16">
+        <ContactTagsTab />
       </div>
     </div>
   );

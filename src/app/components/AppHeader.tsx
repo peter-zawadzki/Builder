@@ -94,6 +94,7 @@ export function AppHeader() {
                 {canManageTeam && <UserButton.Action label="Proposal terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />}
                 {canManageTeam && <UserButton.Action label="Proposal template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />}
                 {canManageTeam && <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />}
+                {canManageTeam && <UserButton.Action label="Contact tags" labelIcon={<Tag size={16} />} onClick={() => navigate('/contact-tags')} />}
                 <UserButton.Action
                   label={
                     versionInfo

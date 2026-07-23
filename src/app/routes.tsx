@@ -10,7 +10,7 @@ import { EditMountain } from "./components/EditMountain";
 import { CreateLocation } from "./components/CreateLocation";
 import { EditLocation } from "./components/EditLocation";
 import { AddInspection } from "./components/AddInspection";
-import { InventoryPage, InspectionItemsPage, ProposalTermsPage, ProposalTemplatePage, AgreementTemplatePage } from "./components/AdminCatalog";
+import { InventoryPage, InspectionItemsPage, ProposalTermsPage, ProposalTemplatePage, AgreementTemplatePage, ContactTagsPage } from "./components/AdminCatalog";
 import { ProposalBuilder } from "./components/ProposalBuilder";
 import { InvoiceViewer } from "./components/InvoiceViewer";
 import { CreateTrail } from "./components/CreateTrail";
@@ -78,6 +78,7 @@ export const router = createBrowserRouter([
           { path: "/proposal-terms", Component: ProposalTermsPage },
           { path: "/proposal-template", Component: ProposalTemplatePage },
           { path: "/agreement-template", Component: AgreementTemplatePage },
+          { path: "/contact-tags", Component: ContactTagsPage },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
           { path: "/system-check", Component: SystemCheck },

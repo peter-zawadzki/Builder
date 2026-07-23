@@ -224,7 +224,11 @@ function PrimaryAssociationPicker({
 function ContactTagPicker({ tags, onChange }: { tags: ContactTag[]; onChange: (tags: ContactTag[]) => void }) {
   const { getOptions, addOption } = useData();
   const [newTag, setNewTag] = useState('');
-  const allTags = [...new Set([...CONTACT_TAGS, ...getOptions('crm:contactTags')])];
+  // Built-in tags removed via the super-admin Contact Tags page (Profile menu)
+  // are hidden here too, same pattern as the equipment items catalog.
+  const hiddenBuiltIns = getOptions('crm:hiddenContactTags');
+  const visibleBuiltIns = CONTACT_TAGS.filter(t => !hiddenBuiltIns.includes(t));
+  const allTags = [...new Set([...visibleBuiltIns, ...getOptions('crm:contactTags')])];
 
   const toggle = (t: string) => onChange(tags.includes(t) ? tags.filter(x => x !== t) : [...tags, t]);
   const addCustom = () => {
