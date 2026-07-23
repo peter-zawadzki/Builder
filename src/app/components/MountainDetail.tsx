@@ -16,6 +16,7 @@ import {
   Calendar, Truck, Barcode, Cpu, Users, Phone, Mail, Maximize2, Pencil, Check, Rocket,
   Image as ImageIcon, Film,
 } from 'lucide-react';
+import { newId } from '../utils/id';
 
 type ContactSlot =
   | { type: 'admin' }
@@ -241,7 +242,7 @@ export function MountainDetail() {
   const addActionItem = (text: string, assigneeId?: string) => {
     const assignee = assigneeId ? yullrMembers.find(m => m.id === assigneeId) : undefined;
     const entry = {
-      id: crypto.randomUUID(),
+      id: newId(),
       text,
       type: 'action' as const,
       createdAt: new Date().toISOString(),

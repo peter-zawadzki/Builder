@@ -9,6 +9,7 @@ import * as cloudAnnotationSync from '../utils/cloudAnnotationSync';
 import * as offlineQueue from '../utils/offlineQueue';
 import { CA_INTRO_PARAGRAPHS, CA_BODY_PARAGRAPHS } from '../data/customerAgreementText';
 import { toast } from 'sonner';
+import { newId } from '../utils/id';
 
 export interface ContactNote {
   id: string;
@@ -1907,7 +1908,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─── Mountains ──────────────────────────────────────────────────────────────
 
   const addMountain = (mountain: Omit<Mountain, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const newMountain: Mountain = {
       ...mountain,
       id,
@@ -1941,7 +1942,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─── Locations ──────────────────────────────────────────────────────────────
 
   const addLocation = (location: Omit<Location, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const newLocation = { ...location, id };
     setLocations(prev => [...prev, newLocation]);
     syncOrQueue('/locations', 'POST', JSON.stringify(newLocation))
@@ -1976,7 +1977,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─── Inspections (own collection, attached to a Location via locationId) ────
 
   const addInspection = (inspection: Omit<Inspection, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const newInspection = { ...inspection, id };
     setInspections(prev => [...prev, newInspection]);
     syncOrQueue('/site-inspections', 'POST', JSON.stringify(newInspection))
@@ -2015,7 +2016,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─── Assets ─────────────────────────────────────────────────────────────────
 
   const addAsset = (asset: Omit<Asset, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const newAsset = {
       ...asset,
       id,
@@ -2097,7 +2098,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─── Trails ─────────────────────────────────────────────────────────────────
 
   const addTrail = (trail: Omit<Trail, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const newTrail = { ...trail, id };
     setTrails(prev => [...prev, newTrail]);
     syncOrQueue('/trails', 'POST', JSON.stringify(newTrail))
@@ -2126,7 +2127,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // The unit of work on a mountain. Install/Repair/Upgrade; see Project type.
 
   const addProject = (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = new Date().toISOString();
     const newProject: Project = { ...project, id, createdAt: now, updatedAt: now };
     setProjects(prev => [...prev, newProject]);
@@ -2172,7 +2173,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // One per project. Content lives in the record's `form`.
 
   const addProposal = (proposal: Omit<Proposal, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = new Date().toISOString();
     const newProposal: Proposal = { ...proposal, id, createdAt: now, updatedAt: now };
     setProposals(prev => [...prev, newProposal]);
@@ -2235,9 +2236,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // refresh to pick up the customer's signature from the public sign page.
 
   const addCustomerAgreement = (mountainId: string, formData: CAFormData) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = new Date().toISOString();
-    const newAgreement: CustomerAgreement = { id, mountainId, formData, signToken: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    const newAgreement: CustomerAgreement = { id, mountainId, formData, signToken: newId(), createdAt: now, updatedAt: now };
     setCustomerAgreements(prev => [...prev, newAgreement]);
     syncOrQueue('/customer-agreements', 'POST', JSON.stringify(newAgreement))
       .catch(e => console.error('Customer agreement sync error:', e));
@@ -2274,7 +2275,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─── Notes ──────────────────────────────────────────────────────────────────
 
   const addNote = (mountainId: string, text: string, topic?: NoteTopic, scheduled?: boolean, completed?: boolean, installProgress?: number, authorName?: string) => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = new Date().toISOString();
     const newNote: MountainNote = {
       id,
@@ -2510,7 +2511,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // ─── CRM ────────────────────────────────────────────────────────────────────
 
   const addContact = (contact: Omit<CRMContact, 'id' | 'createdAt' | 'updatedAt'>): string => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = new Date().toISOString();
     const newContact: CRMContact = { ...contact, id, createdAt: now, updatedAt: now };
     setContacts(prev => [...prev, newContact]);
@@ -2540,7 +2541,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           : toName ? `Assigned to ${label} ${toName}`
           : fromName ? `Removed from ${label} ${fromName}`
           : '';
-        if (text) historyEntries.push({ id: crypto.randomUUID(), text, createdAt: new Date().toISOString() });
+        if (text) historyEntries.push({ id: newId(), text, createdAt: new Date().toISOString() });
       });
       return {
         ...c, ...updates, updatedAt: new Date().toISOString(),
@@ -2559,7 +2560,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const addOrganization = (org: Omit<CRMOrganization, 'id' | 'createdAt' | 'updatedAt'>): string => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = new Date().toISOString();
     const newOrg: CRMOrganization = { ...org, id, createdAt: now, updatedAt: now };
     setOrganizations(prev => [...prev, newOrg]);
@@ -2582,7 +2583,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const addTeam = (team: Omit<CRMTeam, 'id' | 'createdAt' | 'updatedAt'>): string => {
-    const id = crypto.randomUUID();
+    const id = newId();
     const now = new Date().toISOString();
     const newTeam: CRMTeam = { ...team, id, createdAt: now, updatedAt: now };
     setTeams(prev => [...prev, newTeam]);
@@ -2623,7 +2624,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const emailKey = (c.email || '').toLowerCase();
         if (emailKey && existingEmails.has(emailKey)) return;
         if (emailKey) existingEmails.add(emailKey);
-        const id = crypto.randomUUID();
+        const id = newId();
         const now = new Date().toISOString();
         toAdd.push({
           id, name: c.name, email: c.email || '', phone: c.phone || '',

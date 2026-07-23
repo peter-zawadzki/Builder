@@ -8,6 +8,7 @@ import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
 import { DiscardChangesModal } from '../DiscardChangesModal';
 import { useMyContact } from '../../hooks/useMyContact';
+import { newId } from '../../utils/id';
 
 // Project types available when creating a project under a Mountain vs. a Team.
 export const MOUNTAIN_PROJECT_TYPES: ProjectType[] = ['Install', 'Repair', 'Upgrade', 'Special Event'];
@@ -491,7 +492,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   };
 
   const addActivity = (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => {
-    const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    const full: ContactActivity = { ...entry, id: newId(), createdAt: new Date().toISOString() };
     updateProject(project.id, { activities: [...(project.activities || []), full] });
     const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountains.find(m => m.id === project.mountainId)?.name]);
     logActivity(project.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, project.mountainId ? undefined : project.teamId ? `/crm?tab=teams&open=${project.teamId}` : undefined, slackText, !!entry.assigneeContactId);

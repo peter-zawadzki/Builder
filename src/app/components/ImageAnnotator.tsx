@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import type { Annotation, AnnotationType } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import * as cloudAnnotationSync from '../utils/cloudAnnotationSync';
+import { newId } from '../utils/id';
 
 interface ImageAnnotatorProps {
   imageId: string;
@@ -210,7 +211,7 @@ export function ImageAnnotator({
     if (selectedTool === 'pin') {
       // Single click for pin
       const newAnn: Annotation = {
-        id: crypto.randomUUID(),
+        id: newId(),
         type: 'pin',
         points: [point],
         color: selectedColor,
@@ -225,7 +226,7 @@ export function ImageAnnotator({
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const newId = crypto.randomUUID();
+      const newId = newId();
 
       // Text input position is in display coordinates (already scaled)
       setTextInputPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
@@ -247,7 +248,7 @@ export function ImageAnnotator({
     } else if (selectedTool === 'line') {
       // Start new stroke
       setIsDrawing(true);
-      const newId = crypto.randomUUID();
+      const newId = newId();
       const newAnn: Annotation = {
         id: newId,
         type: 'line',
@@ -291,7 +292,7 @@ export function ImageAnnotator({
 
     if (selectedTool === 'pin') {
       const newAnn: Annotation = {
-        id: crypto.randomUUID(),
+        id: newId(),
         type: 'pin',
         points: [point],
         color: selectedColor,
@@ -310,7 +311,7 @@ export function ImageAnnotator({
       // Text input position is in display coordinates (already scaled)
       setTextInputPosition({ x: touch.clientX - rect.left, y: touch.clientY - rect.top });
       setTextInputValue('');
-      const newId = crypto.randomUUID();
+      const newId = newId();
       setPendingAnnotationId(newId);
 
       // Store the canvas point for the annotation (in canvas coordinates)
@@ -326,7 +327,7 @@ export function ImageAnnotator({
       setTimeout(() => textInputRef.current?.focus(), 10);
     } else if (selectedTool === 'line') {
       setIsDrawing(true);
-      const newId = crypto.randomUUID();
+      const newId = newId();
       const newAnn: Annotation = {
         id: newId,
         type: 'line',

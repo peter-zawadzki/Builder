@@ -8,6 +8,7 @@
  * Operations are processed strictly FIFO so create → update → delete ordering
  * is preserved even across reconnect gaps.
  */
+import { newId } from './id';
 
 const DB_NAME  = 'skiInstall_offlineQueue';
 const STORE    = 'pendingOps';
@@ -65,7 +66,7 @@ export async function enqueue(op: Omit<PendingOp, 'id' | 'createdAt'>): Promise<
     const tx = db.transaction(STORE, 'readwrite');
     const item: PendingOp = {
       ...op,
-      id: crypto.randomUUID(),
+      id: newId(),
       createdAt: Date.now(),
     };
     const req = tx.objectStore(STORE).add(item);

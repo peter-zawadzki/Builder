@@ -9,6 +9,7 @@ import {
   ClipboardList, Pencil, Image as ImageIcon, Video as VideoIcon,
   ChevronLeft, ChevronRight, X, Edit3, LayoutGrid, List as ListIcon, Film,
 } from 'lucide-react';
+import { newId } from '../utils/id';
 import { toast } from 'sonner';
 import { ActivitySection } from './ActivitySection';
 import { ImageAnnotator } from './ImageAnnotator';
@@ -508,7 +509,7 @@ export function LocationDetail({
                       <ActivitySection
                         activities={insp.activities || []}
                         onAdd={(entry) => {
-                          const full: ContactActivity = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+                          const full: ContactActivity = { ...entry, id: newId(), createdAt: new Date().toISOString() };
                           updateInspectionActivities(insp.id, [...(insp.activities || []), full]);
                           const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountain.name]);
                           logActivity(location.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/mountains/${location.mountainId}/locations/${location.id}`, slackText, !!entry.assigneeContactId);

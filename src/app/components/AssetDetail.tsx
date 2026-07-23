@@ -6,6 +6,7 @@ import {
   ArrowLeft, Camera, Wifi, Box, Server as ServerIcon,
   Pencil, Trash2, X, Check, Plus, Minus, Image as ImageIcon,
 } from 'lucide-react';
+import { newId } from '../utils/id';
 import { toast } from 'sonner';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
@@ -200,7 +201,7 @@ export function AssetDetail() {
     // Init other items
     setOtherItems(
       asset.miscItems?.filter(i => i.type === 'Other')
-        .map(i => ({ id: crypto.randomUUID(), name: i.customName || '', count: i.count })) || []
+        .map(i => ({ id: newId(), name: i.customName || '', count: i.count })) || []
     );
     setMiscPhotos(asset.miscPhotos || []);
     setIsEditing(true);
@@ -428,7 +429,7 @@ export function AssetDetail() {
                   />
                 ))}
                 <button type="button"
-                  onClick={() => setOtherItems(prev => [...prev, { id: crypto.randomUUID(), name: '', count: 1 }])}
+                  onClick={() => setOtherItems(prev => [...prev, { id: newId(), name: '', count: 1 }])}
                   className="rounded-[10px] px-3 h-[64px] flex items-center justify-center border border-dashed border-[rgba(0,0,0,0.2)] bg-[#f3f3f5] active:bg-[#e8e8ea] col-span-2 gap-2"
                 >
                   <Plus size={16} className="text-[#6a7282]" />

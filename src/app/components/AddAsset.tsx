@@ -6,6 +6,7 @@ import {
   ArrowLeft, Camera, MapPin, X, Wifi, Box, Server as ServerIcon,
   Plus, Minus, Image as ImageIcon,
 } from 'lucide-react';
+import { newId } from '../utils/id';
 import { toast } from 'sonner';
 import { AddableSelect } from './AddableSelect';
 
@@ -187,7 +188,7 @@ export function AddAsset() {
     if (existingAsset?.miscItems) {
       return existingAsset.miscItems
         .filter(i => i.type === 'Other')
-        .map(i => ({ id: crypto.randomUUID(), name: i.customName || '', count: i.count }));
+        .map(i => ({ id: newId(), name: i.customName || '', count: i.count }));
     }
     return [] as { id: string; name: string; count: number }[];
   };
@@ -636,7 +637,7 @@ export function AddAsset() {
                   type="button"
                   onClick={() => setOtherItems(prev => [
                     ...prev,
-                    { id: crypto.randomUUID(), name: '', count: 1 },
+                    { id: newId(), name: '', count: 1 },
                   ])}
                   className="rounded-[10px] px-3 h-[64px] flex items-center justify-center border border-dashed border-[rgba(0,0,0,0.2)] bg-[#f3f3f5] active:bg-[#e8e8ea] col-span-2 gap-2"
                 >

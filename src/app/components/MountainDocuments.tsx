@@ -7,6 +7,7 @@ import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
 import { ImageAnnotator } from './ImageAnnotator';
 import type { Annotation } from '../context/DataContext';
+import { newId } from '../utils/id';
 
 interface Document {
   id: string;
@@ -326,7 +327,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
           thumbnail = url;
         }
 
-        const id = crypto.randomUUID();
+        const id = newId();
         const uploadedAt = new Date().toISOString();
 
         const doc: Document = {

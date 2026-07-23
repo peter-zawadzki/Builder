@@ -6,6 +6,7 @@ import { useData, getYullrMembers, getMountainRollupActivities, canCompleteActiv
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { RollupNoteRow, RollupEmptyState, useMountainRollupUpdater } from './MountainActivityRollup';
 import { useMyContact } from '../hooks/useMyContact';
+import { newId } from '../utils/id';
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -103,7 +104,7 @@ function NoteCard({ note, onUpdate, forceExpanded }: NoteCardProps) {
 
     const now = new Date().toISOString();
     const newEntry = {
-      id: crypto.randomUUID(),
+      id: newId(),
       text: trimmed,
       timestamp: now,
     };
