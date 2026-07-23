@@ -2281,9 +2281,7 @@ function MountainsTab() {
                 <div className="flex-1 min-w-0">
                   <button onClick={() => navigate(`/mountains/${m.id}`)} className="w-full flex items-center justify-between text-left active:opacity-70">
                     <span className="text-[14px] text-[#0a0a0a]">{m.name}</span>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif] ${m.proposalCreated ? 'bg-[#eaf5ef] text-[#3f7a5c]' : 'bg-[#f3f3f5] text-[#6a7282]'}`}>
-                      {m.proposalCreated ? 'Customer' : 'Prospect'}
-                    </span>
+                    <StageBadge stage={m.pipelineStage} />
                   </button>
                   <div className="flex gap-1.5 flex-wrap mt-1.5">
                     {org && (
