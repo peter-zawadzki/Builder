@@ -169,7 +169,7 @@ export function MountainsList() {
     }
   };
 
-  // Filter (single search box across mountain name, state, region, owner, status) and sort mountains
+  // Filter (single search box across mountain name, state, region, owner, status, affiliate) and sort mountains
   const filteredAndSortedMountains = useMemo(() => {
     let filtered = mountains.filter(m => showArchived ? m.archived : !m.archived);
 
@@ -179,7 +179,10 @@ export function MountainsList() {
         const stateCode = extractState(m.address);
         const stateName = stateCode ? STATE_NAMES[stateCode] || stateCode : '';
         const owners = getProjectsByMountainId(m.id).map(p => p.ownerName).filter(Boolean);
-        const haystack = [m.name, m.address, stateCode, stateName, m.region, m.pipelineStage, ...owners]
+        const affiliates = (m.affiliateContactIds || [])
+          .map(id => contacts.find(c => c.id === id)?.name)
+          .filter(Boolean);
+        const haystack = [m.name, m.address, stateCode, stateName, m.region, m.pipelineStage, ...owners, ...affiliates]
           .filter(Boolean).join(' ').toLowerCase();
         return haystack.includes(q);
       });
@@ -189,7 +192,7 @@ export function MountainsList() {
     filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     return filtered;
-  }, [mountains, search, projects, showArchived]);
+  }, [mountains, search, projects, contacts, showArchived]);
 
   const openMap = async (e: React.MouseEvent, mountainId: string, mountainName: string) => {
     e.preventDefault();
@@ -230,7 +233,7 @@ export function MountainsList() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search by mountain, state, region, owner, or status…"
+                placeholder="Search by mountain, state, region, owner, status, or affiliate…"
                 className="w-full bg-[#f3f3f5] rounded-[6px] pl-9 pr-3 py-2 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] border-none outline-none"
               />
             </div>
