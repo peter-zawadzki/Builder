@@ -8,8 +8,9 @@ AWS Console.
 
 ## Current status
 
-- **Live at:** `http://52.86.78.62` (no domain pointed at it yet — see
-  "Known gaps" below)
+- **Live at:** `https://build.yullr.com` (plain `http://` redirects to
+  `https://`; the bare IP `http://52.86.78.62` still works too but has no
+  TLS cert of its own)
 - **Auth:** reusing the existing Clerk **development** instance/keys
   (not a separate production Clerk instance). Fine for the current scale
   (~20 internal users); revisit if that changes.
@@ -84,9 +85,8 @@ was copied as-is from local dev, since we're intentionally reusing the
 dev Clerk instance):
 
 - `DATABASE_URL` → `postgresql://builder:<password>@127.0.0.1:5432/yullr_builder`
-- `APP_BASE_URL` → `http://52.86.78.62` (used to build "View in
-  Builder" links in Slack messages — **must be updated** once a real
-  domain is pointed at this instance, see below)
+- `APP_BASE_URL` → `https://build.yullr.com` (used to build "View in
+  Builder" links in Slack messages)
 - `API_PORT` → `8787` (unchanged from dev default, matches the nginx
   proxy target)
 
@@ -116,15 +116,14 @@ Runs the TypeScript server directly via `tsx` (no separate compile
 step) — enabled and started, auto-restarts on crash and on instance
 boot. Check it with `sudo systemctl status builder-api`.
 
-### nginx — reverse proxy + static files
+### nginx — reverse proxy + static files + TLS
 
-`/etc/nginx/conf.d/builder.conf`:
+`/etc/nginx/conf.d/builder.conf` (the HTTPS server block was added
+automatically by `certbot --nginx`, not written by hand):
 
 ```nginx
 server {
-    listen 80;
-    listen [::]:80;
-    server_name _;
+    server_name build.yullr.com;
 
     root /home/ec2-user/builder/dist;
     index index.html;
@@ -141,13 +140,38 @@ server {
     location / {
         try_files $uri /index.html;
     }
+
+    listen [::]:443 ssl ipv6only=on; # managed by Certbot
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/build.yullr.com/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/build.yullr.com/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+server {
+    if ($host = build.yullr.com) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    listen [::]:80;
+    server_name build.yullr.com;
+    return 404; # managed by Certbot
 }
 ```
 
 Note: the distro-default `server { listen 80; server_name _; ... }`
 block that ships in `/etc/nginx/nginx.conf` was **removed** (it
-conflicted with the one above) — a backup of the original file was left
-at `/etc/nginx/nginx.conf.orig` on the instance.
+conflicted with the one above, before certbot ran) — a backup of the
+original file was left at `/etc/nginx/nginx.conf.orig` on the instance.
+
+**Certificate:** issued by Let's Encrypt via `certbot --nginx -d
+build.yullr.com`, expires 2026-10-22. Auto-renewal is handled by the
+`certbot-renew.timer` systemd timer (runs twice daily, only actually
+renews within ~30 days of expiry) — this had to be manually enabled
+after install (`sudo systemctl enable --now certbot-renew.timer`; the
+package doesn't enable it by default on AL2023). Verified working with
+`sudo certbot renew --dry-run`.
 
 ## Deploying a code change (current manual process)
 
@@ -183,35 +207,28 @@ so it needs to be passed in explicitly like this.)
 
 ## Known gaps / deliberately deferred
 
-1. **No domain / no HTTPS.** `build.yullr.com` currently still points at
-   `sites.figma.net` (an existing Figma Sites page) — deliberately left
-   alone until data migration from the old system is finished. Tracked
-   as a follow-up to: repoint the Route 53 A record at this instance,
-   install certbot, get a Let's Encrypt cert, update nginx for TLS, and
-   update `APP_BASE_URL` accordingly.
-2. **Git-based deploy.** Planned for the same follow-up work as the
-   domain switch — replace the manual rsync process above with a real
-   `git clone`/`git pull` on the server (needs a deploy key/token since
-   the repo is private).
-3. **Clerk production instance.** A production Clerk instance *was*
+1. **Git-based deploy.** Deploys are still manual `rsync` from a local
+   checkout (see above) — replace with a real `git clone`/`git pull` on
+   the server (needs a deploy key/token since the repo is private).
+2. **Clerk production instance.** A production Clerk instance *was*
    created during setup, tied to `build.yullr.com` (`pk_live_...` /
    `sk_live_...` keys) but never activated — DNS verification records
    were never added, and we deliberately kept using the dev instance
    instead given the small user count. If those `sk_live_...` credentials
    were ever pasted anywhere outside a password manager, rotate them in
    the Clerk dashboard before use.
-4. **No DB backups.** Postgres lives on the same instance as the app,
+3. **No DB backups.** Postgres lives on the same instance as the app,
    with no snapshotting or `pg_dump` schedule. Since this box is a
    single point of failure for both app and data, at minimum a cron'd
    `pg_dump` to the `yullr-builder-prod` S3 bucket is worth setting up
    before this holds real customer data.
-5. **No CI/CD.** Deploys are manual (see above). Fine at current
+4. **No CI/CD.** Deploys are manual (see above). Fine at current
    frequency; revisit if deploys become routine.
-6. **S3 bucket unused.** `yullr-builder-prod` was created with an IAM
+5. **S3 bucket unused.** `yullr-builder-prod` was created with an IAM
    instance role already attached, anticipating a move away from
    base64-in-Postgres for file uploads (logos, signatures), but no code
    currently writes to it.
-7. **SSH access is IP-restricted.** The security group only allows port
+6. **SSH access is IP-restricted.** The security group only allows port
    22 from the IP address of whoever set this up. If that person's IP
    changes (new network, VPN, etc.), SSH will stop working until the
    security group rule is updated in the AWS Console (EC2 → Security
