@@ -11,6 +11,7 @@ import * as locMediaDB from '../utils/locationMediaDB';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import L from 'leaflet';
+import { isGeolocationBlockedByInsecureContext, INSECURE_CONTEXT_LOCATION_MESSAGE } from '../utils/geolocation';
 
 // ─── Map Picker Modal ─────────────────────────────────────────────────────────
 
@@ -290,6 +291,11 @@ export function CreateLocation({
   const getGPS = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported on this device');
+      setShowManual(true);
+      return;
+    }
+    if (isGeolocationBlockedByInsecureContext()) {
+      toast.error(INSECURE_CONTEXT_LOCATION_MESSAGE, { duration: 6000 });
       setShowManual(true);
       return;
     }

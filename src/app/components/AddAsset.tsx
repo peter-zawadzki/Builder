@@ -7,6 +7,7 @@ import {
   Plus, Minus, Image as ImageIcon,
 } from 'lucide-react';
 import { newId } from '../utils/id';
+import { isGeolocationBlockedByInsecureContext, INSECURE_CONTEXT_LOCATION_MESSAGE } from '../utils/geolocation';
 import { toast } from 'sonner';
 import { AddableSelect } from './AddableSelect';
 
@@ -333,6 +334,7 @@ export function AddAsset() {
 
   const captureGPS = () => {
     if (!navigator.geolocation) { toast.error('GPS not supported on this device'); return; }
+    if (isGeolocationBlockedByInsecureContext()) { toast.error(INSECURE_CONTEXT_LOCATION_MESSAGE, { duration: 6000 }); return; }
     toast.info('Getting GPS coordinates...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
