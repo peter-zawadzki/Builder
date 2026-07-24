@@ -5,3 +5,8 @@ dist/
 .DS_Store
 coverage/
 .vite/
+
+# Raw Resource Center asset drop zone — a staging/archive area, not what's
+# actually served. The curated, served copies live in public/resource-assets/
+# and are committed normally.
+/resource-assets/

@@ -11,6 +11,7 @@ import { CreateLocation } from "./components/CreateLocation";
 import { EditLocation } from "./components/EditLocation";
 import { AddInspection } from "./components/AddInspection";
 import { InventoryPage, InspectionItemsPage, ProposalTermsPage, ProposalTemplatePage, AgreementTemplatePage, ContactTagsPage } from "./components/AdminCatalog";
+import { ResourceCenterPage } from "./components/ResourceCenter";
 import { ProposalBuilder } from "./components/ProposalBuilder";
 import { InvoiceViewer } from "./components/InvoiceViewer";
 import { CreateTrail } from "./components/CreateTrail";
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
           { path: "/proposal-template", Component: ProposalTemplatePage },
           { path: "/agreement-template", Component: AgreementTemplatePage },
           { path: "/contact-tags", Component: ContactTagsPage },
+          { path: "/resources", Component: ResourceCenterPage },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
           { path: "/system-check", Component: SystemCheck },
