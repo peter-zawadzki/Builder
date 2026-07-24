@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useData, getYullrMembers, canCompleteActivity } from '../context/DataContext';
 import type { ContactActivity } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
+import { useIsSuperAdmin } from '../hooks/useRole';
 
 // Shared "Notes & Action Items" block — used on Contacts, Organizations,
 // Mountains, Teams, Projects, and Inspections so assignment/tracking works the
@@ -27,6 +28,7 @@ export function ActivitySection({
   const { contacts, organizations } = useData();
   const { user } = useUser();
   const me = useMyContact();
+  const isSuperAdmin = useIsSuperAdmin();
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const yullrMembers = getYullrMembers(contacts, organizations);
   const [newText, setNewText] = useState('');
@@ -94,7 +96,7 @@ export function ActivitySection({
           <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2 flex items-center gap-1.5"><ListTodo size={12} /> Action Items ({openActions.length})</h3>
           <div className="space-y-2">
             {openActions.map(a => {
-              const canComplete = canCompleteActivity(a, me);
+              const canComplete = canCompleteActivity(a, me, isSuperAdmin);
               return (
                 <div key={a.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5 flex items-start gap-3">
                   <button
@@ -139,7 +141,7 @@ export function ActivitySection({
           </div>
           <div className="space-y-2">
             {(showArchived ? archivedNotes : notes).map(n => {
-              const canArchive = canCompleteActivity(n, me);
+              const canArchive = canCompleteActivity(n, me, isSuperAdmin);
               return (
                 <div key={n.id} className={`bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5 ${n.archived ? 'opacity-60' : ''}`}>
                   <p className="text-[13px] text-[#0a0a0a]">{n.text}</p>
@@ -169,7 +171,7 @@ export function ActivitySection({
           <h3 className="text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-2">Completed Actions ({doneActions.length})</h3>
           <div className="space-y-2">
             {doneActions.map(a => {
-              const canComplete = canCompleteActivity(a, me);
+              const canComplete = canCompleteActivity(a, me, isSuperAdmin);
               return (
                 <div key={a.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.05)] px-3 py-2.5 flex items-start gap-3 opacity-60">
                   <button

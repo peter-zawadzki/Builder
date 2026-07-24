@@ -2,6 +2,7 @@ import { Check, Lock, ListTodo, Archive } from 'lucide-react';
 import { useData, getMountainRollupActivities, canCompleteActivity } from '../context/DataContext';
 import type { ContactActivity, MountainActivityEntry } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
+import { useIsSuperAdmin } from '../hooks/useRole';
 
 export const ORIGIN_LABEL: Record<MountainActivityEntry['origin'], string> = {
   general: 'General',
@@ -139,7 +140,8 @@ export function MetaLine({ entry }: { entry: MountainActivityEntry }) {
 }
 
 function ActionRow({ entry, me, onToggle }: { entry: MountainActivityEntry; me: ReturnType<typeof useMyContact>; onToggle: () => void }) {
-  const canComplete = canCompleteActivity(entry, me);
+  const isSuperAdmin = useIsSuperAdmin();
+  const canComplete = canCompleteActivity(entry, me, isSuperAdmin);
   return (
     <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2 flex items-start gap-3">
       <div className="flex-1 min-w-0">

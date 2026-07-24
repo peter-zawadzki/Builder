@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback, useRef } from 'react';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 import * as photoDB from '../utils/photoDB';
 import * as locMediaDB from '../utils/locationMediaDB';
@@ -469,10 +469,12 @@ export interface ContactActivity {
 }
 
 // Only the person who created an item, or the person it's assigned to, may
-// mark it complete (action items) or archive it (notes). Tasks can only be
+// mark it complete (action items) or archive it (notes) — except a super
+// admin, who can act on anything regardless of ownership. Tasks can only be
 // assigned to a YULLR person, not a team. Loosely typed so it also accepts
 // MountainNote, which has the same author/assignee shape.
-export function canCompleteActivity(activity: { authorContactId?: string; assigneeContactId?: string }, me: CRMContact | undefined): boolean {
+export function canCompleteActivity(activity: { authorContactId?: string; assigneeContactId?: string }, me: CRMContact | undefined, isSuperAdmin?: boolean): boolean {
+  if (isSuperAdmin) return true;
   if (!me) return false;
   if (activity.authorContactId === me.id) return true;
   if (activity.assigneeContactId === me.id) return true;
@@ -1615,6 +1617,108 @@ export function DataProvider({ children }: { children: ReactNode }) {
     loadData();
   }, []);
 
+  // ─── Background refresh: keep multi-user data fresh without a hard reload ──
+  // The initial load above runs exactly once per page load. Without this,
+  // two people editing the same records (a proposal, a project, the proposal
+  // template, etc.) would only ever see each other's changes after a full
+  // browser refresh — or not at all, if a transient failure (e.g. an auth
+  // token not being ready yet right after sign-in) silently dropped that one
+  // initial fetch with no retry. This re-fetches the same collections
+  // periodically and on tab focus, merging with the same "server wins for
+  // known ids" policy as the initial load, but against CURRENT state (so an
+  // edit not yet confirmed by the server isn't clobbered) rather than a
+  // localStorage snapshot — and never touches isLoading, so it's invisible
+  // unless something actually changed.
+  const isRefreshingRef = useRef(false);
+  const refreshLiveData = useCallback(async () => {
+    if (isRefreshingRef.current || !navigator.onLine) return;
+    isRefreshingRef.current = true;
+    try {
+      const mergeCurrent = <T extends { id: string }>(server: T[], current: T[], tombstoneType: string): T[] => {
+        const deleted = new Set(getTombstones(tombstoneType));
+        const filtered = server.filter(item => !deleted.has(item.id));
+        const serverIds = new Set(filtered.map(item => item.id));
+        const localOnly = current.filter(item => !serverIds.has(item.id) && !deleted.has(item.id));
+        return [...filtered, ...localOnly];
+      };
+
+      const [
+        mountainsRes, locationsRes, trailsRes, assetsRes, notesRes, projectsRes, proposalsRes,
+        customerAgreementsRes, contactsRes, organizationsRes, teamsRes, inspectionsRes,
+        optionsRes, pricesRes, proposalTermsRes, paymentTermsRes, proposalTemplateRes, agreementTemplateRes,
+      ] = await Promise.all([
+        apiCall('/mountains').catch(() => null),
+        apiCall('/locations').catch(() => null),
+        apiCall('/trails').catch(() => null),
+        apiCall('/assets').catch(() => null),
+        apiCall('/notes').catch(() => null),
+        apiCall('/projects').catch(() => null),
+        apiCall('/proposals').catch(() => null),
+        apiCall('/customer-agreements').catch(() => null),
+        apiCall('/contacts').catch(() => null),
+        apiCall('/organizations').catch(() => null),
+        apiCall('/teams').catch(() => null),
+        apiCall('/site-inspections').catch(() => null),
+        apiCall('/options').catch(() => null),
+        apiCall('/item-prices').catch(() => null),
+        apiCall('/proposal-terms').catch(() => null),
+        apiCall('/payment-terms').catch(() => null),
+        apiCall('/proposal-template').catch(() => null),
+        apiCall('/agreement-template').catch(() => null),
+      ]);
+
+      if (mountainsRes) setMountains(prev => mergeCurrent(mountainsRes.mountains || [], prev, 'mountains'));
+      if (locationsRes) setLocations(prev => mergeCurrent(locationsRes.locations || [], prev, 'locations'));
+      if (trailsRes) setTrails(prev => mergeCurrent(trailsRes.trails || [], prev, 'trails'));
+      if (assetsRes) setAssets(prev => mergeCurrent(assetsRes.assets || [], prev, 'assets'));
+      if (notesRes) setNotes(prev => mergeCurrent(notesRes.notes || [], prev, 'notes'));
+      if (projectsRes) setProjects(prev => mergeCurrent(projectsRes.projects || [], prev, 'projects'));
+      if (proposalsRes) setProposals(prev => mergeCurrent(proposalsRes.proposals || [], prev, 'proposals'));
+      if (customerAgreementsRes) setCustomerAgreements(prev => mergeCurrent(customerAgreementsRes.customerAgreements || [], prev, 'customerAgreements'));
+      if (contactsRes) setContacts(prev => mergeCurrent(contactsRes.contacts || [], prev, 'contacts'));
+      if (organizationsRes) setOrganizations(prev => mergeCurrent(organizationsRes.organizations || [], prev, 'organizations'));
+      if (teamsRes) setTeams(prev => mergeCurrent(teamsRes.teams || [], prev, 'teams'));
+      if (inspectionsRes) setInspections(prev => mergeCurrent(inspectionsRes.siteInspections || [], prev, 'site-inspections'));
+      if (optionsRes?.options) {
+        setOptions(prev => {
+          const merged: Record<string, string[]> = { ...prev };
+          const serverOpts = optionsRes.options as Record<string, string[]>;
+          for (const key of Object.keys(serverOpts)) {
+            const existing = merged[key] || [];
+            merged[key] = [...new Set([...serverOpts[key], ...existing])].sort();
+          }
+          return merged;
+        });
+      }
+      if (pricesRes?.prices) setItemPrices(prev => ({ ...prev, ...pricesRes.prices }));
+      if (Array.isArray(proposalTermsRes?.proposalTerms) && proposalTermsRes.proposalTerms.length > 0) setProposalTerms(proposalTermsRes.proposalTerms);
+      if (typeof paymentTermsRes?.defaultPaymentTerms === 'string' && paymentTermsRes.defaultPaymentTerms) setDefaultPaymentTerms(paymentTermsRes.defaultPaymentTerms);
+      if (typeof proposalTemplateRes?.proposalTemplate === 'string' && proposalTemplateRes.proposalTemplate) setProposalTemplate(proposalTemplateRes.proposalTemplate);
+      if (typeof agreementTemplateRes?.agreementTemplate === 'string' && agreementTemplateRes.agreementTemplate) setAgreementTemplate(agreementTemplateRes.agreementTemplate);
+    } catch (err) {
+      console.error('Background refresh failed:', err);
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => refreshLiveData();
+    const onVisibility = () => { if (document.visibilityState === 'visible') refreshLiveData(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    // Periodic safety net so two people who both just leave a tab open (no
+    // focus/visibility change at all) still converge within a bounded time.
+    const interval = setInterval(() => {
+      if (navigator.onLine && document.visibilityState === 'visible') refreshLiveData();
+    }, 45000);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(interval);
+    };
+  }, [refreshLiveData]);
+
   // ─── Flush offline queue on mount + whenever connectivity returns ─────────────
   // A queued op that fails with a permanent (4xx) error, or one that's been
   // retried past the cap, is dropped instead of blocking every op queued after
@@ -1636,7 +1740,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         succeeded++;
       } catch (err) {
         const status = (err as Error & { status?: number }).status;
-        const isPermanent = typeof status === 'number' && status >= 400 && status < 500;
+        // 401/403 excluded from "permanent" — this app has no per-user write
+        // ACLs (any authenticated user can write any record), so an
+        // Unauthorized/Forbidden here is almost always a transient auth-token
+        // timing issue (e.g. right after sign-in), not a real rejection.
+        // Dropping it after a single attempt would silently and permanently
+        // lose the edit instead of just needing a few more seconds.
+        const isPermanent = typeof status === 'number' && status >= 400 && status < 500 && status !== 401 && status !== 403;
         const retries = await offlineQueue.bumpRetry(op.id).catch(() => 0);
         if (isPermanent || retries >= MAX_QUEUE_RETRIES) {
           console.error(`Dropping permanently-failed queued op ${op.method} ${op.endpoint} after ${retries} attempt(s):`, err);

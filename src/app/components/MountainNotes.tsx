@@ -6,6 +6,7 @@ import { useData, getYullrMembers, getMountainRollupActivities, canCompleteActiv
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { RollupNoteRow, RollupEmptyState, useMountainRollupUpdater } from './MountainActivityRollup';
 import { useMyContact } from '../hooks/useMyContact';
+import { useIsSuperAdmin } from '../hooks/useRole';
 import { newId } from '../utils/id';
 
 function formatShortDate(iso: string): string {
@@ -30,7 +31,8 @@ interface NoteCardProps {
 
 function NoteCard({ note, onUpdate, forceExpanded }: NoteCardProps) {
   const me = useMyContact();
-  const canArchive = canCompleteActivity(note, me);
+  const isSuperAdmin = useIsSuperAdmin();
+  const canArchive = canCompleteActivity(note, me, isSuperAdmin);
   const archiveNote = () => canArchive && onUpdate(note.id, { archived: true });
   const [isExpanded, setIsExpanded] = useState(forceExpanded || false);
   const [isEditing, setIsEditing] = useState(false);
@@ -469,6 +471,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
   const location = useLocation();
   const { user } = useUser();
   const me = useMyContact();
+  const isSuperAdmin = useIsSuperAdmin();
   const authorName = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const { addNote, updateNote, getNotesByMountainId, contacts, organizations, mountains, teams, projects, locations, inspections } = useData();
   const yullrMembers = getYullrMembers(contacts, organizations);
@@ -675,7 +678,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
                   : <RollupNoteRow
                       key={item.entry.id}
                       entry={item.entry}
-                      canArchive={canCompleteActivity(item.entry, me)}
+                      canArchive={canCompleteActivity(item.entry, me, isSuperAdmin)}
                       onArchive={() => applyRollupUpdate(item.entry, { archived: true })}
                     />
                 )}
@@ -691,7 +694,8 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
 // Compact read-only row for a soft-archived note, with a Restore action for
 // whoever's allowed to archive it (creator or assignee).
 function ArchivedNoteRow({ note, me, onRestore }: { note: MountainNote; me: ReturnType<typeof useMyContact>; onRestore: () => void }) {
-  const canRestore = canCompleteActivity(note, me);
+  const isSuperAdmin = useIsSuperAdmin();
+  const canRestore = canCompleteActivity(note, me, isSuperAdmin);
   return (
     <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2.5 opacity-70">
       <p className="text-[13px] text-[#0a0a0a]">{note.text}</p>

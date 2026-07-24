@@ -8,6 +8,7 @@ import { ActivitySection } from '../ActivitySection';
 import { DeleteConfirmModal } from '../DeleteConfirmModal';
 import { DiscardChangesModal } from '../DiscardChangesModal';
 import { useMyContact } from '../../hooks/useMyContact';
+import { useIsSuperAdmin } from '../../hooks/useRole';
 import { newId } from '../../utils/id';
 
 // Project types available when creating a project under a Mountain vs. a Team.
@@ -404,6 +405,7 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts, mountains, logActivity } = useData();
   const project = getProjectById(projectId);
   const me = useMyContact();
+  const isSuperAdmin = useIsSuperAdmin();
   const [isEditMode, setIsEditMode] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -419,10 +421,12 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   const [form, setForm] = useState(buildForm);
 
   if (!project) { onClose(); return null; }
-  const isOwner = !!me && project.ownerContactId === me.id;
+  // A super admin can manage/edit any project regardless of ownership —
+  // everyone else stays restricted to owner (or owner/creator for stage).
+  const isOwner = isSuperAdmin || (!!me && project.ownerContactId === me.id);
   // Stage status/date is the one thing both the owner AND the original
   // creator can manage — everything else stays owner-only.
-  const canManageStage = !!me && (project.ownerContactId === me.id || project.createdByContactId === me.id);
+  const canManageStage = isSuperAdmin || (!!me && (project.ownerContactId === me.id || project.createdByContactId === me.id));
   const availableTypes = project.teamId ? TEAM_PROJECT_TYPES : MOUNTAIN_PROJECT_TYPES;
   const stages = PROJECT_STAGES_BY_TYPE[project.type];
   const stageStatus = project.stageStatus || {};

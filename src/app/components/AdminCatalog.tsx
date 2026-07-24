@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useData, DEFAULT_PROPOSAL_TEMPLATE, DEFAULT_AGREEMENT_TEMPLATE } from '../context/DataContext';
 import {
@@ -545,9 +545,16 @@ export function ProposalTermsPage() {
   const [terms, setTerms] = useState(proposalTerms);
   const [paymentTerms, setPaymentTerms] = useState(defaultPaymentTerms);
   const [paymentTermsDirty, setPaymentTermsDirty] = useState(false);
+  // Terms auto-save on every keystroke (no explicit dirty flag), so a
+  // background data refresh landing mid-edit — with a response fetched
+  // before this edit started — could otherwise reset the textarea back to
+  // stale content. Briefly suppress external resyncs right after a local
+  // write so that race can't clobber what the admin just typed.
+  const suppressTermsSyncRef = useRef(false);
+  const suppressTermsTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useEffect(() => { setTerms(proposalTerms); }, [proposalTerms]);
-  useEffect(() => { setPaymentTerms(defaultPaymentTerms); }, [defaultPaymentTerms]);
+  useEffect(() => { if (!suppressTermsSyncRef.current) setTerms(proposalTerms); }, [proposalTerms]);
+  useEffect(() => { if (!paymentTermsDirty) setPaymentTerms(defaultPaymentTerms); }, [defaultPaymentTerms, paymentTermsDirty]);
 
   if (!isSuperAdmin) {
     return (
@@ -564,7 +571,13 @@ export function ProposalTermsPage() {
     );
   }
 
-  const commit = (next: string[]) => { setTerms(next); updateProposalTerms(next); };
+  const commit = (next: string[]) => {
+    setTerms(next);
+    updateProposalTerms(next);
+    suppressTermsSyncRef.current = true;
+    clearTimeout(suppressTermsTimeoutRef.current);
+    suppressTermsTimeoutRef.current = setTimeout(() => { suppressTermsSyncRef.current = false; }, 3000);
+  };
   const setTerm = (i: number, v: string) => commit(terms.map((t, idx) => idx === i ? v : t));
   const addTerm = () => commit([...terms, '']);
   const removeTerm = (i: number) => commit(terms.filter((_, idx) => idx !== i));
@@ -663,7 +676,10 @@ function RawTemplateEditorPage({
   const [draft, setDraft] = useState(value);
   const [dirty, setDirty] = useState(false);
 
-  useEffect(() => { setDraft(value); setDirty(false); }, [value]);
+  // Only resync from the server-backed value while there's no in-progress
+  // edit — otherwise a background data refresh (or someone else saving a
+  // change) would silently overwrite whatever the admin is mid-typing here.
+  useEffect(() => { if (!dirty) setDraft(value); }, [value, dirty]);
 
   if (!isSuperAdmin) {
     return (

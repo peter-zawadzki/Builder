@@ -4,6 +4,7 @@ import { TrendingUp, Activity as ActivityIcon, ListTodo, MessageSquare, ChevronR
 import { ActiveProjects } from "./projects/ActiveProjects";
 import { RecentActivity } from "./RecentActivity";
 import { useMyContact, useCanSeeAll } from "../hooks/useMyContact";
+import { useIsSuperAdmin } from "../hooks/useRole";
 import { useData, getMyNotifications, getAllOpenActivities, useGlobalActivityUpdater, canCompleteActivity } from "../context/DataContext";
 import type { MyNotificationEntry } from "../context/DataContext";
 
@@ -107,6 +108,7 @@ function ActivityList({
   me: ReturnType<typeof useMyContact>;
   onAction: (n: MyNotificationEntry) => void;
 }) {
+  const isSuperAdmin = useIsSuperAdmin();
   if (items.length === 0) {
     return (
       <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-6 text-center text-[13px] text-[#6a7282]">
@@ -117,7 +119,7 @@ function ActivityList({
   return (
     <div className="space-y-2">
       {items.map(n => {
-        const canAct = canCompleteActivity(n, me);
+        const canAct = canCompleteActivity(n, me, isSuperAdmin);
         return (
           <div key={`${n.origin}:${n.id}`} className="w-full bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3">
             <button onClick={() => onOpen(n)} className="flex-1 min-w-0 text-left active:opacity-70">
