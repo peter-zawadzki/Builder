@@ -8,7 +8,7 @@ AWS Console.
 
 ## Current status
 
-- **Live at:** `http://100.57.174.60` (no domain pointed at it yet — see
+- **Live at:** `http://52.86.78.62` (no domain pointed at it yet — see
   "Known gaps" below)
 - **Auth:** reusing the existing Clerk **development** instance/keys
   (not a separate production Clerk instance). Fine for the current scale
@@ -29,16 +29,23 @@ AWS Console.
 | Subnet | `subnet-089493afbf2d245af` (`us-east-1a`) |
 | EC2 instance | `i-04172aadff2b10700` — `t4g.small`, arm64, Amazon Linux 2023 |
 | AMI | `ami-00b18f89b5bdfb338` (`al2023-ami-kernel-default-arm64`, resolved via SSM at launch time — will drift as Amazon publishes newer AMIs) |
-| Public IP | `100.57.174.60` — **not an Elastic IP**, will change if the instance is stopped/started (rebooting is fine, it only changes on stop→start) |
+| Public IP | `52.86.78.62` — **Elastic IP** (`eipalloc-0e6c03fbcee9da259`), so it now survives stop/start, not just reboot |
 | Security group | `sg-0e99a420292eb325e` (`builder-prod-sg`) — port 22 restricted to one IP (whoever set this up; **update the rule if that IP changes** or SSH will start failing), ports 80/443 open to `0.0.0.0/0` |
 | SSH key pair | `builder-prod` — private key lives at `~/.ssh/builder-prod.pem` (local machine only, not in the repo) |
 | IAM role (instance profile) | `builder-prod-ec2-role` / `builder-prod-ec2-profile` — inline policy `builder-prod-s3-access` scoped to the S3 bucket below (Get/Put/Delete/List) |
 | S3 bucket | `yullr-builder-prod` — private (all public access blocked), AES256 default encryption, versioning on. **Not yet wired into the app** — created for future file-upload use (logos/signatures currently live as base64 in Postgres JSONB) |
 
-Why an EIP wasn't allocated: the AWS account already had 10 Elastic IPs
-in use for unrelated projects, hitting the default per-region limit of 5
-active + reserved. Rather than release someone else's IP or request a
-quota bump, we used the instance's auto-assigned public IP instead.
+The instance originally ran on its auto-assigned public IP (no EIP) —
+the account was at its default 5-EIP-per-region quota, already fully
+used by unrelated projects (other EC2 instances plus load balancer/RDS
+network interfaces for YULLR-PROD/YULLR-STAGE). Rather than release
+someone else's IP, we filed an EC2-VPC Elastic IPs quota increase
+(5 → 15) via Service Quotas, which auto-approved within ~15 minutes;
+`52.86.78.62` was then allocated and associated once it cleared.
+Note for future SSH: since AWS recycles IPs, this address may carry a
+stale `known_hosts` entry from whoever had it before — if you see "Host
+key verification failed", run `ssh-keygen -R 52.86.78.62` and reconnect
+with `-o StrictHostKeyChecking=accept-new`.
 
 ## What's installed on the instance
 
@@ -77,7 +84,7 @@ was copied as-is from local dev, since we're intentionally reusing the
 dev Clerk instance):
 
 - `DATABASE_URL` → `postgresql://builder:<password>@127.0.0.1:5432/yullr_builder`
-- `APP_BASE_URL` → `http://100.57.174.60` (used to build "View in
+- `APP_BASE_URL` → `http://52.86.78.62` (used to build "View in
   Builder" links in Slack messages — **must be updated** once a real
   domain is pointed at this instance, see below)
 - `API_PORT` → `8787` (unchanged from dev default, matches the nginx
@@ -150,9 +157,9 @@ From a machine with the repo checked out and `~/.ssh/builder-prod.pem`:
 rsync -az --delete \
   --exclude 'node_modules' --exclude '.git' --exclude 'dist' --exclude '.env.local' --exclude '.DS_Store' \
   -e "ssh -i ~/.ssh/builder-prod.pem" \
-  /path/to/Builder/ ec2-user@100.57.174.60:/home/ec2-user/builder/
+  /path/to/Builder/ ec2-user@52.86.78.62:/home/ec2-user/builder/
 
-ssh -i ~/.ssh/builder-prod.pem ec2-user@100.57.174.60 '
+ssh -i ~/.ssh/builder-prod.pem ec2-user@52.86.78.62 '
   cd /home/ec2-user/builder &&
   npm install &&
   npm run build &&
@@ -165,7 +172,7 @@ schema didn't, that's all that's needed. If a new file was added under
 `db/migrations/`, also run:
 
 ```bash
-ssh -i ~/.ssh/builder-prod.pem ec2-user@100.57.174.60 '
+ssh -i ~/.ssh/builder-prod.pem ec2-user@52.86.78.62 '
   cd /home/ec2-user/builder &&
   DATABASE_URL=$(grep "^DATABASE_URL=" .env.local | cut -d= -f2-) ./db/migrate.sh
 '
