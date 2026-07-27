@@ -10,3 +10,5 @@ coverage/
 # actually served. The curated, served copies live in public/resource-assets/
 # and are committed normally.
 /resource-assets/
+/Demo/
+/alex/

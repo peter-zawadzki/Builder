@@ -19,6 +19,15 @@ export interface LogoGroup {
 
 const BASE = '/resource-assets/logos';
 
+// Illustrator source files are vector, editable originals rather than
+// pre-rendered per-color exports, so the same .ai is shared across both
+// color variants of a given shape (there's one source file per shape, not
+// per color).
+const CIRCLE_AI = `${BASE}/Illistrator/yullr_logo_circle_text_orange.ai`;
+const ICON_AI = `${BASE}/Illistrator/yullr_logo_no_text.ai`;
+const SQUARE_AI = `${BASE}/Illistrator/yullr_logo_square_text.ai`;
+const WIDE_AI = `${BASE}/Illistrator/yullr_logo_wide_text.ai`;
+
 export const LOGO_GROUPS: LogoGroup[] = [
   {
     id: 'circle-orange',
@@ -28,6 +37,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Circle_Orange/yullr_logo_circle_text_orange.png` },
       { label: 'WEBP', url: `${BASE}/Circle_Orange/yullr_logo_circle_text_orange.webp` },
       { label: 'EPS', url: `${BASE}/Circle_Orange/yullr_logo_circle_text_orange.eps` },
+      { label: 'AI', url: CIRCLE_AI },
     ],
   },
   {
@@ -38,6 +48,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Circle_White/yullr_logo_circle_text_white.png` },
       { label: 'WEBP', url: `${BASE}/Circle_White/yullr_logo_circle_text_white.webp` },
       { label: 'EPS', url: `${BASE}/Circle_White/yullr_logo_circle_text_white.eps` },
+      { label: 'AI', url: CIRCLE_AI },
     ],
   },
   {
@@ -48,6 +59,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Icon_Orange/yullr_logo_no_text_orange.png` },
       { label: 'WEBP', url: `${BASE}/Icon_Orange/yullr_logo_no_text_orange.webp` },
       { label: 'EPS', url: `${BASE}/Icon_Orange/yullr_logo_no_text_orange.eps` },
+      { label: 'AI', url: ICON_AI },
     ],
   },
   {
@@ -58,6 +70,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Icon_White/yullr_logo_no_text_white.png` },
       { label: 'WEBP', url: `${BASE}/Icon_White/yullr_logo_no_text_white.webp` },
       { label: 'EPS', url: `${BASE}/Icon_White/yullr_logo_no_text_white.eps` },
+      { label: 'AI', url: ICON_AI },
     ],
   },
   {
@@ -68,6 +81,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Square_Orange/yullr_logo_square_text_orange.png` },
       { label: 'WEBP', url: `${BASE}/Square_Orange/yullr_logo_square_text_orange.webp` },
       { label: 'EPS', url: `${BASE}/Square_Orange/yullr_logo_square_text_orange.eps` },
+      { label: 'AI', url: SQUARE_AI },
     ],
   },
   {
@@ -78,6 +92,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Square_White/yullr_logo_square_text_white.png` },
       { label: 'WEBP', url: `${BASE}/Square_White/yullr_logo_square_text_white.webp` },
       { label: 'EPS', url: `${BASE}/Square_White/yullr_logo_square_text_white.eps` },
+      { label: 'AI', url: SQUARE_AI },
     ],
   },
   {
@@ -88,6 +103,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Wide_Orange/yullr_logo_wide_text_orange.png` },
       { label: 'WEBP', url: `${BASE}/Wide_Orange/yullr_logo_wide_text_orange.webp` },
       { label: 'EPS', url: `${BASE}/Wide_Orange/yullr_logo_wide_text_orange.eps` },
+      { label: 'AI', url: WIDE_AI },
     ],
   },
   {
@@ -98,16 +114,7 @@ export const LOGO_GROUPS: LogoGroup[] = [
       { label: 'PNG', url: `${BASE}/Wide_White/yullr_logo_wide_text_white.png` },
       { label: 'WEBP', url: `${BASE}/Wide_White/yullr_logo_wide_text_white.webp` },
       { label: 'EPS', url: `${BASE}/Wide_White/yullr_logo_wide_text_white.eps` },
+      { label: 'AI', url: WIDE_AI },
     ],
   },
-];
-
-// Raw Adobe Illustrator/EPS source files — not tied to one specific color
-// variant above, so listed separately as a flat downloads list.
-export const LOGO_SOURCE_FILES: LogoFormat[] = [
-  { label: 'Circle logo (text) — AI', url: `${BASE}/Illistrator/yullr_logo_circle_text_orange.ai` },
-  { label: 'Icon (no text) — AI', url: `${BASE}/Illistrator/yullr_logo_no_text.ai` },
-  { label: 'Square logo (text) — AI', url: `${BASE}/Illistrator/yullr_logo_square_text.ai` },
-  { label: 'Text only — EPS', url: `${BASE}/Illistrator/yullr_logo_text_only.eps` },
-  { label: 'Wide logo (text) — AI', url: `${BASE}/Illistrator/yullr_logo_wide_text.ai` },
 ];

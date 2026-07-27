@@ -1,26 +1,66 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap, DollarSign,
+  ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
+  PlayCircle, ExternalLink, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FAQ_ENTRIES, type FAQCategory } from '../data/faqData';
-import { LOGO_GROUPS, LOGO_SOURCE_FILES } from '../data/logoAssets';
-import { BRAND_COLORS, BRAND_FONT } from '../data/brandStyle';
+import { LOGO_GROUPS } from '../data/logoAssets';
+import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
+import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES } from '../data/demoHubData';
 
-type ResourceTab = 'faq' | 'training' | 'pricing' | 'sales' | 'marketing' | 'logos';
+type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo';
 
 const TABS: { id: ResourceTab; label: string; icon: React.ReactNode }[] = [
   { id: 'faq',       label: 'FAQ',               icon: <HelpCircle size={14} /> },
   { id: 'training',  label: 'Training Documents', icon: <GraduationCap size={14} /> },
-  { id: 'pricing',   label: 'Pricing Samples',    icon: <DollarSign size={14} /> },
   { id: 'sales',     label: 'Sales Tools',        icon: <Briefcase size={14} /> },
   { id: 'marketing', label: 'Marketing Assets',   icon: <ImageIcon size={14} /> },
-  { id: 'logos',     label: 'Logo Files',         icon: <Palette size={14} /> },
+  { id: 'logos',     label: 'Brand Assets',       icon: <Palette size={14} /> },
+  { id: 'demo',      label: 'Demo Hub',           icon: <PlayCircle size={14} /> },
 ];
 
-const FAQ_CATEGORIES: FAQCategory[] = ['General', 'Technical', 'Financial'];
+const FAQ_CATEGORIES: FAQCategory[] = ['General', 'Product & Features', 'Technical & Installation', 'Financial & Pricing'];
+
+// Domain jargon/abbreviations used inconsistently across the FAQ answers
+// (some spell it out, some don't) — expanding each query token against its
+// synonyms means searching "power over ethernet" finds the PoE entries and
+// vice versa, without every answer needing to repeat both forms.
+const SYNONYMS: Record<string, string[]> = {
+  poe: ['power over ethernet'],
+  'power over ethernet': ['poe'],
+  nfc: ['near field communication'],
+  'near field communication': ['nfc'],
+  gs: ['giant slalom'],
+  'giant slalom': ['gs'],
+  gps: ['global positioning system'],
+  'global positioning system': ['gps'],
+  fis: ['international ski federation', 'fédération internationale de ski'],
+  price: ['cost', 'pricing', 'fee', 'subscription'],
+  pricing: ['cost', 'price', 'fee'],
+  cost: ['price', 'pricing', 'fee'],
+  install: ['installation', 'setup'],
+  installation: ['install', 'setup'],
+  wifi: ['wireless'],
+  cold: ['temperature', 'winter', 'weather'],
+  night: ['dark', 'lighting'],
+};
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function tokenMatches(token: string, haystack: string): boolean {
+  // Loose substring match for the raw query term — deliberately permissive,
+  // so e.g. "camera" still finds "cameras" (simple plural stemming).
+  if (haystack.includes(token)) return true;
+  // Synonym expansions are checked at word boundaries instead: a loose
+  // .includes() here let short synonyms like "fee" match *inside* unrelated
+  // words (e.g. "cost" → "fee" was matching "500 feet of vertical").
+  return (SYNONYMS[token] || []).some(syn => new RegExp(`\\b${escapeRegExp(syn)}\\b`, 'i').test(haystack));
+}
 
 function FAQSection() {
   const [query, setQuery] = useState('');
@@ -29,14 +69,37 @@ function FAQSection() {
 
   // "Deep search" — matches against both the question AND the answer body,
   // not just the question title, so e.g. searching "PoE" or "NVIDIA" finds
-  // entries where that term only appears in the answer.
+  // entries where that term only appears in the answer. Smarter than a
+  // single raw substring match in two ways:
+  //  1. Tokenized AND matching — "camera cost" finds entries containing both
+  //     words anywhere (question or answer), in any order, rather than only
+  //     entries containing that exact three-word phrase.
+  //  2. Synonym expansion (SYNONYMS above) — jargon/abbreviations resolve to
+  //     their expansions and back, so "power over ethernet" surfaces the PoE
+  //     entries even though most answers just say "PoE".
+  // Results are ranked: question-text matches outrank answer-only matches,
+  // and entries matching more of the query's tokens rank above ones matching
+  // fewer, so the best-fitting FAQ shows up first instead of in doc order.
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return FAQ_ENTRIES.filter(f => {
-      if (category !== 'All' && f.category !== category) return false;
-      if (!q) return true;
-      return f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q);
-    });
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const scored = FAQ_ENTRIES
+      .filter(f => category === 'All' || f.category === category)
+      .map(f => {
+        if (tokens.length === 0) return { entry: f, score: 0 };
+        const q = f.question.toLowerCase();
+        const a = f.answer.toLowerCase();
+        let score = 0;
+        for (const token of tokens) {
+          const inQuestion = tokenMatches(token, q);
+          const inAnswer = tokenMatches(token, a);
+          if (!inQuestion && !inAnswer) return { entry: f, score: -1 }; // missing token — excluded below
+          score += inQuestion ? 2 : 1;
+        }
+        return { entry: f, score };
+      })
+      .filter(r => r.score >= 0)
+      .sort((a, b) => b.score - a.score);
+    return scored.map(r => r.entry);
   }, [query, category]);
 
   return (
@@ -131,6 +194,22 @@ function BrandSection() {
     document.head.appendChild(link);
   }, []);
 
+  // Alex (the logo wordmark font) isn't on Google Fonts — self-hosted
+  // @font-face from the file itself, same on-demand-load treatment.
+  useEffect(() => {
+    if (document.getElementById('logo-font-face')) return;
+    const style = document.createElement('style');
+    style.id = 'logo-font-face';
+    style.textContent = `
+      @font-face {
+        font-family: "${LOGO_FONT.family}";
+        src: url("${LOGO_FONT.downloadUrl}") format("truetype");
+        font-display: swap;
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
   const copyHex = (hex: string) => {
     navigator.clipboard?.writeText(hex).then(() => {
       setCopiedHex(hex);
@@ -164,12 +243,36 @@ function BrandSection() {
       </div>
 
       <div>
+        <h2 className="text-[13px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-3">Logo Font</h2>
+        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4">
+          <p className="text-[36px] text-[#0a0a0a] leading-tight" style={{ fontFamily: `'${LOGO_FONT.family}', sans-serif` }}>
+            {LOGO_FONT.family}
+          </p>
+          <p className="text-[12px] text-[#6a7282] mt-1">ABCDEFGHIJKLMNOPQRSTUVWXYZ · abcdefghijklmnopqrstuvwxyz · 0123456789</p>
+          <a
+            href={LOGO_FONT.downloadUrl}
+            download
+            className="mt-3 inline-flex items-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#307fe2] px-2 py-1 rounded-full hover:bg-[#eef3fb] active:opacity-70"
+          >
+            <Download size={10} /> Download Font (TTF)
+          </a>
+        </div>
+      </div>
+
+      <div>
         <h2 className="text-[13px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-3">Brand Font</h2>
         <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4">
           <p className="text-[36px] text-[#0a0a0a] leading-tight" style={{ fontFamily: `'${BRAND_FONT.family}', sans-serif` }}>
             {BRAND_FONT.family}
           </p>
           <p className="text-[12px] text-[#6a7282] mt-1">ABCDEFGHIJKLMNOPQRSTUVWXYZ · abcdefghijklmnopqrstuvwxyz · 0123456789</p>
+          <a
+            href={BRAND_FONT.downloadUrl}
+            download
+            className="mt-3 inline-flex items-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#307fe2] px-2 py-1 rounded-full hover:bg-[#eef3fb] active:opacity-70"
+          >
+            <Download size={10} /> Download Font (TTF)
+          </a>
         </div>
       </div>
     </div>
@@ -219,15 +322,188 @@ function LogoFilesSection() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// One video frame at an assumed 30fps — the source clips don't expose their
+// real frame rate to the browser, and 30fps is the standard assumption for
+// this kind of footage; close enough for scrubbing by eye.
+const FRAME_SECONDS = 1 / 30;
+
+// Matches the brand fonts from the original demo build: League Gothic for
+// display headings (self-hosted, same file offered as a download in the
+// Logo Files tab) and Open Sans / IBM Plex Mono for body/mono text. Loaded
+// on demand (only while Demo Hub is open), like BrandSection does for its
+// own League Gothic usage.
+function useDemoHubFonts() {
+  useEffect(() => {
+    if (!document.getElementById('demo-hub-fonts')) {
+      const link = document.createElement('link');
+      link.id = 'demo-hub-fonts';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap';
+      document.head.appendChild(link);
+    }
+    if (!document.getElementById('demo-hub-league-gothic')) {
+      const style = document.createElement('style');
+      style.id = 'demo-hub-league-gothic';
+      style.textContent = `
+        @font-face {
+          font-family: "League Gothic";
+          src: url("${BRAND_FONT.downloadUrl}") format("truetype-variations");
+          font-weight: 400 700;
+          font-style: normal;
+          font-display: swap;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+}
+
+function DemoHubSection() {
+  const [pipelineIndex, setPipelineIndex] = useState(0);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useDemoHubFonts();
+
+  const activeStep = PIPELINE_STEPS[pipelineIndex];
+  const activeSlide = DEMO_SLIDES[slideIndex];
+
+  const prevSlide = () => setSlideIndex(i => (i - 1 + DEMO_SLIDES.length) % DEMO_SLIDES.length);
+  const nextSlide = () => setSlideIndex(i => (i + 1) % DEMO_SLIDES.length);
+
+  // Space plays/pauses; Left/Right steps one frame at a time (pausing first
+  // so the step is precise) — handy for stepping through the detection demo
+  // frame-by-frame during a live walkthrough.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const v = videoRef.current;
+      if (!v) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (v.paused) v.play(); else v.pause();
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        v.pause();
+        v.currentTime = Math.min(v.duration || Infinity, v.currentTime + FRAME_SECONDS);
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        v.pause();
+        v.currentTime = Math.max(0, v.currentTime - FRAME_SECONDS);
+      }
+    };
+    // Capture phase: the video has native `controls`, so if it (or its
+    // shadow-DOM control bar) has focus, Chromium applies its own built-in
+    // seek/play-pause shortcut in addition to ours unless we intercept
+    // before the event reaches it.
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+
+  const leagueGothic = { fontFamily: "'League Gothic', sans-serif" };
+  const openSans = { fontFamily: "'Open Sans', sans-serif" };
+  const mono = { fontFamily: "'IBM Plex Mono', monospace" };
+
+  return (
+    <div className="space-y-10" style={openSans}>
+      <div>
+        <h2 style={leagueGothic} className="font-normal text-[32px] leading-none uppercase text-[#1D252D] mb-1">Quick Links</h2>
+        <p className="text-[13px] text-[#61666C] mb-3">Everything you need for a live demo, in one place.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {DEMO_LINKS.map(link => (
+            <a
+              key={link.label}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="group flex flex-col gap-2.5 bg-white border-2 border-[#1D252D] p-3 no-underline transition-transform hover:-translate-y-0.5 hover:-translate-x-0.5"
+              style={{ boxShadow: '4px 4px 0 #1D252D' }}
+            >
+              <div className="flex items-center justify-between">
+                <span style={mono} className="text-[10px] tracking-wide uppercase text-[#8E9296] bg-[#F8F9FA] border border-[#E8E9EA] px-2 py-0.5">{link.tag}</span>
+                <ExternalLink size={13} className="text-[#8E9296]" />
+              </div>
+              <div style={leagueGothic} className="font-normal text-[20px] leading-tight uppercase text-[#1D252D]">{link.label}</div>
+              <div className="text-[13px] font-bold text-[#FF5C39] flex items-center gap-1">Open →</div>
+            </a>
+          ))}
+        </div>
+      </div>
 
       <div>
-        <h2 className="text-[13px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-3">Vector Source Files</h2>
-        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] divide-y divide-[rgba(0,0,0,0.06)]">
-          {LOGO_SOURCE_FILES.map(f => (
-            <a key={f.url} href={f.url} download className="flex items-center justify-between px-4 py-3 hover:bg-[#f9fafb] active:opacity-70">
-              <span className="text-[13px] text-[#0a0a0a]">{f.label}</span>
-              <Download size={14} className="text-[#307fe2]" />
-            </a>
+        <h2 style={leagueGothic} className="font-normal text-[32px] leading-none uppercase text-[#1D252D] mb-1">Pipeline Demo</h2>
+        <p className="text-[13px] text-[#61666C] mb-3">
+          Tap through the YULLR video pipeline: capture, detect, process, deliver.
+          <span className="block text-[11px] text-[#8E9296] mt-0.5">Space to play/pause · ←/→ to step one frame</span>
+        </p>
+        <div className="rounded-[36px] p-[22px] flex justify-center" style={{ background: '#0B0E11', boxShadow: '0 20px 60px rgba(29,37,45,0.35)' }}>
+          <div className="w-full bg-white rounded-[18px] p-3.5 flex flex-col gap-3.5">
+            <div className="bg-black rounded-[6px] overflow-hidden aspect-video flex">
+              <video
+                key={activeStep.file}
+                ref={videoRef}
+                src={activeStep.file}
+                controls
+                autoPlay
+                muted
+                playsInline
+                preload="auto"
+                className="w-full h-full object-contain bg-black"
+              />
+            </div>
+            <div className="grid grid-cols-4 gap-3.5">
+              {PIPELINE_STEPS.map((step, i) => (
+                <button
+                  key={step.label}
+                  onClick={() => setPipelineIndex(i)}
+                  style={{ ...leagueGothic, background: i === pipelineIndex ? '#FF5C39' : '#1D252D' }}
+                  className="font-normal text-[18px] tracking-wide uppercase text-white py-3 px-2 border-none cursor-pointer transition-colors"
+                >
+                  {step.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 style={leagueGothic} className="font-normal text-[32px] leading-none uppercase text-[#1D252D] mb-1">YULLR Slideshow</h2>
+        <p className="text-[13px] text-[#61666C] mb-3">Browse sample stills from the mountain.</p>
+        <div className="relative bg-[#1D252D] border-2 border-[#1D252D] aspect-video overflow-hidden" style={{ boxShadow: '4px 4px 0 #1D252D' }}>
+          <img src={activeSlide.file} alt={activeSlide.label} className="w-full h-full object-contain bg-[#1D252D]" />
+          <button
+            onClick={prevSlide}
+            aria-label="Previous"
+            style={{ ...leagueGothic, background: '#FF5C39' }}
+            className="absolute top-1/2 left-4 -translate-y-1/2 w-11 h-11 text-[24px] text-white border-none cursor-pointer flex items-center justify-center p-0"
+          >
+            ‹
+          </button>
+          <button
+            onClick={nextSlide}
+            aria-label="Next"
+            style={{ ...leagueGothic, background: '#FF5C39' }}
+            className="absolute top-1/2 right-4 -translate-y-1/2 w-11 h-11 text-[24px] text-white border-none cursor-pointer flex items-center justify-center p-0"
+          >
+            ›
+          </button>
+        </div>
+        <div className="grid grid-cols-5 gap-2 mt-3">
+          {DEMO_SLIDES.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => setSlideIndex(i)}
+              className="aspect-square overflow-hidden border-2 p-0 cursor-pointer"
+              style={{ borderColor: i === slideIndex ? '#FF5C39' : '#1D252D' }}
+            >
+              <img src={s.file} alt={s.label} className="w-full h-full object-cover block" />
+            </button>
           ))}
         </div>
       </div>
@@ -264,10 +540,10 @@ export function ResourceCenterPage() {
       <div className="p-4 pb-16">
         {tab === 'faq' && <FAQSection />}
         {tab === 'training' && <EmptyPlaceholder label="Training documents" />}
-        {tab === 'pricing' && <EmptyPlaceholder label="Pricing samples" />}
         {tab === 'sales' && <EmptyPlaceholder label="Sales tools" />}
         {tab === 'marketing' && <EmptyPlaceholder label="Marketing assets" />}
         {tab === 'logos' && <LogoFilesSection />}
+        {tab === 'demo' && <DemoHubSection />}
       </div>
     </div>
   );
