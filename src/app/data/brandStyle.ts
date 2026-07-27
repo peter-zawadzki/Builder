@@ -4,14 +4,53 @@
 export interface BrandColor {
   name: string;
   hex: string;
+  rgb: string;
+  cmyk: string;
+  pantone: string;
+  role: string;
 }
 
 export const BRAND_COLORS: BrandColor[] = [
-  { name: 'Primary Orange', hex: '#FF5C39' },
-  { name: 'Regular Blue',   hex: '#307FE2' },
-  { name: 'Dark Text',      hex: '#1D252D' },
-  { name: 'Grey 900',       hex: '#343B42' },
-  { name: 'Grey 800',       hex: '#4A5157' },
+  {
+    name: 'YULLR Orange',
+    hex: '#FF5C39',
+    rgb: '255, 92, 57',
+    cmyk: 'C:0 M:64 Y:78 K:0',
+    pantone: '171 C',
+    role: 'Primary brand color, calls to action, key highlights, buttons.',
+  },
+  {
+    name: 'Mountain Blue',
+    hex: '#307FE2',
+    rgb: '48, 127, 226',
+    cmyk: 'C:79 M:44 Y:0 K:11',
+    pantone: '2727 C',
+    role: 'Secondary brand color, technology, trust, links, charts, and supporting graphics.',
+  },
+  {
+    name: 'Dark Text',
+    hex: '#1D252D',
+    rgb: '29, 37, 45',
+    cmyk: 'C:36 M:18 Y:0 K:82',
+    pantone: '433 C',
+    role: 'Primary text, headlines, icons, and dark UI elements.',
+  },
+  {
+    name: 'Grey 900',
+    hex: '#343B42',
+    rgb: '52, 59, 66',
+    cmyk: 'C:21 M:11 Y:0 K:74',
+    pantone: 'Cool Gray 11 C',
+    role: 'Secondary headings, navigation, dividers, dark backgrounds.',
+  },
+  {
+    name: 'Grey 800',
+    hex: '#4A5157',
+    rgb: '74, 81, 87',
+    cmyk: 'C:15 M:7 Y:0 K:66',
+    pantone: 'Cool Gray 10 C',
+    role: 'Body copy, secondary text, captions, borders, and UI components.',
+  },
 ];
 
 // The typeface used in the logo wordmark itself (Alex, by Keith Bates /

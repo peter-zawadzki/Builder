@@ -222,22 +222,29 @@ function BrandSection() {
     <div className="space-y-6">
       <div>
         <h2 className="text-[13px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-3">Brand Colors</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="space-y-3">
           {BRAND_COLORS.map(c => (
-            <button
-              key={c.hex}
-              onClick={() => copyHex(c.hex)}
-              className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden text-left active:opacity-80"
-            >
-              <div className="h-16" style={{ background: c.hex }} />
-              <div className="p-2.5 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[12px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{c.name}</p>
-                  <p className="text-[11px] text-[#6a7282] font-mono">{c.hex}</p>
+            <div key={c.hex} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-3 flex gap-3">
+              <div className="w-16 h-16 rounded-[8px] shrink-0" style={{ background: c.hex }} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{c.name}</p>
+                  <button
+                    onClick={() => copyHex(c.hex)}
+                    className="shrink-0 flex items-center gap-1 text-[11px] font-mono text-[#307fe2] active:opacity-70"
+                  >
+                    {c.hex}
+                    {copiedHex === c.hex ? <Check size={12} className="text-[#22c55e]" /> : <Copy size={11} className="text-[#8992a0]" />}
+                  </button>
                 </div>
-                {copiedHex === c.hex ? <Check size={14} className="text-[#22c55e] shrink-0" /> : <Copy size={13} className="text-[#8992a0] shrink-0" />}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1 text-[11px] text-[#6a7282] font-mono">
+                  <span>RGB {c.rgb}</span>
+                  <span>{c.cmyk}</span>
+                  <span className="col-span-2">Pantone {c.pantone}</span>
+                </div>
+                <p className="text-[11px] text-[#8992a0] mt-1.5 leading-snug">{c.role}</p>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>
