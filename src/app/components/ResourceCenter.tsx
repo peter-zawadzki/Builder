@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router';
 import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
-  PlayCircle, ExternalLink, ChevronLeft, ChevronRight,
+  PlayCircle, ExternalLink, ChevronLeft, ChevronRight, FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FAQ_ENTRIES, type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
 import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES } from '../data/demoHubData';
+import { SALES_TOOLS } from '../data/salesToolsData';
 
 type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo';
 
@@ -175,6 +176,34 @@ function EmptyPlaceholder({ label }: { label: string }) {
       </div>
       <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[14px] mb-1">Nothing here yet</p>
       <p className="text-[#6a7282] text-[13px] max-w-xs">{label} will show up here once they're added.</p>
+    </div>
+  );
+}
+
+function formatFileSize(sizeKB: number): string {
+  return sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
+}
+
+function SalesToolsSection() {
+  return (
+    <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] divide-y divide-[rgba(0,0,0,0.06)]">
+      {SALES_TOOLS.map(f => (
+        <a
+          key={f.url}
+          href={f.url}
+          download
+          className="flex items-center gap-3 px-4 py-3 hover:bg-[#f9fafb] active:opacity-70"
+        >
+          <div className="w-9 h-9 rounded-[8px] bg-[#f3f3f5] flex items-center justify-center shrink-0">
+            {f.type === 'PDF' ? <FileText size={16} className="text-[#e11d48]" /> : <ImageIcon size={16} className="text-[#307fe2]" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.label}</p>
+            <p className="text-[11px] text-[#8992a0]">{f.type} · {formatFileSize(f.sizeKB)}</p>
+          </div>
+          <Download size={14} className="text-[#307fe2] shrink-0" />
+        </a>
+      ))}
     </div>
   );
 }
@@ -547,7 +576,7 @@ export function ResourceCenterPage() {
       <div className="p-4 pb-16">
         {tab === 'faq' && <FAQSection />}
         {tab === 'training' && <EmptyPlaceholder label="Training documents" />}
-        {tab === 'sales' && <EmptyPlaceholder label="Sales tools" />}
+        {tab === 'sales' && <SalesToolsSection />}
         {tab === 'marketing' && <EmptyPlaceholder label="Marketing assets" />}
         {tab === 'logos' && <LogoFilesSection />}
         {tab === 'demo' && <DemoHubSection />}
