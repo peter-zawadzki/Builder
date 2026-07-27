@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
-  PlayCircle, ExternalLink, ChevronLeft, ChevronRight, FileText,
+  PlayCircle, ExternalLink, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FAQ_ENTRIES, type FAQCategory } from '../data/faqData';
@@ -186,23 +186,42 @@ function formatFileSize(sizeKB: number): string {
 
 function SalesToolsSection() {
   return (
-    <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] divide-y divide-[rgba(0,0,0,0.06)]">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {SALES_TOOLS.map(f => (
-        <a
-          key={f.url}
-          href={f.url}
-          download
-          className="flex items-center gap-3 px-4 py-3 hover:bg-[#f9fafb] active:opacity-70"
-        >
-          <div className="w-9 h-9 rounded-[8px] bg-[#f3f3f5] flex items-center justify-center shrink-0">
-            {f.type === 'PDF' ? <FileText size={16} className="text-[#e11d48]" /> : <ImageIcon size={16} className="text-[#307fe2]" />}
+        <div key={f.url} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col">
+          <a
+            href={f.url}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Preview ${f.label}`}
+            className="h-40 bg-[#f9fafb] flex items-center justify-center overflow-hidden"
+          >
+            <img src={f.thumbnailUrl} alt={f.label} className="max-h-full max-w-full object-contain" />
+          </a>
+          <div className="p-3 flex flex-col gap-2 flex-1">
+            <div className="min-w-0">
+              <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.label}</p>
+              <p className="text-[11px] text-[#8992a0]">{f.type} · {formatFileSize(f.sizeKB)}</p>
+            </div>
+            <div className="flex gap-1.5 mt-auto">
+              <a
+                href={f.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#0a0a0a] px-2 py-1.5 rounded-full hover:bg-[#eaeaec] active:opacity-70"
+              >
+                <ExternalLink size={10} /> Preview
+              </a>
+              <a
+                href={f.url}
+                download
+                className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#307fe2] px-2 py-1.5 rounded-full hover:bg-[#eef3fb] active:opacity-70"
+              >
+                <Download size={10} /> Download
+              </a>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.label}</p>
-            <p className="text-[11px] text-[#8992a0]">{f.type} · {formatFileSize(f.sizeKB)}</p>
-          </div>
-          <Download size={14} className="text-[#307fe2] shrink-0" />
-        </a>
+        </div>
       ))}
     </div>
   );

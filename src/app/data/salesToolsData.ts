@@ -7,6 +7,11 @@ export interface SalesTool {
   label: string;
   type: 'PDF' | 'PNG';
   url: string;
+  // For PDFs, a pre-rendered first-page thumbnail (there's no in-browser way
+  // to rasterize a PDF for a preview image, so this is generated up front —
+  // `sips -s format png file.pdf --out thumb.png` on macOS — and committed
+  // alongside it). For PNGs, a downscaled copy of the same image.
+  thumbnailUrl: string;
   sizeKB: number;
 }
 
@@ -17,12 +22,14 @@ export const SALES_TOOLS: SalesTool[] = [
     label: 'YULLR Coaches One Pager',
     type: 'PDF',
     url: `${BASE}/YULLR Coaches One Pager.pdf`,
+    thumbnailUrl: `${BASE}/thumbnails/coaches-one-pager.png`,
     sizeKB: 9814,
   },
   {
     label: 'YULLR Install Overview',
     type: 'PNG',
     url: `${BASE}/YULLR Install Overview.png`,
+    thumbnailUrl: `${BASE}/thumbnails/install-overview.png`,
     sizeKB: 2258,
   },
 ];
