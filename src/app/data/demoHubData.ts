@@ -19,6 +19,7 @@ export const DEMO_LINKS: DemoLink[] = [
   { label: 'YULLR Analysis', tag: 'HTML', href: `${BASE}/pages/insights.html`, external: false },
   { label: 'Raw Data', tag: 'DATA', href: `${BASE}/pages/Raw Data.html`, external: false },
   { label: 'Night Footage', tag: 'Dev', href: 'https://dev-app.yullr.com/videos/200634', external: true },
+  { label: 'YULLR Monitor', tag: 'Live', href: 'https://portal.yullr.com/monitor/', external: true },
 ];
 
 export interface PipelineStep {
