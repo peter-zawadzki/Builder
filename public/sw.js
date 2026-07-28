@@ -56,6 +56,19 @@ self.addEventListener('fetch', event => {
   // Skip source maps
   if (url.pathname.endsWith('.map')) return;
 
+  // Real files (PDFs, images, videos, static demo pages) served from
+  // public/resource-assets/ are not part of the SPA route tree. A navigate
+  // request for one of these happens when a link opens it in a new tab —
+  // without this check, the app-shell logic below would serve the cached
+  // index.html instead, and React Router would then 404 on a path it
+  // doesn't recognize as a route (fixed after this shipped: was reported as
+  // "clicking the asset shows a 404, but a hard refresh finds it" — hard
+  // refresh bypasses the service worker entirely, network fetch worked).
+  if (url.pathname.startsWith('/resource-assets/')) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
   // ── HTML navigation: cache-first, background revalidate ──────────────────
   if (req.mode === 'navigate') {
     event.respondWith(
