@@ -15,7 +15,6 @@ import { catalog } from "./routes/catalog";
 import { legacy } from "./routes/legacy";
 import { proposalPublicSign } from "./routes/proposalPublicSign";
 import { agreementPublicSign } from "./routes/agreementPublicSign";
-import { startProposalReminderScheduler } from "./proposalReminders";
 
 const app = new Hono<HonoEnv>();
 
@@ -91,9 +90,8 @@ const port = Number(process.env.API_PORT ?? 8787);
 serve({ fetch: app.fetch, port });
 console.log(`[api] listening on http://localhost:${port}`);
 
-// Hourly sweep for proposal follow-up reminders (Dev Story 4.2) — checks
-// day-since-sent against the reminder cadence and stops once signed,
-// archived, or 8 weeks have elapsed.
-startProposalReminderScheduler();
+// The hourly automatic proposal-reminder sweep (Dev Story 4.2) was removed —
+// reminders are now sent manually from Proposal Builder via
+// POST /proposals/:id/send-reminder (see server/routes/legacy.ts).
 
 export { app };

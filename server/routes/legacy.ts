@@ -88,7 +88,16 @@ for (const collection of Object.keys(ARRAY_KEY)) {
   legacy.post(`/${collection}`, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const id = body?.id ?? crypto.randomUUID();
-    await upsert(collection, id, { ...body, id });
+    let record = { ...body, id };
+    // Stamp who actually created it server-side (not client-supplied) so a
+    // proposal reminder can later notify its creator by email — `createdBy`
+    // (a display name) is already set by the client for UI purposes, but
+    // that's not a resolvable address.
+    if (collection === "proposals" && !record.createdById) {
+      const user = c.get("user");
+      record = { ...record, createdById: user.id, createdByEmail: user.email };
+    }
+    await upsert(collection, id, record);
     return c.json({ ok: true, id });
   });
   // update
@@ -458,6 +467,69 @@ legacy.post("/proposals/:id/send", async (c) => {
   }
 
   return c.json({ ok: true, token, email: emailResult });
+});
+
+// Postmark template "proposal-reminder" (numeric id, not an alias) — used to
+// be sent automatically on an hourly cadence sweep; that's been removed in
+// favor of this manual, staff-triggered send.
+const REMINDER_TEMPLATE_ID = 45791871;
+
+// Manual reminder send — replaces the old automatic hourly cadence sweep.
+// Emails the original recipient a nudge, and separately notifies whoever
+// created the proposal (by email, stamped server-side at creation time) that
+// a reminder just went out, so they have visibility without needing to be
+// CC'd on the customer-facing email itself.
+legacy.post("/proposals/:id/send-reminder", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  const row = await queryOne<{ data: any }>(`SELECT data FROM legacy_records WHERE collection='proposals' AND id=$1`, [id]);
+  if (!row) return c.json({ error: "Proposal not found" }, 404);
+  const proposal = row.data;
+
+  if (!proposal.sentAt || !proposal.sentTo) {
+    return c.json({ error: "Proposal hasn't been sent yet — nothing to remind about" }, 400);
+  }
+  if (proposal.archived) {
+    return c.json({ error: "Proposal is archived" }, 400);
+  }
+  if (proposal.clientSignature && proposal.yullrSignature) {
+    return c.json({ error: "Proposal is already fully signed" }, 400);
+  }
+
+  const signUrl = `${process.env.APP_BASE_URL || "http://localhost:5173"}/sign/${proposal.signToken}`;
+  const { sendTemplateEmail, sendEmail } = await import("../email");
+
+  const reminderResult = await sendTemplateEmail({
+    to: proposal.sentTo,
+    templateId: REMINDER_TEMPLATE_ID,
+    model: { email_subject: "Reminder: Your YULLR Proposal is Awaiting Signature", product_url: signUrl },
+  });
+
+  if (!reminderResult.ok) {
+    return c.json({ error: reminderResult.error || "Reminder email failed to send", email: reminderResult }, 502);
+  }
+
+  let creatorEmailResult: any = { ok: false, skipped: true };
+  if (proposal.createdByEmail) {
+    const recipientLabel = proposal.sentToName ? `${proposal.sentToName} (${proposal.sentTo})` : proposal.sentTo;
+    creatorEmailResult = await sendEmail({
+      to: proposal.createdByEmail,
+      subject: `Reminder sent: ${proposal.title || "Proposal"}`,
+      html: `<p>A reminder email was just sent to <strong>${recipientLabel}</strong> for "${proposal.title || "Proposal"}".</p><p>Triggered by ${user.name || user.email || "a teammate"}.</p>`,
+    });
+  }
+
+  await insertActivity({
+    mountainId: proposal.mountainId ?? null,
+    type: "proposal_reminder_sent",
+    summary: `Proposal reminder sent to ${proposal.sentTo}`,
+    path: proposal.mountainId ? `/mountains/${proposal.mountainId}/proposal/${id}` : null,
+    actor: user.name || user.email || "Someone",
+    actorId: user.id,
+  });
+
+  return c.json({ ok: true, email: reminderResult, creatorEmail: creatorEmailResult });
 });
 
 legacy.post("/proposals/:id/countersign", async (c) => {

@@ -412,7 +412,9 @@ export interface Proposal {
   proposalCreatedAt?: string;
   archived?: boolean;           // soft-deleted — kept for historical record, never hard-deleted once created
   form?: any;                   // the editable ProposalForm content
-  createdBy?: string;
+  createdBy?: string;            // display name, client-set — not a resolvable address
+  createdById?: string;          // internal users.id, stamped server-side on create
+  createdByEmail?: string;       // creator's email, stamped server-side — notified when a reminder is sent
   createdAt: string;
   updatedAt: string;
   // ── Send / e-sign lifecycle ────────────────────────────────────────────────
@@ -423,7 +425,6 @@ export interface Proposal {
   viewedAt?: string;             // first time the customer opened the sign link
   clientSignature?: { name: string; title?: string | null; legalEntity?: string | null; signatureImage?: string | null; signedAt: string };
   yullrSignature?: { name: string; signatureImage?: string | null; signedAt: string };
-  remindersSentDays?: number[];  // days-since-sentAt thresholds already emailed (server-managed reminder cadence)
 }
 
 export interface CAFormData {
@@ -951,6 +952,7 @@ interface DataContextType {
   getProposalsByMountainId: (mountainId: string) => Proposal[];
   getProposalById: (id: string) => Proposal | undefined;
   sendProposal: (id: string, opts: { to?: string; toName?: string; cc?: string }) => Promise<any>;
+  sendProposalReminder: (id: string) => Promise<any>;
   countersignProposal: (id: string, name: string, signatureImage?: string | null) => Promise<any>;
   refreshProposal: (id: string) => Promise<void>;
   customerAgreements: CustomerAgreement[];
@@ -2322,6 +2324,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return res;
   };
 
+  // Manual follow-up nudge to the customer — replaces the old automatic
+  // hourly cadence sweep. The server also emails the proposal's creator a
+  // confirmation that a reminder went out.
+  const sendProposalReminder = async (id: string) => {
+    return apiCall(`/proposals/${id}/send-reminder`, { method: 'POST' });
+  };
+
   // Records YULLR's countersignature; if the customer already signed, the
   // server emails them the completed link and this resolves bothSigned.
   const countersignProposal = async (id: string, name: string, signatureImage?: string | null) => {
@@ -2800,6 +2809,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         getProposalsByMountainId,
         getProposalById,
         sendProposal,
+        sendProposalReminder,
         countersignProposal,
         refreshProposal,
         customerAgreements,

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import { useData, DEFAULT_PROPOSAL_TERMS, DEFAULT_PAYMENT_TERMS } from '../context/DataContext';
 import { renderTemplate } from '../utils/templateRenderer';
-import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive } from 'lucide-react';
+import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 import html2canvas from 'html2canvas';
@@ -122,7 +122,7 @@ export function ProposalBuilder() {
     proposalTerms,
     defaultPaymentTerms,
     proposalTemplate,
-    sendProposal, countersignProposal, refreshProposal,
+    sendProposal, sendProposalReminder, countersignProposal, refreshProposal,
     getCustomerAgreementByMountainId,
   } = useData();
 
@@ -149,6 +149,7 @@ export function ProposalBuilder() {
   // /sign/:token page, which this authenticated view never sees live, so
   // refreshProposal() is called on mount/refresh to pick it up.
   const [signLoading, setSignLoading] = useState(false);
+  const [reminderSending, setReminderSending] = useState(false);
   const [yullrSignerName, setYullrSignerName] = useState('');
   const [yullrSigning, setYullrSigning] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -642,6 +643,19 @@ export function ProposalBuilder() {
       toast.error(`Error: ${e.message}`);
     } finally {
       setSignLoading(false);
+    }
+  }
+
+  async function sendReminder() {
+    if (!proposalId) return;
+    setReminderSending(true);
+    try {
+      await sendProposalReminder(proposalId);
+      toast.success(`Reminder sent to ${signRecord?.sentToName || signRecord?.sentTo || 'recipient'}`);
+    } catch (e: any) {
+      toast.error(`Error: ${e.message}`);
+    } finally {
+      setReminderSending(false);
     }
   }
 
@@ -1651,6 +1665,14 @@ export function ProposalBuilder() {
                 <p className="text-[11px] text-[#166534] font-['Inter:Regular',sans-serif] mt-1">
                   {signRecord.sentToName ? `${signRecord.sentToName} (${signRecord.sentTo})` : signRecord.sentTo} · {new Date(signRecord.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(signRecord.sentAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                 </p>
+                <button
+                  onClick={sendReminder}
+                  disabled={reminderSending}
+                  className="mt-2 flex items-center gap-1.5 text-[11px] font-['Inter:Medium',sans-serif] font-medium text-[#15803d] bg-white border border-[#bbf7d0] px-2.5 py-1.5 rounded-full active:opacity-70 disabled:opacity-50"
+                  title="Manually email the recipient a follow-up reminder"
+                >
+                  <Bell size={11} /> {reminderSending ? 'Sending…' : 'Send Reminder Now'}
+                </button>
               </div>
             )}
 
