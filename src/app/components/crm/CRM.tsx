@@ -33,6 +33,7 @@ const PIPELINE_STAGES: MountainPipelineStage[] = MOUNTAIN_PIPELINE_STAGES;
 export const STAGE_COLORS: Record<MountainPipelineStage, string> = {
   'Lead':       'bg-[#f3f3f5] text-[#6a7282]',
   'Prospect':   'bg-[#fff3e0] text-[#e65100]',
+  'Committed':  'bg-[#f3e8ff] text-[#7c3aed]',
   'Onboarding': 'bg-[#e3f2fd] text-[#1565c0]',
   'Active':     'bg-[#e8f5e9] text-[#1b5e20]',
   'Paused':     'bg-[#fffbeb] text-[#b45309]',

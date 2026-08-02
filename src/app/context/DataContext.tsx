@@ -56,6 +56,13 @@ export interface Mountain {
   id: string;
   name: string;
   address: string;
+  // Geocoded once (from `address`, via Nominatim) and cached here the first
+  // time the all-mountains Map View is opened, so it isn't re-geocoded on
+  // every open — mirrors Location.coordinates.
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
   parentOrganization?: string;
   legalEntity?: string;
   billingAddress?: string;
@@ -324,9 +331,9 @@ export type StallReason = 'No response' | 'Waiting on legal' | 'Budget hold' | '
 // Mountain-level relationship stage — distinct from Project.stage (the
 // per-install sales pipeline), tracked in the mountain detail Status window.
 export type MountainPipelineStage =
-  | 'Lead' | 'Prospect' | 'Onboarding' | 'Active' | 'Paused' | 'Dead';
+  | 'Lead' | 'Prospect' | 'Committed' | 'Onboarding' | 'Active' | 'Paused' | 'Dead';
 export const MOUNTAIN_PIPELINE_STAGES: MountainPipelineStage[] = [
-  'Lead', 'Prospect', 'Onboarding', 'Active', 'Paused', 'Dead',
+  'Lead', 'Prospect', 'Committed', 'Onboarding', 'Active', 'Paused', 'Dead',
 ];
 
 // ─── Projects (the unit of work on a mountain OR a team) ─────────────────────

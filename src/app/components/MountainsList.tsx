@@ -10,6 +10,7 @@ import { SalesProcessBar } from './SalesProcessBar';
 import { QuickNotesModal } from './QuickNotesModal';
 import { ProjectMiniBar } from './projects/ProjectsPane';
 import { StageBadge } from './crm/CRM';
+import { AllMountainsMapView } from './AllMountainsMapView';
 import { toast } from 'sonner';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
@@ -29,6 +30,7 @@ export function MountainsList() {
   const isSuperAdmin = useIsSuperAdmin();
 
   const [mapView, setMapView] = useState<MapViewState | null>(null);
+  const [showGeoMap, setShowGeoMap] = useState(false);
   const [notesModalMountainId, setNotesModalMountainId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -249,6 +251,12 @@ export function MountainsList() {
             >
               Archived
             </button>
+            <button
+              onClick={() => setShowGeoMap(true)}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#6a7282]"
+            >
+              <Map size={14} /> Map View
+            </button>
           </div>
         </div>
 
@@ -402,6 +410,14 @@ export function MountainsList() {
         <QuickNotesModal
           mountainId={notesModalMountainId}
           onClose={() => setNotesModalMountainId(null)}
+        />
+      )}
+
+      {/* All-mountains geographic Map View */}
+      {showGeoMap && (
+        <AllMountainsMapView
+          mountains={filteredAndSortedMountains}
+          onClose={() => setShowGeoMap(false)}
         />
       )}
 
