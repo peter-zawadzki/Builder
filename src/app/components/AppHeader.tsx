@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Camera } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsAdminOrAbove } from '../hooks/useRole';
@@ -26,10 +26,11 @@ function useVersionInfo() {
 
 // The one nav header shared across every page and sub-page. The icon for the
 // section you're on is highlighted orange. Projects live inside each mountain,
-// so there's no top-level projects section.
+// so there's no top-level projects section — Site Assessments follow the
+// same pattern (mountain-scoped, reached from within a mountain's detail
+// page, not its own top-level nav destination).
 const NAV = [
   { to: '/mountains', Icon: Mountain, label: 'Mountains', match: (p: string) => p === '/mountains' || p.startsWith('/mountains/') },
-  { to: '/site-assessments', Icon: Camera, label: 'Site Assessments', match: (p: string) => p.startsWith('/site-assessments') },
   { to: '/crm', Icon: Users, label: 'People & contacts', match: (p: string) => p.startsWith('/crm') },
   { to: '/inventory', Icon: Boxes, label: 'Inventory', match: (p: string) => p.startsWith('/inventory') },
 ];

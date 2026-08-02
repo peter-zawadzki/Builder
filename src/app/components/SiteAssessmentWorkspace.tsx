@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import mapboxgl from 'mapbox-gl';
 import {
   ArrowLeft, Loader2, LocateFixed, Search, MousePointer2, Server, Router, Zap,
-  Building2, Box, Camera as CameraIcon, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Unlock, X,
+  Building2, Box, Camera as CameraIcon, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Unlock, X, MapPin,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
@@ -30,6 +30,21 @@ const OBJECT_TYPE_CONFIG: Record<ObjectType, { label: string; color: string; Ico
   misc: { label: 'Miscellaneous', color: '#94a3b8', Icon: Box },
 };
 const TOOLS: ObjectType[] = ['camera', 'server', 'network', 'power', 'building', 'misc'];
+
+// Locations are a distinct, pre-existing app-wide entity (the same one used
+// by LocationDetail, inspections, assets — created normally via
+// CreateLocation.tsx from within a Trail). This tool creates real Location
+// records from the map instead — same data, same locationType values,
+// visible everywhere Locations already show up, not scoped to this
+// assessment. Rendered as squares (vs. circles for site_assessment_objects)
+// so the two systems stay visually distinguishable on the same map.
+const LOCATION_TYPE_CONFIG: Record<string, { color: string; letter: string }> = {
+  'Install Site': { color: '#0d9488', letter: 'I' },
+  'Power': { color: '#f59e0b', letter: 'P' },
+  'Start': { color: '#22c55e', letter: 'S' },
+  'Finish': { color: '#ef4444', letter: 'F' },
+};
+const LOCATION_TYPES = ['Install Site', 'Power', 'Start', 'Finish'] as const;
 
 const VERIFICATION_STATUSES = [
   'Unverified', 'Visible in map imagery', 'Reported by resort',
@@ -83,6 +98,124 @@ function createCameraMarkerElement(isSelected: boolean) {
     ${isSelected ? 'outline: 2px dashed #ff5c39; outline-offset: 4px;' : ''}
   `;
   return el;
+}
+
+function createLocationMarkerElement(locationType: string | undefined) {
+  const config = LOCATION_TYPE_CONFIG[locationType || ''] || { color: '#9ca3af', letter: 'L' };
+  const el = document.createElement('div');
+  el.style.cssText = `
+    width: 24px; height: 24px; border-radius: 6px;
+    background: ${config.color}; border: 2px solid white;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-family: sans-serif; font-size: 11px; font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    cursor: pointer;
+  `;
+  el.textContent = config.letter;
+  return el;
+}
+
+// "Add Location" modal — deliberately mirrors CreateLocation.tsx's core
+// fields (name, trail, location type, notes) rather than inventing a new
+// shape, since this creates the exact same Location entity. The only real
+// difference: GPS is already known from the map click (no picker needed),
+// and Trail is a real required select (there's no trail context here,
+// unlike CreateLocation.tsx's locked-input-when-already-in-a-trail case).
+function AddLocationModal({
+  lat, lng, trails, onClose, onCreate,
+}: {
+  lat: number; lng: number;
+  trails: { id: string; name: string }[];
+  onClose: () => void;
+  onCreate: (data: { name: string; trailId: string; locationType: string; notes: string }) => void;
+}) {
+  const [name, setName] = useState('');
+  const [trailId, setTrailId] = useState('');
+  const [locationType, setLocationType] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) { setError('Name is required'); return; }
+    if (!trailId) { setError('Trail is required'); return; }
+    if (!locationType) { setError('Location type is required'); return; }
+    onCreate({ name: name.trim(), trailId, locationType, notes: notes.trim() });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white w-full max-w-md rounded-t-[20px] sm:rounded-[20px] p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Add Location</h2>
+          <button type="button" onClick={onClose} className="p-1 active:opacity-60"><X size={20} className="text-[#6a7282]" /></button>
+        </div>
+        <p className="text-[11px] text-[#8992a0]">{lat.toFixed(5)}, {lng.toFixed(5)}</p>
+
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-1">
+            Name <span className="text-[#ff5c39]">*</span>
+          </label>
+          <input
+            type="text" value={name} onChange={e => setName(e.target.value)}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-1">
+            Trail <span className="text-[#ff5c39]">*</span>
+          </label>
+          <select
+            value={trailId} onChange={e => setTrailId(e.target.value)}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none"
+          >
+            <option value="">Select a trail…</option>
+            {trails.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-2">
+            Location Type <span className="text-[#ff5c39]">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {LOCATION_TYPES.map(t => (
+              <button
+                key={t} type="button"
+                onClick={() => setLocationType(t)}
+                className={`h-11 rounded-[8px] text-[13px] font-['Inter:Medium',sans-serif] transition-colors ${
+                  locationType === t ? 'bg-[#ff5c39] text-white' : 'bg-[#f3f3f5] text-[#6a7282] active:bg-[#e8e8ea]'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mb-1">Notes (optional)</label>
+          <textarea
+            value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none resize-none"
+          />
+        </div>
+
+        {error && <p className="text-[#ef4444] font-['Inter:Regular',sans-serif] text-[13px]">{error}</p>}
+
+        <button
+          type="submit"
+          className="w-full flex items-center justify-center gap-2 bg-[#ff5c39] text-white rounded-[8px] py-3 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
+        >
+          <MapPin size={14} /> Save Location
+        </button>
+      </form>
+    </div>
+  );
 }
 
 // Camera-only fields — heading/FOV/range drive the live coverage cone
@@ -291,9 +424,9 @@ function ObjectPropertiesPanel({
 }
 
 export function SiteAssessmentWorkspace() {
-  const { id } = useParams<{ id: string }>();
+  const { mountainId: mountainIdParam, id } = useParams<{ mountainId: string; id: string }>();
   const navigate = useNavigate();
-  const { getMountainById, getProjectById, updateMountain, getTrailsByMountainId } = useData();
+  const { getMountainById, getProjectById, updateMountain, getTrailsByMountainId, getLocationsByMountainId, addLocation } = useData();
 
   const [siteAssessment, setSiteAssessment] = useState<SiteAssessment | null>(null);
   const [objects, setObjects] = useState<SiteAssessmentObject[]>([]);
@@ -304,16 +437,18 @@ export function SiteAssessmentWorkspace() {
   const [mapReady, setMapReady] = useState(false);
   const [styleReady, setStyleReady] = useState(false);
 
-  const [activeTool, setActiveTool] = useState<'select' | ObjectType>('select');
+  const [activeTool, setActiveTool] = useState<'select' | 'location' | ObjectType>('select');
   const [addAnother, setAddAnother] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [cameraAimingId, setCameraAimingId] = useState<string | null>(null);
+  const [pendingLocationClick, setPendingLocationClick] = useState<{ lat: number; lng: number } | null>(null);
   const [listOpen, setListOpen] = useState(false);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const resortCenterRef = useRef<[number, number]>(DEFAULT_CENTER);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const locationMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const handleMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   useEffect(() => {
@@ -328,6 +463,11 @@ export function SiteAssessmentWorkspace() {
   const project = siteAssessment?.project_id ? getProjectById(siteAssessment.project_id) : undefined;
   const trails = mountain ? getTrailsByMountainId(mountain.id).map(t => ({ id: t.id, name: t.name })) : [];
   const selectedObject = objects.find(o => o.id === selectedObjectId) || null;
+  // Mountain-wide Locations (the pre-existing app entity), not scoped to
+  // this assessment — created here or via the normal CreateLocation.tsx
+  // flow, both show up on this same map per the requirement that nothing
+  // should be invisible depending on how it was added.
+  const mountainLocations = mountain ? getLocationsByMountainId(mountain.id) : [];
 
   // Debounced-by-nature: moveend only fires once movement has settled, so no
   // separate debounce timer is needed for this particular save.
@@ -504,6 +644,23 @@ export function SiteAssessmentWorkspace() {
     if (!addAnother) setActiveTool('select');
   }
 
+  function handleCreateLocation(data: { name: string; trailId: string; locationType: string; notes: string }) {
+    if (!mountain || !pendingLocationClick) return;
+    const trail = trails.find(t => t.id === data.trailId);
+    addLocation({
+      mountainId: mountain.id,
+      name: data.name,
+      trailId: data.trailId,
+      trailName: trail?.name,
+      coordinates: { latitude: pendingLocationClick.lat, longitude: pendingLocationClick.lng },
+      notes: data.notes || undefined,
+      locationType: data.locationType as any,
+    });
+    toast.success(`Location "${data.name}" added`);
+    setPendingLocationClick(null);
+    if (!addAnother) setActiveTool('select');
+  }
+
   // Escape exits placement/aiming mode.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -519,6 +676,10 @@ export function SiteAssessmentWorkspace() {
     if (!map || !mapReady) return;
     const handler = (e: mapboxgl.MapMouseEvent) => {
       if (activeTool === 'select') return;
+      if (activeTool === 'location') {
+        setPendingLocationClick({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        return;
+      }
       if (activeTool === 'camera') {
         if (cameraAimingId) aimCamera(cameraAimingId, e.lngLat.lat, e.lngLat.lng);
         else placeCamera(e.lngLat.lat, e.lngLat.lng);
@@ -567,6 +728,33 @@ export function SiteAssessmentWorkspace() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [objects, selectedObjectId, activeTool, mapReady]);
+
+  // Location markers — the pre-existing mountain-wide entity, drawn
+  // alongside (not instead of) the assessment's own objects. Clicking one
+  // navigates to its real LocationDetail page rather than opening an
+  // in-workspace panel, since that page already has the fuller feature set
+  // (inspections, assets, photos) for these.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !mountain) return;
+
+    locationMarkersRef.current.forEach(marker => marker.remove());
+    locationMarkersRef.current.clear();
+
+    mountainLocations.forEach(loc => {
+      if (!loc.coordinates) return;
+      const el = createLocationMarkerElement(loc.locationType);
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigate(`/mountains/${mountain.id}/locations/${loc.id}`);
+      });
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([loc.coordinates.longitude, loc.coordinates.latitude])
+        .addTo(map);
+      locationMarkersRef.current.set(loc.id, marker);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mountainLocations, mapReady, mountain?.id]);
 
   // Coverage-cone polygons — one per non-hidden camera, rebuilt from
   // heading/FOV/range whenever any camera's properties or position change.
@@ -652,8 +840,8 @@ export function SiteAssessmentWorkspace() {
     return (
       <div className="min-h-screen bg-[#f9fafb] flex flex-col items-center justify-center gap-3">
         <p className="text-[#ef4444] font-['Inter:Regular',sans-serif]">{loadError || 'Site Assessment not found'}</p>
-        <button onClick={() => navigate('/site-assessments')} className="text-[#307fe2] font-['Inter:Medium',sans-serif] text-[14px]">
-          Back to Site Assessments
+        <button onClick={() => navigate(mountainIdParam ? `/mountains/${mountainIdParam}` : '/mountains')} className="text-[#307fe2] font-['Inter:Medium',sans-serif] text-[14px]">
+          Back to Mountain
         </button>
       </div>
     );
@@ -662,7 +850,7 @@ export function SiteAssessmentWorkspace() {
   return (
     <div className="min-h-screen bg-[#f9fafb] flex flex-col">
       <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-4 flex items-center gap-3 shrink-0">
-        <button onClick={() => navigate('/site-assessments')} className="p-1 active:opacity-60">
+        <button onClick={() => navigate(`/mountains/${siteAssessment.mountain_id}`)} className="p-1 active:opacity-60">
           <ArrowLeft size={24} className="text-[#0a0a0a]" />
         </button>
         <div>
@@ -698,6 +886,18 @@ export function SiteAssessmentWorkspace() {
               </button>
             );
           })}
+          {trails.length > 0 && (
+            <>
+              <div className="h-px bg-[rgba(0,0,0,0.08)] mx-1 my-0.5" />
+              <button
+                onClick={() => setActiveTool(activeTool === 'location' ? 'select' : 'location')}
+                title="Add Location (onsite)"
+                className={`w-11 h-11 rounded-[8px] flex items-center justify-center ${activeTool === 'location' ? 'bg-[#0d9488] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
+              >
+                <MapPin size={18} />
+              </button>
+            </>
+          )}
         </div>
 
         {activeTool !== 'select' && (
@@ -705,7 +905,9 @@ export function SiteAssessmentWorkspace() {
             <span className="text-[12px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
               {activeTool === 'camera' && cameraAimingId
                 ? 'Click to aim the camera'
-                : `Click map to place ${OBJECT_TYPE_CONFIG[activeTool].label}`}
+                : activeTool === 'location'
+                ? 'Click map to add a Location'
+                : `Click map to place ${OBJECT_TYPE_CONFIG[activeTool as ObjectType].label}`}
             </span>
             <label className="flex items-center gap-1.5 text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif]">
               <input type="checkbox" checked={addAnother} onChange={e => setAddAnother(e.target.checked)} />
@@ -750,6 +952,16 @@ export function SiteAssessmentWorkspace() {
             onUpdate={(data) => handleUpdateObject(selectedObject.id, data)}
             onDelete={() => handleDeleteObject(selectedObject.id)}
             onClose={() => setSelectedObjectId(null)}
+          />
+        )}
+
+        {pendingLocationClick && (
+          <AddLocationModal
+            lat={pendingLocationClick.lat}
+            lng={pendingLocationClick.lng}
+            trails={trails}
+            onClose={() => setPendingLocationClick(null)}
+            onCreate={handleCreateLocation}
           />
         )}
 

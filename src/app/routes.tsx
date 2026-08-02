@@ -27,7 +27,6 @@ import { SignInPage } from "./components/SignInPage";
 import { SignUpPage } from "./components/SignUpPage";
 import { TeamPage } from "./components/TeamPage";
 import { SystemCheck } from "./components/SystemCheck";
-import { SiteAssessmentsList } from "./components/SiteAssessmentsList";
 import { SiteAssessmentWorkspace } from "./components/SiteAssessmentWorkspace";
 
 // react-router reuses the same component instance across param-only
@@ -76,8 +75,6 @@ export const router = createBrowserRouter([
         children: [
           { path: "/", Component: HomeDashboard },
           { path: "/mountains", Component: MountainsList },
-          { path: "/site-assessments", Component: SiteAssessmentsList },
-          { path: "/site-assessments/:id", Component: SiteAssessmentWorkspace },
           { path: "/inventory", Component: InventoryPage },
           { path: "/inspection-items", Component: InspectionItemsPage },
           { path: "/proposal-terms", Component: ProposalTermsPage },
@@ -94,6 +91,8 @@ export const router = createBrowserRouter([
           { path: "/mountains/:mountainId/proposal/:proposalId", Component: ProposalBuilderRoute },
           { path: "/mountains/:mountainId/agreement", Component: CustomerAgreementBuilder },
           { path: "/mountains/:mountainId/invoice", Component: InvoiceViewer },
+          // ── Site Assessments (mountain-scoped, not a top-level nav item) ────
+          { path: "/mountains/:mountainId/site-assessments/:id", Component: SiteAssessmentWorkspace },
           // ── Trails ────────────────────────────────────────────────────────
           { path: "/mountains/:mountainId/trails/new", Component: CreateTrail },
           { path: "/mountains/:mountainId/trails/:trailId", Component: TrailDetail },
