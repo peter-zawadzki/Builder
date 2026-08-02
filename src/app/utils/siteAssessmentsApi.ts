@@ -101,7 +101,25 @@ export async function archiveSiteAssessment(id: string): Promise<void> {
 
 // ── Map objects (Phase 3+) ────────────────────────────────────────────────
 
-export type ObjectType = 'server' | 'network' | 'power' | 'building' | 'misc';
+export type ObjectType = 'camera' | 'server' | 'network' | 'power' | 'building' | 'misc';
+
+// Camera-specific fields, stored in SiteAssessmentObject.properties_json —
+// not real columns, since only cameras need them (spec's "object-specific
+// configuration should be stored separately from common object properties").
+export interface CameraProperties {
+  heading: number;        // compass bearing, 0-359 (0 = North)
+  horizontalFov: number;  // degrees
+  verticalFov?: number;   // degrees
+  rangeMeters: number;    // estimated coverage distance
+  mountingHeightFt?: number;
+  tilt?: number;          // degrees
+  model?: string;
+  lens?: string;
+  resolution?: string;
+  mountingType?: string;
+  powerSource?: string;
+  networkConnection?: string;
+}
 
 export interface SiteAssessmentObject {
   id: string;

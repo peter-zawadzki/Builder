@@ -3,29 +3,33 @@ import { useNavigate, useParams } from 'react-router';
 import mapboxgl from 'mapbox-gl';
 import {
   ArrowLeft, Loader2, LocateFixed, Search, MousePointer2, Server, Router, Zap,
-  Building2, Box, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Unlock, X,
+  Building2, Box, Camera as CameraIcon, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Unlock, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
 import { getSiteAssessment, updateSiteAssessment, type SiteAssessment } from '../utils/siteAssessmentsApi';
 import {
-  createObject, updateObject, deleteObject, type SiteAssessmentObject, type ObjectType,
+  createObject, updateObject, deleteObject, type SiteAssessmentObject, type ObjectType, type CameraProperties,
 } from '../utils/siteAssessmentsApi';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import { bearingBetween, distanceBetween, destinationPoint, buildCoverageCone, compassLabel, METERS_PER_FOOT } from '../utils/geo';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
 
 const DEFAULT_CENTER: [number, number] = [-98.35, 39.5]; // continental US, same fallback as Map View
 const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12';
+const COVERAGE_SOURCE_ID = 'camera-coverage';
+const DEFAULT_CAMERA_PROPS: CameraProperties = { heading: 0, horizontalFov: 90, verticalFov: 50, rangeMeters: 100 };
 
 const OBJECT_TYPE_CONFIG: Record<ObjectType, { label: string; color: string; Icon: typeof Server }> = {
+  camera: { label: 'Camera', color: '#f43f5e', Icon: CameraIcon },
   server: { label: 'Server', color: '#6366f1', Icon: Server },
   network: { label: 'Network Device', color: '#0ea5e9', Icon: Router },
   power: { label: 'Power Source', color: '#f59e0b', Icon: Zap },
   building: { label: 'Building', color: '#64748b', Icon: Building2 },
   misc: { label: 'Miscellaneous', color: '#94a3b8', Icon: Box },
 };
-const TOOLS: ObjectType[] = ['server', 'network', 'power', 'building', 'misc'];
+const TOOLS: ObjectType[] = ['camera', 'server', 'network', 'power', 'building', 'misc'];
 
 const VERIFICATION_STATUSES = [
   'Unverified', 'Visible in map imagery', 'Reported by resort',
@@ -64,6 +68,99 @@ function createMarkerElement(type: ObjectType, isSelected: boolean) {
   `;
   el.textContent = config.label[0];
   return el;
+}
+
+// Directional — a triangle pointing "up" so setRotation(heading) (with
+// rotationAlignment: 'map') visually aims it, staying geographically
+// accurate regardless of map bearing since Mapbox handles that rotation.
+function createCameraMarkerElement(isSelected: boolean) {
+  const el = document.createElement('div');
+  el.style.cssText = `
+    width: 0; height: 0; cursor: pointer;
+    border-left: 13px solid transparent; border-right: 13px solid transparent;
+    border-bottom: 26px solid ${OBJECT_TYPE_CONFIG.camera.color};
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+    ${isSelected ? 'outline: 2px dashed #ff5c39; outline-offset: 4px;' : ''}
+  `;
+  return el;
+}
+
+// Camera-only fields — heading/FOV/range drive the live coverage cone
+// (see buildCoverageCone in geo.ts); the rest (model/lens/etc.) are plain
+// descriptive metadata. All stored in properties_json, not real columns.
+function CameraFields({ object, onUpdate }: { object: SiteAssessmentObject; onUpdate: (data: Partial<SiteAssessmentObject>) => void }) {
+  const props = (object.properties_json || {}) as Partial<CameraProperties>;
+  const heading = props.heading ?? 0;
+  const rangeFt = Math.round((props.rangeMeters ?? 100) / METERS_PER_FOOT);
+
+  function setProps(patch: Partial<CameraProperties>) {
+    onUpdate({ properties_json: { ...props, ...patch } } as any);
+  }
+
+  return (
+    <div className="space-y-3 pb-3 mb-1 border-b border-[rgba(0,0,0,0.08)]">
+      <div>
+        <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">
+          Heading — {Math.round(heading)}° {compassLabel(heading)}
+        </label>
+        <input
+          type="range" min={0} max={359} value={Math.round(heading)}
+          onChange={e => setProps({ heading: Number(e.target.value) })}
+          className="w-full"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">Horizontal FOV (°)</label>
+          <input
+            type="number" min={10} max={180} value={Math.round(props.horizontalFov ?? 90)}
+            onChange={e => setProps({ horizontalFov: Number(e.target.value) })}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-2.5 py-2 text-[#0a0a0a] text-[13px] outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">Range (ft)</label>
+          <input
+            type="number" min={10} value={rangeFt}
+            onChange={e => setProps({ rangeMeters: Number(e.target.value) * METERS_PER_FOOT })}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-2.5 py-2 text-[#0a0a0a] text-[13px] outline-none"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">Mount height (ft)</label>
+          <input
+            type="number" value={props.mountingHeightFt ?? ''} placeholder="—"
+            onChange={e => setProps({ mountingHeightFt: e.target.value ? Number(e.target.value) : undefined })}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-2.5 py-2 text-[#0a0a0a] text-[13px] outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">Tilt (°)</label>
+          <input
+            type="number" value={props.tilt ?? ''} placeholder="—"
+            onChange={e => setProps({ tilt: e.target.value ? Number(e.target.value) : undefined })}
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-2.5 py-2 text-[#0a0a0a] text-[13px] outline-none"
+          />
+        </div>
+      </div>
+      <input
+        type="text" value={props.model ?? ''} placeholder="Camera model"
+        onChange={e => setProps({ model: e.target.value })}
+        className="w-full bg-[#f3f3f5] rounded-[8px] px-2.5 py-2 text-[#0a0a0a] text-[13px] outline-none"
+      />
+      <input
+        type="text" value={props.networkConnection ?? ''} placeholder="Network connection"
+        onChange={e => setProps({ networkConnection: e.target.value })}
+        className="w-full bg-[#f3f3f5] rounded-[8px] px-2.5 py-2 text-[#0a0a0a] text-[13px] outline-none"
+      />
+      <p className="text-[11px] text-[#8992a0] leading-snug">
+        Estimated coverage is based on the selected heading, field of view and range. Actual coverage
+        may be affected by terrain, trees, equipment, weather, mounting height and camera configuration.
+      </p>
+    </div>
+  );
 }
 
 // ── Properties panel ──────────────────────────────────────────────────────
@@ -115,6 +212,8 @@ function ObjectPropertiesPanel({
             className="w-full bg-[#f3f3f5] rounded-[8px] px-2.5 py-2 text-[#0a0a0a] text-[13px] outline-none"
           />
         </div>
+
+        {object.object_type === 'camera' && <CameraFields object={object} onUpdate={onUpdate} />}
 
         <div>
           <label className="block text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mb-1">Status</label>
@@ -203,16 +302,19 @@ export function SiteAssessmentWorkspace() {
   const [locating, setLocating] = useState(false);
   const [needsManualLocate, setNeedsManualLocate] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [styleReady, setStyleReady] = useState(false);
 
   const [activeTool, setActiveTool] = useState<'select' | ObjectType>('select');
   const [addAnother, setAddAnother] = useState(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+  const [cameraAimingId, setCameraAimingId] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const resortCenterRef = useRef<[number, number]>(DEFAULT_CENTER);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const handleMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -302,6 +404,18 @@ export function SiteAssessmentWorkspace() {
       });
       map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
       map.on('moveend', () => saveViewport(map));
+      map.on('load', () => {
+        map.addSource(COVERAGE_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+          id: 'camera-coverage-fill', type: 'fill', source: COVERAGE_SOURCE_ID,
+          paint: { 'fill-color': OBJECT_TYPE_CONFIG.camera.color, 'fill-opacity': 0.25 },
+        });
+        map.addLayer({
+          id: 'camera-coverage-outline', type: 'line', source: COVERAGE_SOURCE_ID,
+          paint: { 'line-color': OBJECT_TYPE_CONFIG.camera.color, 'line-width': 1.5, 'line-opacity': 0.6 },
+        });
+        setStyleReady(true);
+      });
       mapRef.current = map;
       setMapReady(true);
     })();
@@ -311,6 +425,7 @@ export function SiteAssessmentWorkspace() {
       mapRef.current?.remove();
       mapRef.current = null;
       setMapReady(false);
+      setStyleReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteAssessment, mountain?.id]);
@@ -360,9 +475,40 @@ export function SiteAssessmentWorkspace() {
     }
   }
 
-  // Escape exits placement mode.
+  // Camera placement is two clicks: the first drops the camera (default
+  // heading/FOV/range), the second aims it — heading is computed from the
+  // camera to wherever that second click lands, per spec.
+  async function placeCamera(lat: number, lng: number) {
+    if (!id) return;
+    const countOfType = objects.filter(o => o.object_type === 'camera').length;
+    const name = `Camera ${countOfType + 1}`;
+    try {
+      const created = await createObject(id, {
+        object_type: 'camera', name, latitude: lat, longitude: lng,
+        properties_json: DEFAULT_CAMERA_PROPS as unknown as Record<string, unknown>,
+      });
+      setObjects(prev => [...prev, created]);
+      setSelectedObjectId(created.id);
+      setCameraAimingId(created.id);
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
+    }
+  }
+
+  async function aimCamera(cameraId: string, lat: number, lng: number) {
+    const cam = objects.find(o => o.id === cameraId);
+    setCameraAimingId(null);
+    if (!cam || cam.latitude == null || cam.longitude == null) return;
+    const heading = bearingBetween(cam.latitude, cam.longitude, lat, lng);
+    await handleUpdateObject(cameraId, { properties_json: { ...cam.properties_json, heading } } as any);
+    if (!addAnother) setActiveTool('select');
+  }
+
+  // Escape exits placement/aiming mode.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setActiveTool('select'); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setActiveTool('select'); setCameraAimingId(null); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
@@ -373,12 +519,17 @@ export function SiteAssessmentWorkspace() {
     if (!map || !mapReady) return;
     const handler = (e: mapboxgl.MapMouseEvent) => {
       if (activeTool === 'select') return;
+      if (activeTool === 'camera') {
+        if (cameraAimingId) aimCamera(cameraAimingId, e.lngLat.lat, e.lngLat.lng);
+        else placeCamera(e.lngLat.lat, e.lngLat.lng);
+        return;
+      }
       placeObject(activeTool, e.lngLat.lat, e.lngLat.lng);
     };
     map.on('click', handler);
     return () => { map.off('click', handler); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, activeTool, objects, addAnother]);
+  }, [mapReady, activeTool, objects, addAnother, cameraAimingId]);
 
   // Marker sync — recreated whenever objects/selection/tool changes (fine at
   // the object counts this workspace deals with).
@@ -391,11 +542,23 @@ export function SiteAssessmentWorkspace() {
 
     objects.forEach(obj => {
       if (obj.is_hidden || obj.latitude == null || obj.longitude == null) return;
-      const el = createMarkerElement(obj.object_type as ObjectType, obj.id === selectedObjectId);
+      const isCamera = obj.object_type === 'camera';
+      const el = isCamera
+        ? createCameraMarkerElement(obj.id === selectedObjectId)
+        : createMarkerElement(obj.object_type as ObjectType, obj.id === selectedObjectId);
       el.addEventListener('click', (e) => { e.stopPropagation(); setSelectedObjectId(obj.id); });
-      const marker = new mapboxgl.Marker({ element: el, draggable: activeTool === 'select' && !obj.is_locked })
+      const marker = new mapboxgl.Marker({
+        element: el,
+        draggable: activeTool === 'select' && !obj.is_locked,
+        rotationAlignment: isCamera ? 'map' : 'auto',
+        pitchAlignment: isCamera ? 'map' : 'auto',
+      })
         .setLngLat([obj.longitude, obj.latitude])
         .addTo(map);
+      if (isCamera) {
+        const heading = ((obj.properties_json as any)?.heading as number) ?? 0;
+        marker.setRotation(heading);
+      }
       marker.on('dragend', () => {
         const ll = marker.getLngLat();
         handleUpdateObject(obj.id, { latitude: ll.lat, longitude: ll.lng });
@@ -404,6 +567,78 @@ export function SiteAssessmentWorkspace() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [objects, selectedObjectId, activeTool, mapReady]);
+
+  // Coverage-cone polygons — one per non-hidden camera, rebuilt from
+  // heading/FOV/range whenever any camera's properties or position change.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+    const source = map.getSource(COVERAGE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const cameras = objects.filter(o => o.object_type === 'camera' && !o.is_hidden && o.latitude != null && o.longitude != null);
+    const features = cameras.map(cam => {
+      const props = (cam.properties_json || {}) as Partial<CameraProperties>;
+      const coords = buildCoverageCone(
+        cam.latitude!, cam.longitude!,
+        props.heading ?? 0, props.horizontalFov ?? 90, props.rangeMeters ?? 100
+      );
+      return { type: 'Feature' as const, properties: { id: cam.id }, geometry: { type: 'Polygon' as const, coordinates: [coords] } };
+    });
+    source.setData({ type: 'FeatureCollection', features });
+  }, [objects, styleReady]);
+
+  // Draggable heading/range handle for the selected camera — sets both at
+  // once (angle from camera = heading, distance from camera = range).
+  useEffect(() => {
+    const map = mapRef.current;
+    handleMarkerRef.current?.remove();
+    handleMarkerRef.current = null;
+    if (!map || !mapReady) return;
+    if (!selectedObject || selectedObject.object_type !== 'camera' || selectedObject.latitude == null || selectedObject.longitude == null) return;
+
+    const camLat = selectedObject.latitude;
+    const camLng = selectedObject.longitude;
+    const props = (selectedObject.properties_json || {}) as Partial<CameraProperties>;
+    const heading = props.heading ?? 0;
+    const hFov = props.horizontalFov ?? 90;
+    const range = props.rangeMeters ?? 100;
+    const [hLng, hLat] = destinationPoint(camLat, camLng, heading, range);
+
+    const el = document.createElement('div');
+    el.style.cssText = `width:14px;height:14px;border-radius:50%;background:white;border:3px solid ${OBJECT_TYPE_CONFIG.camera.color};cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,0.4);`;
+    const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([hLng, hLat]).addTo(map);
+
+    marker.on('drag', () => {
+      const ll = marker.getLngLat();
+      const liveHeading = bearingBetween(camLat, camLng, ll.lat, ll.lng);
+      const liveRange = distanceBetween(camLat, camLng, ll.lat, ll.lng);
+      markersRef.current.get(selectedObject.id)?.setRotation(liveHeading);
+      const source = map.getSource(COVERAGE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+      if (source) {
+        const others = objects.filter(o => o.object_type === 'camera' && o.id !== selectedObject.id && !o.is_hidden && o.latitude != null && o.longitude != null);
+        const otherFeatures = others.map(cam => {
+          const p = (cam.properties_json || {}) as Partial<CameraProperties>;
+          const coords = buildCoverageCone(cam.latitude!, cam.longitude!, p.heading ?? 0, p.horizontalFov ?? 90, p.rangeMeters ?? 100);
+          return { type: 'Feature' as const, properties: { id: cam.id }, geometry: { type: 'Polygon' as const, coordinates: [coords] } };
+        });
+        const liveCoords = buildCoverageCone(camLat, camLng, liveHeading, hFov, liveRange);
+        source.setData({
+          type: 'FeatureCollection',
+          features: [...otherFeatures, { type: 'Feature', properties: { id: selectedObject.id }, geometry: { type: 'Polygon', coordinates: [liveCoords] } }],
+        });
+      }
+    });
+
+    marker.on('dragend', () => {
+      const ll = marker.getLngLat();
+      const newHeading = bearingBetween(camLat, camLng, ll.lat, ll.lng);
+      const newRange = distanceBetween(camLat, camLng, ll.lat, ll.lng);
+      handleUpdateObject(selectedObject.id, { properties_json: { ...props, heading: newHeading, rangeMeters: newRange } } as any);
+    });
+
+    handleMarkerRef.current = marker;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedObject?.id, selectedObject?.properties_json, mapReady]);
 
   if (loading) {
     return (
@@ -468,7 +703,9 @@ export function SiteAssessmentWorkspace() {
         {activeTool !== 'select' && (
           <div className="absolute top-4 left-20 z-10 bg-white rounded-full shadow-lg pl-3 pr-2 py-2 flex items-center gap-3">
             <span className="text-[12px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-              Click map to place {OBJECT_TYPE_CONFIG[activeTool].label}
+              {activeTool === 'camera' && cameraAimingId
+                ? 'Click to aim the camera'
+                : `Click map to place ${OBJECT_TYPE_CONFIG[activeTool].label}`}
             </span>
             <label className="flex items-center gap-1.5 text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif]">
               <input type="checkbox" checked={addAnother} onChange={e => setAddAnother(e.target.checked)} />
