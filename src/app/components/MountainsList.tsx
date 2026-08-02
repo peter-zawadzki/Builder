@@ -11,6 +11,7 @@ import { QuickNotesModal } from './QuickNotesModal';
 import { ProjectMiniBar } from './projects/ProjectsPane';
 import { StageBadge } from './crm/CRM';
 import { AllMountainsMapView } from './AllMountainsMapView';
+import { useMountainGeocoding } from '../hooks/useMountainGeocoding';
 import { toast } from 'sonner';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
@@ -28,6 +29,11 @@ export function MountainsList() {
   const { mountains, trails, assets, projects, contacts, organizations, getNotesByMountainId, getLocationsByMountainId, getInspectionsByLocationId, getProjectsByMountainId, updateMountain } = useData();
   const navigate = useNavigate();
   const isSuperAdmin = useIsSuperAdmin();
+
+  // Fire off in the background as soon as the list loads (not gated behind
+  // opening Map View) so mountain addresses are usually already geocoded and
+  // cached by the time someone actually clicks "Map View".
+  useMountainGeocoding(mountains);
 
   const [mapView, setMapView] = useState<MapViewState | null>(null);
   const [showGeoMap, setShowGeoMap] = useState(false);
