@@ -13,6 +13,7 @@ import { locations } from "./routes/locations";
 import { assets } from "./routes/assets";
 import { catalog } from "./routes/catalog";
 import { legacy } from "./routes/legacy";
+import { siteAssessments } from "./routes/siteAssessments";
 import { proposalPublicSign } from "./routes/proposalPublicSign";
 import { agreementPublicSign } from "./routes/agreementPublicSign";
 
@@ -74,6 +75,7 @@ app.use("/api/mountains/*", requireAuth);
 app.use("/api/trails/*", requireAuth);
 app.use("/api/locations/*", requireAuth);
 app.use("/api/legacy/*", requireAuth);
+app.use("/api/site-assessments/*", requireAuth);
 app.use("/api/me", requireAuth);
 
 // Who am I — verifies the auth chain and returns the synced app user.
@@ -83,6 +85,7 @@ app.get("/api/me", (c) => c.json({ user: c.get("user") }));
 app.route("/api/mountains", mountains);
 app.route("/api/trails", trails);
 app.route("/api/locations", locations);
+app.route("/api/site-assessments", siteAssessments);
 // Legacy shapes for the existing UI running losslessly on the local DB.
 app.route("/api/legacy", legacy);
 

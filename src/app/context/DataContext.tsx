@@ -1218,6 +1218,15 @@ export function registerLocalTokenGetter(fn: () => Promise<string | null>) {
   localTokenGetter = fn;
 }
 
+// Exposed so other API modules that talk to a different base path (e.g.
+// siteAssessmentsApi.ts, which hits /api/site-assessments — a dedicated
+// backend, not the /api/legacy JSONB-blob one this file's apiCall() is
+// scoped to) can reuse the same registered Clerk token getter without a
+// second LocalApiBridge-style registration wire-up.
+export async function getAuthToken(): Promise<string | null> {
+  return localTokenGetter ? await localTokenGetter() : null;
+}
+
 async function apiCall(endpoint: string, options: RequestInit = {}) {
   const token = localTokenGetter ? await localTokenGetter() : null;
   const response = await fetch(`${LOCAL_API_BASE}${endpoint}`, {

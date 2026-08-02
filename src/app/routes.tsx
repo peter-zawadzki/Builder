@@ -27,6 +27,8 @@ import { SignInPage } from "./components/SignInPage";
 import { SignUpPage } from "./components/SignUpPage";
 import { TeamPage } from "./components/TeamPage";
 import { SystemCheck } from "./components/SystemCheck";
+import { SiteAssessmentsList } from "./components/SiteAssessmentsList";
+import { SiteAssessmentWorkspace } from "./components/SiteAssessmentWorkspace";
 
 // react-router reuses the same component instance across param-only
 // navigations (e.g. /proposal/A -> /proposal/B) — ProposalBuilder holds a lot
@@ -74,6 +76,8 @@ export const router = createBrowserRouter([
         children: [
           { path: "/", Component: HomeDashboard },
           { path: "/mountains", Component: MountainsList },
+          { path: "/site-assessments", Component: SiteAssessmentsList },
+          { path: "/site-assessments/:id", Component: SiteAssessmentWorkspace },
           { path: "/inventory", Component: InventoryPage },
           { path: "/inspection-items", Component: InspectionItemsPage },
           { path: "/proposal-terms", Component: ProposalTermsPage },
