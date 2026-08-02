@@ -138,3 +138,86 @@ siteAssessments.delete("/:id", async (c) => {
   );
   return c.json({ ok: true });
 });
+
+// ── Map objects (Phase 3+) ────────────────────────────────────────────────
+// Every write is scoped by site_assessment_id in its WHERE clause — an
+// object can only ever be read/updated/deleted through the assessment it
+// actually belongs to (the spec's explicit "validate ownership" requirement).
+
+const OBJECT_COLS = [
+  "trail_id", "object_type", "object_subtype", "name", "description",
+  "geometry_json", "latitude", "longitude", "elevation", "status",
+  "verification_status", "properties_json", "notes", "is_hidden", "is_locked",
+  "display_order",
+] as const;
+
+function pickObject(body: any) {
+  const out: Record<string, any> = {};
+  for (const col of OBJECT_COLS) if (col in body) out[col] = body[col];
+  return out;
+}
+
+siteAssessments.post("/:id/objects", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  if (!body?.object_type) return c.json({ error: "object_type is required" }, 400);
+  if (!body?.name) return c.json({ error: "name is required" }, 400);
+  if (!body?.geometry_json) return c.json({ error: "geometry_json is required" }, 400);
+
+  const assessment = await queryOne(`SELECT id FROM site_assessments WHERE id = $1`, [id]);
+  if (!assessment) return c.json({ error: "Site Assessment not found" }, 404);
+
+  const fields = { ...pickObject(body), site_assessment_id: id, created_by: user.id };
+  const cols = Object.keys(fields);
+  const vals = Object.values(fields);
+  const placeholders = cols.map((_, i) => `$${i + 1}`);
+  const object = await queryOne(
+    `INSERT INTO site_assessment_objects (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`,
+    vals
+  );
+  await query(
+    `INSERT INTO site_assessment_activity (site_assessment_id, type, summary, actor_user_id)
+       VALUES ($1, 'object_created', $2, $3)`,
+    [id, `${body.object_type} "${body.name}" placed`, user.id]
+  );
+  return c.json({ object }, 201);
+});
+
+siteAssessments.put("/:id/objects/:objectId", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const objectId = c.req.param("objectId");
+  const body = await c.req.json().catch(() => ({}));
+  const fields = { ...pickObject(body), updated_by: user.id };
+  if (Object.keys(fields).length === 1) return c.json({ error: "no updatable fields" }, 400);
+  const cols = Object.keys(fields);
+  const vals = Object.values(fields);
+  const set = cols.map((col, i) => `${col} = $${i + 1}`).join(", ");
+  const object = await queryOne(
+    `UPDATE site_assessment_objects SET ${set}
+      WHERE id = $${cols.length + 1} AND site_assessment_id = $${cols.length + 2} AND deleted_at IS NULL
+      RETURNING *`,
+    [...vals, objectId, id]
+  );
+  return object ? c.json({ object }) : c.json({ error: "Not found" }, 404);
+});
+
+// Soft delete — kept for revision history / undo, per spec.
+siteAssessments.delete("/:id/objects/:objectId", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const objectId = c.req.param("objectId");
+  const object = await queryOne(
+    `UPDATE site_assessment_objects SET deleted_at = now(), updated_by = $3
+      WHERE id = $1 AND site_assessment_id = $2 AND deleted_at IS NULL RETURNING *`,
+    [objectId, id, user.id]
+  );
+  if (!object) return c.json({ error: "Not found" }, 404);
+  await query(
+    `INSERT INTO site_assessment_activity (site_assessment_id, type, summary, actor_user_id)
+       VALUES ($1, 'object_deleted', $2, $3)`,
+    [id, `${(object as any).object_type} "${(object as any).name}" removed`, user.id]
+  );
+  return c.json({ ok: true });
+});

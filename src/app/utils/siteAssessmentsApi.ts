@@ -98,3 +98,72 @@ export async function updateSiteAssessment(id: string, data: Partial<SiteAssessm
 export async function archiveSiteAssessment(id: string): Promise<void> {
   await apiCall(`/${id}`, { method: 'DELETE' });
 }
+
+// ── Map objects (Phase 3+) ────────────────────────────────────────────────
+
+export type ObjectType = 'server' | 'network' | 'power' | 'building' | 'misc';
+
+export interface SiteAssessmentObject {
+  id: string;
+  site_assessment_id: string;
+  trail_id: string | null;
+  object_type: ObjectType | string;
+  object_subtype: string | null;
+  name: string;
+  description: string | null;
+  geometry_json: { type: 'Point'; coordinates: [number, number] };
+  latitude: number | null;
+  longitude: number | null;
+  elevation: number | null;
+  status: string | null;
+  verification_status: string;
+  properties_json: Record<string, unknown>;
+  notes: string | null;
+  is_hidden: boolean;
+  is_locked: boolean;
+  display_order: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export async function createObject(
+  assessmentId: string,
+  data: {
+    object_type: ObjectType;
+    object_subtype?: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    trail_id?: string;
+    properties_json?: Record<string, unknown>;
+  }
+): Promise<SiteAssessmentObject> {
+  const res = await apiCall(`/${assessmentId}/objects`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...data,
+      geometry_json: { type: 'Point', coordinates: [data.longitude, data.latitude] },
+    }),
+  });
+  return res.object;
+}
+
+export async function updateObject(
+  assessmentId: string,
+  objectId: string,
+  data: Partial<SiteAssessmentObject> & { latitude?: number; longitude?: number }
+): Promise<SiteAssessmentObject> {
+  const body: any = { ...data };
+  if (data.latitude != null && data.longitude != null) {
+    body.geometry_json = { type: 'Point', coordinates: [data.longitude, data.latitude] };
+  }
+  const res = await apiCall(`/${assessmentId}/objects/${objectId}`, { method: 'PUT', body: JSON.stringify(body) });
+  return res.object;
+}
+
+export async function deleteObject(assessmentId: string, objectId: string): Promise<void> {
+  await apiCall(`/${assessmentId}/objects/${objectId}`, { method: 'DELETE' });
+}
