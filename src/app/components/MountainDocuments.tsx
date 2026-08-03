@@ -7,6 +7,7 @@ import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
 import * as mountainDocsSync from '../utils/mountainDocsSync';
 import { ImageAnnotator } from './ImageAnnotator';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 import type { Annotation } from '../context/DataContext';
 import { newId } from '../utils/id';
 import { toast } from 'sonner';
@@ -39,6 +40,8 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAnnotations, setHasAnnotations] = useState<Record<string, boolean>>({});
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewImageRef = useRef<HTMLImageElement>(null);
@@ -418,31 +421,41 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
     }
   };
 
-  const handleDelete = async (id: string) => {
-    const doc = documents.find(d => d.id === id);
-    if (!doc || doc.source !== 'upload') {
-      // Only plain admin uploads are deletable from here — location/asset/
-      // inspection photos are managed from their own record instead.
-      return;
+  // Only plain admin uploads are deletable from here — location/asset/
+  // inspection photos are managed from their own record instead.
+  const requestDelete = (doc: Document) => {
+    if (doc.source !== 'upload') return;
+    setDeleteTarget(doc);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    const doc = deleteTarget;
+    setIsDeleting(true);
+    try {
+      // Revoke blob URLs
+      if (doc.url.startsWith('blob:')) {
+        URL.revokeObjectURL(doc.url);
+      }
+      if (doc.thumbnail && doc.thumbnail.startsWith('blob:')) {
+        URL.revokeObjectURL(doc.thumbnail);
+      }
+
+      // Remove from IndexedDB
+      const currentDocs = await mountainDocsDB.getDocuments(mountainId);
+      const updatedDocs = currentDocs.filter(d => d.id !== doc.id);
+      await mountainDocsDB.saveDocuments(mountainId, updatedDocs);
+
+      mountainDocsSync.removePendingMountainDoc(mountainId, doc.id);
+      await mountainDocsSync.deleteMountainDocument(mountainId, doc.id).catch(() => {});
+
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      if (previewDoc?.id === doc.id) setPreviewDoc(null);
+      toast.success(`"${doc.name}" deleted`);
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
-
-    // Revoke blob URLs
-    if (doc.url.startsWith('blob:')) {
-      URL.revokeObjectURL(doc.url);
-    }
-    if (doc.thumbnail && doc.thumbnail.startsWith('blob:')) {
-      URL.revokeObjectURL(doc.thumbnail);
-    }
-
-    // Remove from IndexedDB
-    const currentDocs = await mountainDocsDB.getDocuments(mountainId);
-    const updatedDocs = currentDocs.filter(d => d.id !== id);
-    await mountainDocsDB.saveDocuments(mountainId, updatedDocs);
-
-    mountainDocsSync.removePendingMountainDoc(mountainId, id);
-    mountainDocsSync.deleteMountainDocument(mountainId, id).catch(() => {});
-
-    setDocuments(prev => prev.filter(d => d.id !== id));
   };
 
   const getFileIcon = (type: string) => {
@@ -733,7 +746,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                   </a>
                   {doc.source === 'upload' && (
                     <button
-                      onClick={() => handleDelete(doc.id)}
+                      onClick={() => requestDelete(doc)}
                       className="bg-white/90 backdrop-blur-sm rounded-[4px] p-1 active:bg-white/100"
                     >
                       <Trash2 size={11} className="text-[#ff5c39]" />
@@ -811,7 +824,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                   </a>
                   {doc.source === 'upload' && (
                     <button
-                      onClick={() => handleDelete(doc.id)}
+                      onClick={() => requestDelete(doc)}
                       className="bg-white rounded-[6px] p-1.5 active:bg-[#f3f3f5] border border-[rgba(0,0,0,0.08)]"
                     >
                       <Trash2 size={13} className="text-[#ff5c39]" />
@@ -853,6 +866,15 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                 <Download size={13} />
                 Download
               </a>
+              {previewDoc.source === 'upload' && (
+                <button
+                  onClick={() => requestDelete(previewDoc)}
+                  className="flex items-center gap-1.5 bg-white/20 text-white text-[13px] font-['Inter:Medium',sans-serif] px-3 py-1.5 rounded-[8px] active:bg-white/30"
+                >
+                  <Trash2 size={13} />
+                  Delete
+                </button>
+              )}
               <button
                 onClick={() => setPreviewDoc(null)}
                 className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center active:bg-white/30"
@@ -955,6 +977,23 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             setShowAnnotator(false);
           }}
           onClose={() => setShowAnnotator(false)}
+        />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          title="Delete document?"
+          description={
+            <>
+              This will permanently delete{' '}
+              <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">"{deleteTarget.name}"</span>.
+              This can't be undone.
+            </>
+          }
+          isDeleting={isDeleting}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </div>
