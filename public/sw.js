@@ -3,13 +3,23 @@
  * Strategy:
  *  - Install: fetch and cache the app shell (/) so the full HTML + its linked
  *    JS/CSS chunks are pulled into cache during install, not lazily.
- *  - Navigate requests: serve cached shell immediately, revalidate in background
- *  - Static assets (JS/CSS/images/fonts): stale-while-revalidate
- *  - Supabase API calls: skip entirely (handled by DataContext + offline queue)
+ *  - Navigate requests: network-first, cache fallback when offline — every
+ *    deploy needs to reach a device on its very next page load, not "whenever
+ *    a background revalidation from two visits ago happens to have landed."
+ *    (Was cache-first with background revalidate — that shipped every deploy
+ *    to nobody until a device happened to reload twice; found via photo/
+ *    document uploads silently running week-old cached JS that referenced a
+ *    JS bundle filename the server no longer had, both on the same mountain.)
+ *  - Static assets (JS/CSS/images/fonts): stale-while-revalidate — safe here
+ *    because asset filenames are content-hashed by Vite, so a given hash's
+ *    bytes never change; only the app shell's reference to *which* hash can
+ *    go stale.
+ *  - Supabase API calls: skip entirely (dead code path — app no longer talks
+ *    to Supabase at all, but kept as a no-op safety net)
  *  - OSM tile requests: stale-while-revalidate (map works offline after first view)
  */
 
-const CACHE = 'builder-v3';
+const CACHE = 'builder-v4';
 const SUPABASE_PATTERN = /supabase\.co/;
 
 // ── Install: warm up the app shell cache ──────────────────────────────────────
@@ -69,18 +79,21 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ── HTML navigation: cache-first, background revalidate ──────────────────
+  // ── HTML navigation: network-first, cache fallback when offline ──────────
   if (req.mode === 'navigate') {
     event.respondWith(
-      caches.open(CACHE).then(async cache => {
-        const cached = await cache.match('/');
-        // Always kick off a network fetch to refresh the shell
-        const networkFetch = fetch(req)
-          .then(res => { if (res.ok) cache.put('/', res.clone()); return res; })
-          .catch(() => null);
-        // Serve cache instantly if available; otherwise wait for network
-        return cached ?? networkFetch;
-      })
+      (async () => {
+        const cache = await caches.open(CACHE);
+        try {
+          const res = await fetch(req);
+          if (res.ok) cache.put('/', res.clone());
+          return res;
+        } catch (e) {
+          const cached = await cache.match('/');
+          if (cached) return cached;
+          throw e;
+        }
+      })()
     );
     return;
   }
