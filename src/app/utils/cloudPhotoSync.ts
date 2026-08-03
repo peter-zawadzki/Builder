@@ -1,23 +1,33 @@
 /**
- * Cloud photo sync — uploads asset photos to Supabase Storage so they are
- * available on every device, not just the one that captured them.
+ * Cloud photo sync — uploads asset photos to S3 (via server/routes/documents.ts)
+ * so they are available on every device, not just the one that captured them.
  *
  * Upload flow (single round-trip):
  *   1. Compress photo to ≤1600px JPEG at 82% quality (~300–700 KB)
- *   2. POST compressed base64 to /photos/upload
- *   3. Server decodes → uploads to Supabase Storage → saves path in KV
+ *   2. POST compressed base64 to /api/documents/photos/upload
+ *   3. Server decodes → uploads to S3 → records the path in the `documents` table
  *
  * Download flow (on every page load for devices without local copies):
- *   1. POST /photos/batch-urls with all asset IDs
+ *   1. POST /api/documents/photos/batch-urls with all asset IDs
  *   2. Server generates 24-hour signed URLs from stored paths
  *   3. Signed URLs are set as photo field values (work directly in <img src>)
  */
 
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { getAuthToken } from '../context/DataContext';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
-const AUTH = { Authorization: `Bearer ${publicAnonKey}` };
-function jsonHeaders() { return { ...AUTH, 'Content-Type': 'application/json' }; }
+const BASE = '/api/documents';
+
+async function apiCall(endpoint: string, options: RequestInit = {}) {
+  const token = await getAuthToken();
+  return fetch(`${BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token ?? ''}`,
+      ...options.headers,
+    },
+  });
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -28,7 +38,7 @@ export function isDataUrl(v: string | null | undefined): v is string {
 
 /**
  * Resize + re-encode a data URL to JPEG ≤1600×1200 at 82% quality.
- * This keeps uploads under ~800 KB — well within the 6 MB edge-function limit.
+ * This keeps uploads under ~800 KB — well within the request body limit.
  * If the canvas API is unavailable or the image can't be decoded, returns the original.
  */
 async function compressDataUrl(dataUrl: string): Promise<string> {
@@ -69,9 +79,8 @@ async function uploadOne(
   try {
     const compressed = await compressDataUrl(dataUrl);
 
-    const res = await fetch(`${API_BASE}/photos/upload`, {
+    const res = await apiCall(`/photos/upload`, {
       method: 'POST',
-      headers: jsonHeaders(),
       body: JSON.stringify({ assetId, field, index, dataUrl: compressed }),
     });
 
@@ -135,9 +144,8 @@ export async function fetchBatchPhotoUrls(
 ): Promise<Record<string, Record<string, string | string[]>>> {
   if (assetIds.length === 0) return {};
   try {
-    const res = await fetch(`${API_BASE}/photos/batch-urls`, {
+    const res = await apiCall(`/photos/batch-urls`, {
       method: 'POST',
-      headers: jsonHeaders(),
       body: JSON.stringify({ assetIds }),
     });
     if (!res.ok) {
@@ -164,10 +172,7 @@ export async function fetchBatchPhotoUrls(
 /** Delete all cloud-stored photos for an asset (call when asset is deleted). */
 export async function deleteAssetPhotos(assetId: string): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/photos/${assetId}`, {
-      method: 'DELETE',
-      headers: AUTH,
-    });
+    const res = await apiCall(`/photos/${assetId}`, { method: 'DELETE' });
     if (!res.ok) {
       console.warn('[cloudPhoto] deleteAssetPhotos failed:', res.status);
     }

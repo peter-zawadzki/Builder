@@ -1,23 +1,27 @@
 /**
  * Cloud sync for location media (photos/videos).
  * Mirrors the same pattern as cloudPhotoSync.ts but for locationMediaDB records.
- *
- * Storage paths:
- *   locations/{locationId}/loc/photos/{index}.jpg    (location-level)
- *   locations/{locationId}/insp/photos/{index}.jpg   (inspection)
- *
- * KV keys:
- *   locMediaRefs:loc:{locationId}   → { photos: [path, ...], videos: [] }
- *   locMediaRefs:insp:{locationId}  → { photos: [path, ...] }
+ * Backed by S3 + the `documents` table (server/routes/documents.ts) — not
+ * Supabase Storage.
  */
 
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { getAuthToken } from '../context/DataContext';
 
 export type MediaType = 'loc' | 'insp';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
-const AUTH = { Authorization: `Bearer ${publicAnonKey}` };
-function jsonHeaders() { return { ...AUTH, 'Content-Type': 'application/json' }; }
+const BASE = '/api/documents';
+
+async function apiCall(endpoint: string, options: RequestInit = {}) {
+  const token = await getAuthToken();
+  return fetch(`${BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token ?? ''}`,
+      ...options.headers,
+    },
+  });
+}
 
 function isDataUrl(v: string | null | undefined): v is string {
   return typeof v === 'string' && v.startsWith('data:');
@@ -81,8 +85,8 @@ async function compressPhoto(dataUrl: string): Promise<string> {
 
 /**
  * Upload all data: photos (skips https:// URLs that are already in the cloud).
- * Videos are too large for the edge function body limit, so they use a
- * presigned PUT directly to Supabase Storage (browser → Storage, no proxy).
+ * Videos are too large for a JSON request body, so they use a presigned PUT
+ * directly to S3 (browser → S3, no proxy).
  * Returns true if all uploads succeeded.
  */
 export async function uploadLocationMedia(
@@ -98,9 +102,8 @@ export async function uploadLocationMedia(
     tasks.push(
       compressPhoto(photo)
         .then(compressed =>
-          fetch(`${API_BASE}/location-media/upload`, {
+          apiCall(`/location-media/upload`, {
             method: 'POST',
-            headers: jsonHeaders(),
             body: JSON.stringify({ locationId, mediaType, field: 'photos', index, dataUrl: compressed }),
           }).then(r => {
             if (!r.ok) r.text().then(t => console.error(`[cloudLocSync] photo upload failed (${mediaType}/${index}):`, t));
@@ -111,7 +114,7 @@ export async function uploadLocationMedia(
     );
   });
 
-  // ── Videos: presigned PUT directly to Supabase Storage ────────────────────
+  // ── Videos: presigned PUT directly to S3 ───────────────────────────────────
   (media.videos ?? []).forEach((video, index) => {
     if (!isDataUrl(video)) return;
     tasks.push(uploadOneVideo(locationId, mediaType, video, index));
@@ -134,9 +137,8 @@ async function uploadOneVideo(
     const ext  = mime.includes('quicktime') ? 'mov' : mime.includes('webm') ? 'webm' : 'mp4';
 
     // 1. Get a presigned upload URL from the server
-    const presignRes = await fetch(`${API_BASE}/location-media/presign-video`, {
+    const presignRes = await apiCall(`/location-media/presign-video`, {
       method: 'POST',
-      headers: jsonHeaders(),
       body: JSON.stringify({ locationId, mediaType, index, ext }),
     });
     if (!presignRes.ok) {
@@ -148,7 +150,7 @@ async function uploadOneVideo(
     // 2. Convert data URL to a Blob (native browser API — no manual base64 loop)
     const blob = await fetch(dataUrl).then(r => r.blob());
 
-    // 3. PUT blob directly to Supabase Storage (bypasses the edge function size limit)
+    // 3. PUT blob directly to S3 (bypasses the server entirely for the large payload)
     const putRes = await fetch(signedUrl, {
       method: 'PUT',
       headers: { 'Content-Type': mime },
@@ -159,10 +161,9 @@ async function uploadOneVideo(
       return false;
     }
 
-    // 4. Register the stored path in KV
-    const regRes = await fetch(`${API_BASE}/location-media/register-video`, {
+    // 4. Register the stored path in the documents table
+    const regRes = await apiCall(`/location-media/register-video`, {
       method: 'POST',
-      headers: jsonHeaders(),
       body: JSON.stringify({ locationId, mediaType, index, path }),
     });
     if (!regRes.ok) {
@@ -187,9 +188,8 @@ export async function fetchLocationMediaUrls(
 ): Promise<Record<string, { loc?: { photos?: string[]; videos?: string[] }; insp?: { photos?: string[]; videos?: string[] } }>> {
   if (locationIds.length === 0) return {};
   try {
-    const res = await fetch(`${API_BASE}/location-media/batch-urls`, {
+    const res = await apiCall(`/location-media/batch-urls`, {
       method: 'POST',
-      headers: jsonHeaders(),
       body: JSON.stringify({ locationIds }),
     });
     if (!res.ok) {
@@ -216,10 +216,7 @@ export async function fetchLocationMediaUrls(
 /** Delete all cloud-stored media for a location (call when location is deleted). */
 export async function deleteLocationMedia(locationId: string): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/location-media/${locationId}`, {
-      method: 'DELETE',
-      headers: AUTH,
-    });
+    const res = await apiCall(`/location-media/${locationId}`, { method: 'DELETE' });
     if (!res.ok) console.warn('[cloudLocSync] delete failed:', res.status);
   } catch (err) {
     console.error('[cloudLocSync] delete error:', err);

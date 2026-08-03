@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Loader2, MapPin, X } from 'lucide-react';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { getAuthToken } from '../context/DataContext';
 
-const SERVER = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
+const SERVER = '/api/places';
 
 interface Suggestion {
   placeId: string;
@@ -51,9 +51,10 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
     }
     setLoading(true);
     try {
+      const token = await getAuthToken();
       const resp = await fetch(
-        `${SERVER}/places/autocomplete?input=${encodeURIComponent(input)}`,
-        { headers: { Authorization: `Bearer ${publicAnonKey}` } }
+        `${SERVER}/autocomplete?input=${encodeURIComponent(input)}`,
+        { headers: { Authorization: `Bearer ${token ?? ''}` } }
       );
       const data = await resp.json();
       const list: Suggestion[] = data.suggestions || [];
@@ -80,9 +81,10 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
     setSuggestions([]);
     setLoading(true);
     try {
+      const token = await getAuthToken();
       const resp = await fetch(
-        `${SERVER}/places/details?place_id=${encodeURIComponent(suggestion.placeId)}`,
-        { headers: { Authorization: `Bearer ${publicAnonKey}` } }
+        `${SERVER}/details?place_id=${encodeURIComponent(suggestion.placeId)}`,
+        { headers: { Authorization: `Bearer ${token ?? ''}` } }
       );
       const data = await resp.json();
       const address = data.address || suggestion.description;

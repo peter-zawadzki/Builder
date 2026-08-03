@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback, useRef } from 'react';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
 import * as photoDB from '../utils/photoDB';
 import * as locMediaDB from '../utils/locationMediaDB';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
@@ -1799,12 +1798,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Tracks which pending items we've already shown a failure toast for, so the
+  // 20s retry loop below doesn't re-toast the same stuck upload every pass —
+  // only the first failure (and a fresh one once it succeeds and fails again).
+  const warnedPhotoIdsRef = useRef(new Set<string>());
+  const warnedLocMediaKeysRef = useRef(new Set<string>());
+  const warnedAnnotationIdsRef = useRef(new Set<string>());
+
   // ─── Flush pending photo uploads on reconnect ──────────────────────────────
   const flushPendingPhotos = useCallback(async () => {
     const pending = getPendingPhotoIds();
     if (pending.length === 0) return;
     console.log(`[photoSync] Retrying ${pending.length} pending photo upload(s)…`);
     let syncedCount = 0;
+    let failedCount = 0;
     for (const assetId of pending) {
       try {
         const photos = await photoDB.getPhotos(assetId);
@@ -1815,17 +1822,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const ok = await cloudPhotos.uploadAssetPhotos(assetId, photos);
         if (ok) {
           removePendingPhoto(assetId);
+          warnedPhotoIdsRef.current.delete(assetId);
           syncedCount++;
           console.log(`[photoSync] Synced photos for asset ${assetId}`);
         } else {
           console.warn(`[photoSync] Retry failed for asset ${assetId} — will try again later`);
+          if (!warnedPhotoIdsRef.current.has(assetId)) {
+            warnedPhotoIdsRef.current.add(assetId);
+            failedCount++;
+          }
         }
       } catch (err) {
         console.error(`[photoSync] Error retrying asset ${assetId}:`, err);
+        if (!warnedPhotoIdsRef.current.has(assetId)) {
+          warnedPhotoIdsRef.current.add(assetId);
+          failedCount++;
+        }
       }
     }
     if (syncedCount > 0) {
       toast.success(`${syncedCount} photo${syncedCount !== 1 ? 's' : ''} synced to cloud ☁️`, { duration: 3000 });
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} photo${failedCount !== 1 ? 's' : ''} couldn't sync to the cloud — will keep retrying`, { duration: 5000 });
     }
   }, []);
 
@@ -1835,7 +1854,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (pending.length === 0) return;
     console.log(`[locMediaSync] Retrying ${pending.length} pending location media upload(s)…`);
     let syncedCount = 0;
+    let failedCount = 0;
     for (const { locationId, mediaType } of pending) {
+      const warnKey = `${locationId}:${mediaType}`;
       try {
         const media = mediaType === 'loc'
           ? await locMediaDB.getLocationMedia(locationId)
@@ -1850,17 +1871,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const ok = await cloudLocSync.uploadLocationMedia(locationId, media, mediaType);
         if (ok) {
           cloudLocSync.removePendingLocMedia(locationId, mediaType);
+          warnedLocMediaKeysRef.current.delete(warnKey);
           syncedCount++;
           console.log(`[locMediaSync] Synced ${mediaType} media for location ${locationId}`);
         } else {
           console.warn(`[locMediaSync] Retry failed for location ${locationId} (${mediaType}) — will try again later`);
+          if (!warnedLocMediaKeysRef.current.has(warnKey)) {
+            warnedLocMediaKeysRef.current.add(warnKey);
+            failedCount++;
+          }
         }
       } catch (err) {
         console.error(`[locMediaSync] Error retrying location ${locationId}:`, err);
+        if (!warnedLocMediaKeysRef.current.has(warnKey)) {
+          warnedLocMediaKeysRef.current.add(warnKey);
+          failedCount++;
+        }
       }
     }
     if (syncedCount > 0) {
       toast.success(`${syncedCount} location photo${syncedCount !== 1 ? 's' : ''} synced to cloud ☁️`, { duration: 3000 });
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} location photo/video upload${failedCount !== 1 ? 's' : ''} couldn't sync to the cloud — will keep retrying`, { duration: 5000 });
     }
   }, []);
 
@@ -1870,6 +1903,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (pending.length === 0) return;
     console.log(`[annotationSync] Retrying ${pending.length} pending annotation upload(s)…`);
     let syncedCount = 0;
+    let failedCount = 0;
     for (const imageId of pending) {
       try {
         const annotations = await imageAnnotationsDB.getAnnotations(imageId);
@@ -1881,17 +1915,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const ok = await cloudAnnotationSync.uploadAnnotations(imageId, annotations);
         if (ok) {
           cloudAnnotationSync.removePendingAnnotation(imageId);
+          warnedAnnotationIdsRef.current.delete(imageId);
           syncedCount++;
           console.log(`[annotationSync] Synced annotations for image ${imageId}`);
         } else {
           console.warn(`[annotationSync] Retry failed for image ${imageId} — will try again later`);
+          if (!warnedAnnotationIdsRef.current.has(imageId)) {
+            warnedAnnotationIdsRef.current.add(imageId);
+            failedCount++;
+          }
         }
       } catch (err) {
         console.error(`[annotationSync] Error retrying image ${imageId}:`, err);
+        if (!warnedAnnotationIdsRef.current.has(imageId)) {
+          warnedAnnotationIdsRef.current.add(imageId);
+          failedCount++;
+        }
       }
     }
     if (syncedCount > 0) {
       toast.success(`${syncedCount} annotation${syncedCount !== 1 ? 's' : ''} synced to cloud ☁️`, { duration: 3000 });
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} annotation${failedCount !== 1 ? 's' : ''} couldn't sync to the cloud — will keep retrying`, { duration: 5000 });
     }
   }, []);
 
@@ -2188,6 +2234,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           .catch(e => {
             console.error('Cloud photo upload error:', e);
             addPendingPhoto(id);
+            toast.error('Photo upload failed — will retry when reconnected', { duration: 4000 });
           });
       }
     }
@@ -2219,6 +2266,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           .catch(e => {
             console.error('Cloud photo update error:', e);
             addPendingPhoto(id);
+            toast.error('Photo upload failed — will retry when reconnected', { duration: 4000 });
           });
       }
     }

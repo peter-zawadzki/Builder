@@ -1,22 +1,33 @@
 /**
- * Cloud annotation sync — uploads image annotations to Supabase KV so they are
- * available on every device, not just the one that created them.
+ * Cloud annotation sync — uploads image annotations to Postgres (via
+ * server/routes/documents.ts, image_annotations table) so they are available
+ * on every device, not just the one that created them.
  *
  * Upload flow:
  *   1. Save annotations to IndexedDB (local copy)
- *   2. POST /annotations/upload with imageId and annotations array
+ *   2. POST /api/documents/annotations/upload with imageId and annotations array
  *
  * Download flow:
- *   1. POST /annotations/batch-get with array of imageIds
+ *   1. POST /api/documents/annotations/batch-get with array of imageIds
  *   2. Returns map of imageId -> annotations
  */
 
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { getAuthToken } from '../context/DataContext';
 import type { Annotation } from '../context/DataContext';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
-const AUTH = { Authorization: `Bearer ${publicAnonKey}` };
-function jsonHeaders() { return { ...AUTH, 'Content-Type': 'application/json' }; }
+const BASE = '/api/documents';
+
+async function apiCall(endpoint: string, options: RequestInit = {}) {
+  const token = await getAuthToken();
+  return fetch(`${BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token ?? ''}`,
+      ...options.headers,
+    },
+  });
+}
 
 // ── Pending annotation upload queue (localStorage) ────────────────────────────
 
@@ -50,9 +61,8 @@ export async function uploadAnnotations(
   annotations: Annotation[],
 ): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/annotations/upload`, {
+    const res = await apiCall(`/annotations/upload`, {
       method: 'POST',
-      headers: jsonHeaders(),
       body: JSON.stringify({ imageId, annotations }),
     });
 
@@ -84,9 +94,8 @@ export async function fetchBatchAnnotations(
 ): Promise<Record<string, Annotation[]>> {
   if (imageIds.length === 0) return {};
   try {
-    const res = await fetch(`${API_BASE}/annotations/batch-get`, {
+    const res = await apiCall(`/annotations/batch-get`, {
       method: 'POST',
-      headers: jsonHeaders(),
       body: JSON.stringify({ imageIds }),
     });
     if (!res.ok) {
@@ -110,10 +119,7 @@ export async function fetchBatchAnnotations(
 /** Delete cloud-stored annotations for an image (call when image is deleted). */
 export async function deleteAnnotations(imageId: string): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/annotations/${imageId}`, {
-      method: 'DELETE',
-      headers: AUTH,
-    });
+    const res = await apiCall(`/annotations/${imageId}`, { method: 'DELETE' });
     if (!res.ok) {
       console.warn('[cloudAnnotations] delete failed:', res.status);
     }

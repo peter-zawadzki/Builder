@@ -343,8 +343,16 @@ function LocationMediaFields({ locationId }: { locationId: string }) {
       cloudLocSync.addPendingLocMedia(locationId, 'loc');
     } else {
       cloudLocSync.uploadLocationMedia(locationId, { photos: nextPhotos, videos: nextVideos }, 'loc')
-        .then(ok => { if (!ok) cloudLocSync.addPendingLocMedia(locationId, 'loc'); })
-        .catch(() => cloudLocSync.addPendingLocMedia(locationId, 'loc'));
+        .then(ok => {
+          if (!ok) {
+            cloudLocSync.addPendingLocMedia(locationId, 'loc');
+            toast.error('Media upload failed — will retry when reconnected', { duration: 4000 });
+          }
+        })
+        .catch(() => {
+          cloudLocSync.addPendingLocMedia(locationId, 'loc');
+          toast.error('Media upload failed — will retry when reconnected', { duration: 4000 });
+        });
     }
   }
 

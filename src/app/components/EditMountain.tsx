@@ -10,13 +10,12 @@ import { ContactForm } from './ContactForm';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { AddressAutocomplete } from './AddressAutocomplete';
 import { AddableSelect } from './AddableSelect';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { getAuthToken } from '../context/DataContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { ImageAnnotator } from './ImageAnnotator';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
-const AUTH_HEADER = { Authorization: `Bearer ${publicAnonKey}` };
+const API_BASE = '/api/documents';
 
 const DEFAULT_PARENT_ORGS = ['Altera Mountain Co', 'Boyne Resorts', 'Powder Corporation', 'Vail Resorts'];
 
@@ -25,9 +24,12 @@ const emptyContact = (): Contact => ({
 });
 
 // ── Compress image before upload ─────────────────────────────────────────────
+// JPEG has no alpha channel — re-encoding a transparent PNG as JPEG composites
+// transparent pixels onto black, so non-JPEG sources are kept as PNG instead.
 async function compressImage(dataUrl: string): Promise<string> {
   return new Promise(resolve => {
     try {
+      const isJpeg = /^data:image\/jpe?g/i.test(dataUrl);
       const img = new Image();
       img.onload = () => {
         const MAX = 2400;
@@ -39,7 +41,7 @@ async function compressImage(dataUrl: string): Promise<string> {
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(isJpeg ? canvas.toDataURL('image/jpeg', 0.85) : canvas.toDataURL('image/png'));
       };
       img.onerror = () => resolve(dataUrl);
       img.src = dataUrl;
@@ -131,7 +133,8 @@ export function EditMountain() {
   // Load existing trail map URL from server on mount
   useEffect(() => {
     if (!mountainId || !mountain?.trailMapType) { setMapLoading(false); return; }
-    fetch(`${API_BASE}/trail-map/${mountainId}`, { headers: AUTH_HEADER })
+    getAuthToken()
+      .then(token => fetch(`${API_BASE}/trail-map/${mountainId}`, { headers: { Authorization: `Bearer ${token ?? ''}` } }))
       .then(r => r.json())
       .then((data: any) => {
         if (data.url) { setMapUrl(data.url); setMapMime(data.mimeType); setMapFileName(data.fileName); }
@@ -153,9 +156,10 @@ export function EditMountain() {
         reader.readAsDataURL(file);
       });
       const finalDataUrl = file.type.startsWith('image/') ? await compressImage(dataUrl) : dataUrl;
+      const token = await getAuthToken();
       const resp = await fetch(`${API_BASE}/trail-map/upload`, {
         method: 'POST',
-        headers: { ...AUTH_HEADER, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ mountainId, dataUrl: finalDataUrl, mimeType: file.type, fileName: file.name }),
       });
       const data = await resp.json() as any;
@@ -181,9 +185,10 @@ export function EditMountain() {
     if (!mountainId) return;
     setShowDeleteMapModal(false);
     try {
+      const token = await getAuthToken();
       await fetch(`${API_BASE}/trail-map/${mountainId}`, {
         method: 'DELETE',
-        headers: AUTH_HEADER,
+        headers: { Authorization: `Bearer ${token ?? ''}` },
       });
       updateMountain(mountainId, {
         trailMapType: undefined,

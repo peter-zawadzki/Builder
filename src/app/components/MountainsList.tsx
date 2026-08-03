@@ -1,10 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useData } from '../context/DataContext';
+import { useData, getAuthToken } from '../context/DataContext';
 import { Plus, Mountain, Settings, FileText, MapPin, Camera, Map, X, ExternalLink, StickyNote, Receipt, ArrowUpDown, Users, UserPlus, Database, Boxes, Wrench, Search, Building2, Navigation } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import imgImageYullrLogo from "figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png";
-import { projectId, publicAnonKey } from '/utils/supabase/info';
 import { useIsSuperAdmin } from '../hooks/useRole';
 import { SalesProcessBar } from './SalesProcessBar';
 import { QuickNotesModal } from './QuickNotesModal';
@@ -14,8 +13,7 @@ import { AllMountainsMapView } from './AllMountainsMapView';
 import { useMountainGeocoding } from '../hooks/useMountainGeocoding';
 import { toast } from 'sonner';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
-const AUTH_HEADER = { Authorization: `Bearer ${publicAnonKey}` };
+const API_BASE = '/api/documents';
 
 interface MapViewState {
   mountainName: string;
@@ -207,7 +205,8 @@ export function MountainsList() {
     e.stopPropagation();
     setMapView({ mountainName, loading: true, url: null, mimeType: null, error: null });
     try {
-      const resp = await fetch(`${API_BASE}/trail-map/${mountainId}`, { headers: AUTH_HEADER });
+      const token = await getAuthToken();
+      const resp = await fetch(`${API_BASE}/trail-map/${mountainId}`, { headers: { Authorization: `Bearer ${token ?? ''}` } });
       const data = await resp.json() as any;
       if (!resp.ok || data.error) throw new Error(data.error || 'Failed to load map');
       if (!data.url) throw new Error('No map found');

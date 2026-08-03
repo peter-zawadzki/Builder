@@ -5,7 +5,7 @@ import { useData, DEFAULT_PROPOSAL_TERMS, DEFAULT_PAYMENT_TERMS } from '../conte
 import { renderTemplate } from '../utils/templateRenderer';
 import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive, Bell } from 'lucide-react';
 import { toast } from 'sonner';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { getAuthToken } from '../context/DataContext';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -14,8 +14,7 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-a0d4ba78`;
-const API_HEADERS = { Authorization: `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' };
+const API_BASE = '/api/documents';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -438,7 +437,8 @@ export function ProposalBuilder() {
         if (!src || src.startsWith('data:') || src.startsWith('blob:')) return;
         try {
           const proxyUrl = `${API_BASE}/proxy-image?url=${encodeURIComponent(src)}`;
-          const resp = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${publicAnonKey}` } });
+          const token = await getAuthToken();
+          const resp = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${token ?? ''}` } });
           if (!resp.ok) return;
           const blob = await resp.blob();
           const dataUrl = await new Promise<string>((res) => {
