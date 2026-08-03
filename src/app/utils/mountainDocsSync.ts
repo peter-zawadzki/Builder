@@ -29,6 +29,61 @@ export interface CloudMountainDoc {
   uploadedAt: string;
 }
 
+export interface CloudAssetPhotoItem {
+  id: string;
+  field: string;
+  slotIndex: number | null;
+  url: string;
+}
+
+export interface CloudLocationMediaItem {
+  id: string;
+  mediaType: 'loc' | 'insp';
+  field: 'photos' | 'videos';
+  slotIndex: number | null;
+  url: string;
+}
+
+/**
+ * Raw (uncompacted) rows for a single asset's photos — carries each item's
+ * real document id, so a delete can target the exact row instead of an array
+ * index that may have drifted from slot_index after an earlier deletion.
+ */
+export async function fetchAssetPhotosFull(assetId: string): Promise<CloudAssetPhotoItem[]> {
+  try {
+    const res = await apiCall(`/photos/asset-full/${assetId}`);
+    if (!res.ok) return [];
+    const { items } = await res.json();
+    return items ?? [];
+  } catch (err) {
+    console.error('[mountainDocsSync] fetchAssetPhotosFull error:', err);
+    return [];
+  }
+}
+
+/** Raw (uncompacted) rows for a single location's photos/videos — see fetchAssetPhotosFull. */
+export async function fetchLocationMediaFull(locationId: string): Promise<CloudLocationMediaItem[]> {
+  try {
+    const res = await apiCall(`/location-media/full/${locationId}`);
+    if (!res.ok) return [];
+    const { items } = await res.json();
+    return items ?? [];
+  } catch (err) {
+    console.error('[mountainDocsSync] fetchLocationMediaFull error:', err);
+    return [];
+  }
+}
+
+/** Generic single-row delete by document id (photo, video, mountain doc — anything). */
+export async function deleteDocumentById(id: string): Promise<void> {
+  try {
+    const res = await apiCall(`/${id}`, { method: 'DELETE' });
+    if (!res.ok) console.warn('[mountainDocsSync] deleteDocumentById failed:', res.status);
+  } catch (err) {
+    console.error('[mountainDocsSync] deleteDocumentById error:', err);
+  }
+}
+
 // ── Pending mountain-doc upload queue (localStorage) ──────────────────────────
 // Stored as: { mountainId, docId }[] — docId is the locally-minted id so a
 // retry can find the same record in IndexedDB to re-upload.

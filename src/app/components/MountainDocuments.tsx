@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Upload, File, FileText, Image, Video, Download, Trash2, X, Grid, List, Edit3, Maximize2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import * as locMediaDB from '../utils/locationMediaDB';
+import * as photoDB from '../utils/photoDB';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
@@ -23,6 +24,7 @@ interface Document {
   source?: 'upload' | 'inspection' | 'location' | 'asset';
   locationName?: string;
   dataUrl?: string; // Store original base64 for persistence
+  cloudDocId?: string; // Real documents.id, when this item has been uploaded to the cloud — lets delete target the exact row instead of an array index that can drift from slot_index.
 }
 
 interface MountainDocumentsProps {
@@ -31,7 +33,7 @@ interface MountainDocumentsProps {
 }
 
 export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumentsProps) {
-  const { getLocationsByMountainId, getAssetsByMountainId, getInspectionsByLocationId } = useData();
+  const { getLocationsByMountainId, getAssetsByMountainId, getInspectionsByLocationId, getAssetById, updateAsset } = useData();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
@@ -67,6 +69,15 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         console.error('[MountainDocuments] Cloud fetch error:', e);
       }
 
+      // Raw rows (real document ids) per location, so deletion can target the
+      // exact row instead of an array index that may drift from slot_index.
+      const locFullById = new Map<string, mountainDocsSync.CloudLocationMediaItem[]>();
+      await Promise.all(locations.map(async loc => {
+        locFullById.set(loc.id, await mountainDocsSync.fetchLocationMediaFull(loc.id));
+      }));
+      const findLocDocId = (locationId: string, mediaType: 'loc' | 'insp', field: 'photos' | 'videos', index: number) =>
+        locFullById.get(locationId)?.find(i => i.mediaType === mediaType && i.field === field && i.slotIndex === index)?.id;
+
       // Load all media from all locations
       for (const loc of locations) {
         // Load location-level media from IndexedDB
@@ -96,6 +107,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             thumbnail: photoUrl,
             source: 'location',
             locationName: loc.name,
+            cloudDocId: findLocDocId(loc.id, 'loc', 'photos', idx),
           });
         });
 
@@ -110,6 +122,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             uploadedAt: new Date().toISOString(),
             source: 'location',
             locationName: loc.name,
+            cloudDocId: findLocDocId(loc.id, 'loc', 'videos', idx),
           });
         });
 
@@ -126,6 +139,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             thumbnail: photoUrl,
             source: 'inspection',
             locationName: loc.name,
+            cloudDocId: findLocDocId(loc.id, 'insp', 'photos', idx),
           });
         });
 
@@ -140,9 +154,18 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             uploadedAt: inspectionDate,
             source: 'inspection',
             locationName: loc.name,
+            cloudDocId: findLocDocId(loc.id, 'insp', 'videos', idx),
           });
         });
       }
+
+      // Raw rows (real document ids) per asset — same reasoning as locFullById above.
+      const assetFullById = new Map<string, mountainDocsSync.CloudAssetPhotoItem[]>();
+      await Promise.all(assets.map(async asset => {
+        assetFullById.set(asset.id, await mountainDocsSync.fetchAssetPhotosFull(asset.id));
+      }));
+      const findAssetDocId = (assetId: string, field: string, index: number | null) =>
+        assetFullById.get(assetId)?.find(i => i.field === field && i.slotIndex === index)?.id;
 
       // Load asset photos
       assets.forEach(asset => {
@@ -166,6 +189,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             thumbnail: asset.serialPhoto,
             source: 'asset',
             locationName: assetName,
+            cloudDocId: findAssetDocId(asset.id, 'serialPhoto', null),
           });
         }
 
@@ -181,6 +205,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             thumbnail: asset.installPhoto,
             source: 'asset',
             locationName: assetName,
+            cloudDocId: findAssetDocId(asset.id, 'installPhoto', null),
           });
         }
 
@@ -196,6 +221,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             thumbnail: asset.internalPhoto,
             source: 'asset',
             locationName: assetName,
+            cloudDocId: findAssetDocId(asset.id, 'internalPhoto', null),
           });
         }
 
@@ -211,6 +237,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             thumbnail: asset.externalPhoto,
             source: 'asset',
             locationName: assetName,
+            cloudDocId: findAssetDocId(asset.id, 'externalPhoto', null),
           });
         }
 
@@ -227,6 +254,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
               thumbnail: photoUrl,
               source: 'asset',
               locationName: assetName,
+              cloudDocId: findAssetDocId(asset.id, 'miscPhotos', idx),
             });
           });
         }
@@ -421,37 +449,98 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
     }
   };
 
-  // Only plain admin uploads are deletable from here — location/asset/
-  // inspection photos are managed from their own record instead.
-  const requestDelete = (doc: Document) => {
-    if (doc.source !== 'upload') return;
-    setDeleteTarget(doc);
-  };
+  // doc.id encodes where it came from (see the loadDocuments push sites above):
+  // loc-<locationId>-photo|video-<index>, insp-<locationId>-photo|video-<index>,
+  // asset-<assetId>-serial|install|internal|external, asset-<assetId>-misc-<index>.
+  type ParsedDocId =
+    | { kind: 'location'; locationId: string; mediaType: 'loc' | 'insp'; field: 'photos' | 'videos'; index: number }
+    | { kind: 'asset'; assetId: string; field: string; index: number | null };
+
+  function parseDocId(id: string): ParsedDocId | null {
+    let m = /^(loc|insp)-(.+)-(photo|video)-(\d+)$/.exec(id);
+    if (m) {
+      return {
+        kind: 'location',
+        mediaType: m[1] as 'loc' | 'insp',
+        locationId: m[2],
+        field: m[3] === 'photo' ? 'photos' : 'videos',
+        index: Number(m[4]),
+      };
+    }
+    m = /^asset-(.+)-(serial|install|internal|external)$/.exec(id);
+    if (m) {
+      const fieldMap: Record<string, string> = {
+        serial: 'serialPhoto', install: 'installPhoto', internal: 'internalPhoto', external: 'externalPhoto',
+      };
+      return { kind: 'asset', assetId: m[1], field: fieldMap[m[2]], index: null };
+    }
+    m = /^asset-(.+)-misc-(\d+)$/.exec(id);
+    if (m) return { kind: 'asset', assetId: m[1], field: 'miscPhotos', index: Number(m[2]) };
+    return null;
+  }
+
+  const requestDelete = (doc: Document) => setDeleteTarget(doc);
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     const doc = deleteTarget;
     setIsDeleting(true);
     try {
-      // Revoke blob URLs
-      if (doc.url.startsWith('blob:')) {
-        URL.revokeObjectURL(doc.url);
-      }
-      if (doc.thumbnail && doc.thumbnail.startsWith('blob:')) {
-        URL.revokeObjectURL(doc.thumbnail);
-      }
+      if (doc.source === 'upload') {
+        // Revoke blob URLs
+        if (doc.url.startsWith('blob:')) URL.revokeObjectURL(doc.url);
+        if (doc.thumbnail?.startsWith('blob:')) URL.revokeObjectURL(doc.thumbnail);
 
-      // Remove from IndexedDB
-      const currentDocs = await mountainDocsDB.getDocuments(mountainId);
-      const updatedDocs = currentDocs.filter(d => d.id !== doc.id);
-      await mountainDocsDB.saveDocuments(mountainId, updatedDocs);
+        // Remove from IndexedDB
+        const currentDocs = await mountainDocsDB.getDocuments(mountainId);
+        await mountainDocsDB.saveDocuments(mountainId, currentDocs.filter(d => d.id !== doc.id));
 
-      mountainDocsSync.removePendingMountainDoc(mountainId, doc.id);
-      await mountainDocsSync.deleteMountainDocument(mountainId, doc.id).catch(() => {});
+        mountainDocsSync.removePendingMountainDoc(mountainId, doc.id);
+        await mountainDocsSync.deleteMountainDocument(mountainId, doc.id).catch(() => {});
+      } else if (doc.source === 'location' || doc.source === 'inspection') {
+        const parsed = parseDocId(doc.id);
+        if (parsed?.kind === 'location') {
+          const { locationId, mediaType, field, index } = parsed;
+          const current = mediaType === 'loc'
+            ? await locMediaDB.getLocationMedia(locationId)
+            : await locMediaDB.getInspectionMedia(locationId);
+          const nextMedia = { ...current, [field]: current[field].filter((_, i) => i !== index) };
+          if (mediaType === 'loc') await locMediaDB.saveLocationMedia(locationId, nextMedia);
+          else await locMediaDB.saveInspectionMedia(locationId, nextMedia);
+
+          if (!navigator.onLine) {
+            cloudLocSync.addPendingLocMedia(locationId, mediaType);
+          } else {
+            const ok = await cloudLocSync.uploadLocationMedia(locationId, nextMedia, mediaType);
+            if (!ok) cloudLocSync.addPendingLocMedia(locationId, mediaType);
+          }
+          // The upload above only pushes still-local (data:) items — it never
+          // deletes the removed item's own cloud row, so do that explicitly.
+          if (doc.cloudDocId) await mountainDocsSync.deleteDocumentById(doc.cloudDocId).catch(() => {});
+        }
+      } else if (doc.source === 'asset') {
+        const parsed = parseDocId(doc.id);
+        if (parsed?.kind === 'asset') {
+          const { assetId, field, index } = parsed;
+          const asset = getAssetById(assetId);
+          if (field === 'miscPhotos') {
+            const nextMisc = (asset?.miscPhotos ?? []).filter((_, i) => i !== index);
+            await photoDB.savePhotos(assetId, { miscPhotos: nextMisc });
+            updateAsset(assetId, { miscPhotos: nextMisc });
+          } else {
+            await photoDB.savePhotos(assetId, { [field]: undefined });
+            updateAsset(assetId, { [field]: undefined } as any);
+          }
+          if (doc.cloudDocId) await mountainDocsSync.deleteDocumentById(doc.cloudDocId).catch(() => {});
+        }
+      }
 
       setDocuments(prev => prev.filter(d => d.id !== doc.id));
       if (previewDoc?.id === doc.id) setPreviewDoc(null);
       toast.success(`"${doc.name}" deleted`);
+    } catch (err) {
+      console.error('[MountainDocuments] delete error:', err);
+      toast.error('Failed to delete — please try again');
     } finally {
       setIsDeleting(false);
       setDeleteTarget(null);
@@ -744,14 +833,12 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                   >
                     <Download size={11} className="text-[#307FE2]" />
                   </a>
-                  {doc.source === 'upload' && (
-                    <button
-                      onClick={() => requestDelete(doc)}
-                      className="bg-white/90 backdrop-blur-sm rounded-[4px] p-1 active:bg-white/100"
-                    >
-                      <Trash2 size={11} className="text-[#ff5c39]" />
-                    </button>
-                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); requestDelete(doc); }}
+                    className="bg-white/90 backdrop-blur-sm rounded-[4px] p-1 active:bg-white/100"
+                  >
+                    <Trash2 size={11} className="text-[#ff5c39]" />
+                  </button>
                 </div>
               </div>
             );
@@ -822,14 +909,12 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                   >
                     <Download size={13} className="text-[#307FE2]" />
                   </a>
-                  {doc.source === 'upload' && (
-                    <button
-                      onClick={() => requestDelete(doc)}
-                      className="bg-white rounded-[6px] p-1.5 active:bg-[#f3f3f5] border border-[rgba(0,0,0,0.08)]"
-                    >
-                      <Trash2 size={13} className="text-[#ff5c39]" />
-                    </button>
-                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); requestDelete(doc); }}
+                    className="bg-white rounded-[6px] p-1.5 active:bg-[#f3f3f5] border border-[rgba(0,0,0,0.08)]"
+                  >
+                    <Trash2 size={13} className="text-[#ff5c39]" />
+                  </button>
                 </div>
               </div>
             );
@@ -866,15 +951,13 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                 <Download size={13} />
                 Download
               </a>
-              {previewDoc.source === 'upload' && (
-                <button
-                  onClick={() => requestDelete(previewDoc)}
-                  className="flex items-center gap-1.5 bg-white/20 text-white text-[13px] font-['Inter:Medium',sans-serif] px-3 py-1.5 rounded-[8px] active:bg-white/30"
-                >
-                  <Trash2 size={13} />
-                  Delete
-                </button>
-              )}
+              <button
+                onClick={() => requestDelete(previewDoc)}
+                className="flex items-center gap-1.5 bg-white/20 text-white text-[13px] font-['Inter:Medium',sans-serif] px-3 py-1.5 rounded-[8px] active:bg-white/30"
+              >
+                <Trash2 size={13} />
+                Delete
+              </button>
               <button
                 onClick={() => setPreviewDoc(null)}
                 className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center active:bg-white/30"

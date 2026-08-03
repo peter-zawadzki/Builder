@@ -131,6 +131,23 @@ documents.delete("/photos/:assetId", async (c) => {
   return c.json({ success: true, deletedFiles: rows.length });
 });
 
+/**
+ * GET /photos/asset-full/:assetId — raw rows (not compacted into arrays) so
+ * a single-photo delete can target its exact document id instead of an array
+ * index that may not line up with slot_index after earlier deletions.
+ */
+documents.get("/photos/asset-full/:assetId", async (c) => {
+  const assetId = c.req.param("assetId");
+  const rows = await query<{ id: string; field: string; slot_index: number | null; storage_path: string }>(
+    `SELECT id, field, slot_index, storage_path FROM documents WHERE asset_id = $1 AND kind = 'photo'`,
+    [assetId]
+  );
+  const items = await Promise.all(rows.map(async r => ({
+    id: r.id, field: r.field, slotIndex: r.slot_index, url: await getSignedGetUrl(r.storage_path),
+  })));
+  return c.json({ items });
+});
+
 // ─── Location media (photos + videos, location-level + inspection-level) ─────
 
 documents.post("/location-media/upload", async (c) => {
@@ -212,6 +229,20 @@ documents.delete("/location-media/:locationId", async (c) => {
   );
   await deleteObjects(rows.map(r => r.storage_path));
   return c.json({ success: true, deletedFiles: rows.length });
+});
+
+/** GET /location-media/full/:locationId — raw rows, see /photos/asset-full above. */
+documents.get("/location-media/full/:locationId", async (c) => {
+  const locationId = c.req.param("locationId");
+  const rows = await query<{ id: string; field: string; slot_index: number | null; storage_path: string }>(
+    `SELECT id, field, slot_index, storage_path FROM documents WHERE location_id = $1 AND kind IN ('photo','video')`,
+    [locationId]
+  );
+  const items = await Promise.all(rows.map(async r => {
+    const [mediaType, arrField] = r.field.split(":");
+    return { id: r.id, mediaType, field: arrField, slotIndex: r.slot_index, url: await getSignedGetUrl(r.storage_path) };
+  }));
+  return c.json({ items });
 });
 
 // ─── Trail maps (one per mountain) ────────────────────────────────────────────
@@ -322,6 +353,21 @@ documents.delete("/mountain-docs/:mountainId/:id", async (c) => {
   const row = await queryOne<{ storage_path: string }>(
     `DELETE FROM documents WHERE id = $1 AND mountain_id = $2 AND field = 'mountainDoc' RETURNING storage_path`,
     [id, mountainId]
+  );
+  if (row) await deleteObjects([row.storage_path]);
+  return c.json({ success: true });
+});
+
+/**
+ * DELETE /:id — generic single-row delete by primary key, for the Documents
+ * panel's per-item delete on location/asset-sourced photos (identified by
+ * their real document id via the /full endpoints above, not by array index —
+ * indices can drift out of sync with slot_index after earlier deletions).
+ */
+documents.delete("/:id", async (c) => {
+  const id = c.req.param("id");
+  const row = await queryOne<{ storage_path: string }>(
+    `DELETE FROM documents WHERE id = $1 RETURNING storage_path`, [id]
   );
   if (row) await deleteObjects([row.storage_path]);
   return c.json({ success: true });
