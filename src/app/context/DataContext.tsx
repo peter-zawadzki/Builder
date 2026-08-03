@@ -223,9 +223,11 @@ export interface Location {
   // flow — every dropped item is a real Location either way (same record,
   // same LocationDetail page, same visibility everywhere), this just tags
   // which ones also carry type-specific data below.
-  deviceType?: 'camera' | 'server' | 'network' | 'power' | 'building' | 'misc';
-  // Camera: { heading, horizontalFov, rangeMeters, networkConnection }. Only
-  // cameras use this today; other device types have no extra fields yet.
+  deviceType?: 'camera' | 'server' | 'network' | 'power' | 'building' | 'misc' | 'startfinish';
+  // Camera: { heading, horizontalFov, rangeMeters, networkConnection,
+  // powerStatus, powerVoltage, color }. Network: { items[], networkConnection }.
+  // Power: { status, voltage }. Start/Finish: { disciplines[] } (plus
+  // locationType 'Start'|'Finish' for which end). See utils/deviceTypes.tsx.
   deviceProperties?: Record<string, unknown>;
   // Prevents accidental drags once a device's position is finalized.
   isLocked?: boolean;

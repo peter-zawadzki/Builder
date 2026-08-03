@@ -14,10 +14,17 @@ AWS Console.
 - **Auth:** reusing the existing Clerk **development** instance/keys
   (not a separate production Clerk instance). Fine for the current scale
   (~20 internal users); revisit if that changes.
-- **Database:** fresh Postgres, all 11 migrations applied, completely
-  empty except one row: `peter@yullr.com` auto-provisioned as
-  `super_admin` on first login (see `server/auth.ts` — email match is
-  hardcoded there, no manual seeding was done or is needed).
+- **Database:** Postgres with all migrations in `db/migrations/` applied
+  (12 as of this writing, through `0012_site_assessments.sql`); the running
+  app itself reads/writes almost entirely through the `legacy_records` JSONB
+  layer (`0010_legacy_records.sql`), not the normalized tables — see
+  `db/README.md`, "Current runtime data model." `peter@yullr.com` is
+  auto-provisioned as `super_admin` on first login (see `server/auth.ts` —
+  email match is hardcoded there, no manual seeding was done or is needed).
+- **Last deployed:** 2026-08-03, via the manual rsync process below (Site
+  Assessment device-panel rework: shared properties panel, real-Location map
+  tools, marker-drift fix, Start/Finish multi-discipline checkboxes, media
+  thumbnails). No new migration in that deploy.
 
 ## AWS resources
 

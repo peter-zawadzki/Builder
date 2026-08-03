@@ -60,3 +60,29 @@ DATABASE_URL="postgresql://USER:PASS@HOST:5432/yullr_builder" ./db/migrate.sh
   `mountain_season_participation`, `mountain_season_platform_stats`.
 - `0007_engagement.sql` — `contact_activities`, `notes`, `note_entries`,
   `documents`, `notification_log`.
+- `0008_options.sql` — `app_options`, `item_prices`.
+- `0009_project_work.sql` — `project_trails`, `project_locations`,
+  `activity_log`, `inbound_email_updates`. See `docs/BUILD_PLAN.md`.
+- `0010_legacy_records.sql` — `legacy_records`, the JSONB-blob table the
+  running app actually reads/writes through `/api/legacy/*` today (see
+  "Current runtime data model" below) — not the normalized tables above.
+- `0011_user_roles.sql` — `user_role` enum (`user`/`admin`/`super_admin`) on
+  `users`.
+- `0012_site_assessments.sql` — `site_assessments` and its child tables
+  (`_participants`, `_objects`, `_object_relationships`, `_annotations`,
+  `_measurements`) for the Site Assessment map-survey feature. `mountain_id`/
+  `project_id` are plain `uuid` columns with no `REFERENCES` constraint,
+  since they point at `legacy_records.id` values, not rows in `mountains`/
+  `projects`.
+
+## Current runtime data model
+
+The app's day-to-day mountains/trails/locations/notes/contacts data does
+**not** live in the normalized tables from `0001`–`0009` — those tables are
+real and migrated-into (see `MIGRATION_MAP.md`), but the frontend exclusively
+calls `/api/legacy/*`, which reads/writes JSONB blobs in `legacy_records`
+(`0010_legacy_records.sql`). The dedicated `/api/mountains`, `/api/trails`,
+`/api/locations` routes and their backing tables are effectively dead code
+today. Anything that needs a real foreign key into "whatever mountain/project
+the user is looking at" (e.g. `site_assessments.mountain_id`) has to use an
+unconstrained `uuid` column for that reason — there's no enforceable FK target.
