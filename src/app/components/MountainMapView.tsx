@@ -1,4 +1,3 @@
-import * as locMediaDB from '../utils/locationMediaDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
@@ -74,16 +73,9 @@ function LocationCard({
   const typeConfig = deviceType ? DEVICE_TYPE_CONFIG[deviceType] : null;
 
   useEffect(() => {
-    locMediaDB.getLocationMedia(location.id).then(async m => {
-      if (m.photos.length > 0) {
-        setThumb(m.photos[0]);
-      } else {
-        try {
-          const urlMap = await cloudLocSync.fetchLocationMediaUrls([location.id]);
-          const photos = urlMap[location.id]?.loc?.photos;
-          if (photos?.[0]) setThumb(photos[0]);
-        } catch { /* ignore */ }
-      }
+    // Reconciles with cloud every time — see LocationPropertiesPanel/EditLocation.
+    cloudLocSync.reconcileLocationMedia(location.id, 'loc').then(m => {
+      if (m.photos[0]) setThumb(m.photos[0]);
     }).catch(() => {});
   }, [location.id]);
 

@@ -1,4 +1,3 @@
-import * as locMediaDB from '../utils/locationMediaDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import { useState, useEffect } from 'react';
@@ -135,34 +134,13 @@ export function LocationDetail({
 
   useEffect(() => {
     if (!locationId) return;
+    // Reconciles with cloud every time (not just when local is empty) —
+    // otherwise once this device has any local copy, it never sees another
+    // device's later uploads or deletions for this location again.
     Promise.all([
-      locMediaDB.getLocationMedia(locationId),
-      locMediaDB.getInspectionMedia(locationId),
-    ]).then(async ([lm, im]) => {
-      // Use local data if available; fall back to cloud signed URLs
-      let finalLocMedia = lm;
-      let finalInspMedia = im;
-
-      const needsCloud = (lm.photos.length === 0 && lm.videos.length === 0) ||
-                         (im.photos.length === 0 && im.videos.length === 0);
-
-      if (needsCloud) {
-        try {
-          const urlMap = await cloudLocSync.fetchLocationMediaUrls([locationId]);
-          const cloud = urlMap[locationId];
-          if (cloud) {
-            if (lm.photos.length === 0 && lm.videos.length === 0 && (cloud.loc?.photos?.length || cloud.loc?.videos?.length)) {
-              finalLocMedia = { photos: cloud.loc?.photos ?? [], videos: cloud.loc?.videos ?? [] };
-            }
-            if (im.photos.length === 0 && im.videos.length === 0 && (cloud.insp?.photos?.length || cloud.insp?.videos?.length)) {
-              finalInspMedia = { photos: cloud.insp?.photos ?? [], videos: cloud.insp?.videos ?? [] };
-            }
-          }
-        } catch (e) {
-          console.error('[LocationDetail] cloud media fetch error:', e);
-        }
-      }
-
+      cloudLocSync.reconcileLocationMedia(locationId, 'loc'),
+      cloudLocSync.reconcileLocationMedia(locationId, 'insp'),
+    ]).then(async ([finalLocMedia, finalInspMedia]) => {
       // Merge inspection media with location media
       const mergedPhotos = [...finalLocMedia.photos, ...finalInspMedia.photos];
       const mergedVideos = [...finalLocMedia.videos, ...finalInspMedia.videos];

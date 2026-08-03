@@ -57,18 +57,6 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
 
       console.log('[MountainDocuments] Loading media for', locations.length, 'locations and', assets.length, 'assets');
 
-      // Fetch cloud URLs if needed
-      let cloudUrls: Record<string, any> = {};
-      try {
-        const locationIds = locations.map(l => l.id);
-        if (locationIds.length > 0) {
-          cloudUrls = await cloudLocSync.fetchLocationMediaUrls(locationIds);
-          console.log('[MountainDocuments] Cloud URLs fetched for', Object.keys(cloudUrls).length, 'locations');
-        }
-      } catch (e) {
-        console.error('[MountainDocuments] Cloud fetch error:', e);
-      }
-
       // Raw rows (real document ids) per location, so deletion can target the
       // exact row instead of an array index that may drift from slot_index.
       const locFullById = new Map<string, mountainDocsSync.CloudLocationMediaItem[]>();
@@ -80,18 +68,13 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
 
       // Load all media from all locations
       for (const loc of locations) {
-        // Load location-level media from IndexedDB
-        const locMedia = await locMediaDB.getLocationMedia(loc.id);
-        const inspMedia = await locMediaDB.getInspectionMedia(loc.id);
-
-        // Use cloud URLs as fallback
-        const cloud = cloudUrls[loc.id];
-        const finalLocMedia = (locMedia.photos.length === 0 && locMedia.videos.length === 0 && cloud?.loc)
-          ? { photos: cloud.loc.photos || [], videos: cloud.loc.videos || [] }
-          : locMedia;
-        const finalInspMedia = (inspMedia.photos.length === 0 && inspMedia.videos.length === 0 && cloud?.insp)
-          ? { photos: cloud.insp.photos || [], videos: cloud.insp.videos || [] }
-          : inspMedia;
+        // Reconcile with cloud every time (not just when local is empty) —
+        // otherwise once a device has any local copy, it never sees another
+        // device's later uploads or deletions for this location again.
+        const [finalLocMedia, finalInspMedia] = await Promise.all([
+          cloudLocSync.reconcileLocationMedia(loc.id, 'loc'),
+          cloudLocSync.reconcileLocationMedia(loc.id, 'insp'),
+        ]);
 
         console.log(`[MountainDocuments] Location "${loc.name}": ${finalLocMedia.photos.length} photos, ${finalLocMedia.videos.length} videos (loc), ${finalInspMedia.photos.length} photos, ${finalInspMedia.videos.length} videos (insp)`);
 
@@ -501,9 +484,10 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         const parsed = parseDocId(doc.id);
         if (parsed?.kind === 'location') {
           const { locationId, mediaType, field, index } = parsed;
-          const current = mediaType === 'loc'
-            ? await locMediaDB.getLocationMedia(locationId)
-            : await locMediaDB.getInspectionMedia(locationId);
+          // Reconcile first (not a raw local read) — otherwise deleting index
+          // N here could target a completely different item than what's
+          // actually displayed, if local storage had drifted from the cloud.
+          const current = await cloudLocSync.reconcileLocationMedia(locationId, mediaType);
           const nextMedia = { ...current, [field]: current[field].filter((_, i) => i !== index) };
           if (mediaType === 'loc') await locMediaDB.saveLocationMedia(locationId, nextMedia);
           else await locMediaDB.saveInspectionMedia(locationId, nextMedia);

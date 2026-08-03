@@ -6,6 +6,8 @@
  */
 
 import { getAuthToken } from '../context/DataContext';
+import * as locMediaDB from './locationMediaDB';
+import type { LocationMedia } from './locationMediaDB';
 
 export type MediaType = 'loc' | 'insp';
 
@@ -211,6 +213,57 @@ export async function fetchLocationMediaUrls(
     console.error('[cloudLocSync] fetchLocationMediaUrls error:', err);
     return {};
   }
+}
+
+/**
+ * Fetches the current cloud state for one location's media and reconciles it
+ * with whatever's cached locally, persisting the result back to IndexedDB.
+ *
+ * Every consumer used to skip the cloud fetch entirely whenever local had
+ * ANY cached photos/videos ("local non-empty ⇒ trust it forever") — so once
+ * a device had a local copy of a location's media, it would never see
+ * another device's later uploads OR deletions for that location again. This
+ * fetches cloud every time (when reachable) and treats it as authoritative
+ * for anything already synced (https:// URLs), while preserving local items
+ * still waiting to sync (data: URLs, not yet uploaded — e.g. captured
+ * offline). Falls back to the local copy unchanged if the cloud is
+ * unreachable, so offline use is unaffected.
+ */
+export async function reconcileLocationMedia(
+  locationId: string,
+  mediaType: MediaType,
+): Promise<LocationMedia> {
+  const local = mediaType === 'loc'
+    ? await locMediaDB.getLocationMedia(locationId)
+    : await locMediaDB.getInspectionMedia(locationId);
+
+  let cloudFetchSucceeded = false;
+  let cloud: { photos?: string[]; videos?: string[] } | undefined;
+  try {
+    const res = await apiCall(`/location-media/batch-urls`, {
+      method: 'POST',
+      body: JSON.stringify({ locationIds: [locationId] }),
+    });
+    if (res.ok) {
+      const { urlMap } = await res.json();
+      cloud = urlMap?.[locationId]?.[mediaType];
+      cloudFetchSucceeded = true;
+    }
+  } catch {
+    // offline or server unreachable — cloudFetchSucceeded stays false
+  }
+
+  if (!cloudFetchSucceeded) return local;
+
+  const merged: LocationMedia = {
+    photos: [...(cloud?.photos ?? []), ...local.photos.filter(isDataUrl)],
+    videos: [...(cloud?.videos ?? []), ...local.videos.filter(isDataUrl)],
+  };
+
+  if (mediaType === 'loc') await locMediaDB.saveLocationMedia(locationId, merged);
+  else await locMediaDB.saveInspectionMedia(locationId, merged);
+
+  return merged;
 }
 
 /** Delete all cloud-stored media for a location (call when location is deleted). */

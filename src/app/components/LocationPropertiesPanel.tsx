@@ -321,18 +321,12 @@ function LocationMediaFields({ locationId }: { locationId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    locMediaDB.getLocationMedia(locationId).then(async m => {
+    // Reconciles with cloud every time (not just when local is empty) —
+    // otherwise once this device has any local copy, it never sees another
+    // device's later uploads or deletions for this location again.
+    cloudLocSync.reconcileLocationMedia(locationId, 'loc').then(m => {
       if (cancelled) return;
-      if (m.photos.length > 0 || m.videos.length > 0) {
-        setPhotos(m.photos); setVideos(m.videos);
-        return;
-      }
-      try {
-        const urlMap = await cloudLocSync.fetchLocationMediaUrls([locationId]);
-        if (cancelled) return;
-        setPhotos(urlMap[locationId]?.loc?.photos || []);
-        setVideos(urlMap[locationId]?.loc?.videos || []);
-      } catch { /* ignore */ }
+      setPhotos(m.photos); setVideos(m.videos);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [locationId]);
@@ -464,21 +458,13 @@ function LocationMediaThumbnails({ locationId, onOpenFull }: { locationId: strin
 
   useEffect(() => {
     let cancelled = false;
-    locMediaDB.getLocationMedia(locationId).then(async m => {
+    // Reconciles with cloud every time — see LocationMediaFields above.
+    cloudLocSync.reconcileLocationMedia(locationId, 'loc').then(m => {
       if (cancelled) return;
-      if (m.photos.length > 0 || m.videos.length > 0) {
-        setPhotos(m.photos); setVideos(m.videos); setLoaded(true);
-        return;
-      }
-      try {
-        const urlMap = await cloudLocSync.fetchLocationMediaUrls([locationId]);
-        if (cancelled) return;
-        setPhotos(urlMap[locationId]?.loc?.photos || []);
-        setVideos(urlMap[locationId]?.loc?.videos || []);
-      } catch { /* ignore */ } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    }).catch(() => setLoaded(true));
+      setPhotos(m.photos); setVideos(m.videos);
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) setLoaded(true);
+    });
     return () => { cancelled = true; };
   }, [locationId]);
 

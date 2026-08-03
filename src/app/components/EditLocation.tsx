@@ -283,26 +283,15 @@ export function EditLocation() {
     setHasUnsavedChanges(hasChanges);
   }, [nickname, trailName, notes, locationType, coords, photos, videos, location]);
 
-  // Load existing media from IndexedDB on mount; fall back to cloud if empty
+  // Load existing media, reconciled with cloud every time — not just when
+  // local is empty, otherwise once this device has any local copy, it never
+  // sees another device's later uploads or deletions for this location again.
   useEffect(() => {
     if (!locationId) return;
-    locMediaDB.getLocationMedia(locationId).then(async media => {
-      if (media.photos.length > 0 || media.videos.length > 0) {
-        setPhotos(media.photos || []);
-        setVideos(media.videos || []);
-        setMediaLoaded(true);
-      } else {
-        // No local media — try fetching from cloud
-        try {
-          const urlMap = await cloudLocSync.fetchLocationMediaUrls([locationId]);
-          const cloudMedia = urlMap[locationId]?.loc;
-          setPhotos(cloudMedia?.photos || []);
-          setVideos(cloudMedia?.videos || []);
-        } catch (e) {
-          console.error('[EditLocation] cloud media fetch error:', e);
-        }
-        setMediaLoaded(true);
-      }
+    cloudLocSync.reconcileLocationMedia(locationId, 'loc').then(media => {
+      setPhotos(media.photos || []);
+      setVideos(media.videos || []);
+      setMediaLoaded(true);
     }).catch(err => {
       console.error('Error loading location media:', err);
       setMediaLoaded(true);
