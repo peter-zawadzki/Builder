@@ -17,7 +17,7 @@ interface Document {
   url: string;
   uploadedAt: string;
   thumbnail?: string;
-  source?: 'upload' | 'inspection';
+  source?: 'upload' | 'inspection' | 'location' | 'asset';
   locationName?: string;
   dataUrl?: string; // Store original base64 for persistence
 }
@@ -89,7 +89,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             url: photoUrl,
             uploadedAt: new Date().toISOString(),
             thumbnail: photoUrl,
-            source: 'inspection',
+            source: 'location',
             locationName: loc.name,
           });
         });
@@ -103,7 +103,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             size: 0,
             url: videoUrl,
             uploadedAt: new Date().toISOString(),
-            source: 'inspection',
+            source: 'location',
             locationName: loc.name,
           });
         });
@@ -159,7 +159,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             url: asset.serialPhoto,
             uploadedAt: new Date().toISOString(), // Assets don't track upload date currently
             thumbnail: asset.serialPhoto,
-            source: 'inspection',
+            source: 'asset',
             locationName: assetName,
           });
         }
@@ -174,7 +174,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             url: asset.installPhoto,
             uploadedAt: new Date().toISOString(),
             thumbnail: asset.installPhoto,
-            source: 'inspection',
+            source: 'asset',
             locationName: assetName,
           });
         }
@@ -189,7 +189,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             url: asset.internalPhoto,
             uploadedAt: new Date().toISOString(),
             thumbnail: asset.internalPhoto,
-            source: 'inspection',
+            source: 'asset',
             locationName: assetName,
           });
         }
@@ -204,7 +204,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             url: asset.externalPhoto,
             uploadedAt: new Date().toISOString(),
             thumbnail: asset.externalPhoto,
-            source: 'inspection',
+            source: 'asset',
             locationName: assetName,
           });
         }
@@ -220,7 +220,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
               url: photoUrl,
               uploadedAt: new Date().toISOString(),
               thumbnail: photoUrl,
-              source: 'inspection',
+              source: 'asset',
               locationName: assetName,
             });
           });
@@ -376,8 +376,9 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
 
   const handleDelete = async (id: string) => {
     const doc = documents.find(d => d.id === id);
-    if (!doc || doc.source === 'inspection') {
-      // Don't delete inspection images
+    if (!doc || doc.source !== 'upload') {
+      // Only plain admin uploads are deletable from here — location/asset/
+      // inspection photos are managed from their own record instead.
       return;
     }
 
@@ -663,6 +664,11 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                       Insp
                     </span>
                   )}
+                  {(doc.source === 'location' || doc.source === 'asset') && doc.locationName && (
+                    <span className="text-[8px] bg-[#f3f3f5] text-[#6a7282] px-1 py-0.5 rounded-full font-['Inter:Medium',sans-serif] truncate max-w-[70px]">
+                      {doc.locationName}
+                    </span>
+                  )}
                   <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[9px] truncate">
                     {doc.size > 0 ? formatFileSize(doc.size) : formatDate(doc.uploadedAt)}
                   </p>
@@ -733,6 +739,11 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
                     {doc.source === 'inspection' && (
                       <span className="text-[9px] bg-[#EBF3FF] text-[#307FE2] px-1.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif]">
                         Inspection
+                      </span>
+                    )}
+                    {(doc.source === 'location' || doc.source === 'asset') && doc.locationName && (
+                      <span className="text-[9px] bg-[#f3f3f5] text-[#6a7282] px-1.5 py-0.5 rounded-full font-['Inter:Medium',sans-serif]">
+                        {doc.locationName}
                       </span>
                     )}
                     <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[10px]">

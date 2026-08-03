@@ -8,7 +8,9 @@ import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { LocationDetail } from './LocationDetail';
-import { CreateLocation } from './CreateLocation';
+import { ChooseSiteAssessmentModal } from './ChooseSiteAssessmentModal';
+import { useAddLocationToMap } from '../hooks/useAddLocationToMap';
+import { type DeviceType, DEVICE_TYPE_CONFIG } from '../utils/deviceTypes';
 
 // Trail detail now opens as a modal (matching the rest of the app's detail
 // patterns) instead of navigating to a full page. Drilling into a location
@@ -37,8 +39,8 @@ export function TrailDetailModal({
   const [editName, setEditName] = useState(trail?.name || '');
   const [editNotes, setEditNotes] = useState(trail?.notes || '');
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
-  const [showAddLocation, setShowAddLocation] = useState(false);
   const [mediaCounts, setMediaCounts] = useState<Record<string, { photos: number; videos: number }>>({});
+  const { start: startAddLocation, picking, choose, cancelPicking } = useAddLocationToMap(mountainId, mountain?.name || '');
 
   useEffect(() => {
     let alive = true;
@@ -75,16 +77,7 @@ export function TrailDetailModal({
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-t-[16px] sm:rounded-[16px] w-full max-w-2xl h-[90vh] sm:h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        {showAddLocation ? (
-          <div className="overflow-y-auto flex-1">
-            <CreateLocation
-              mountainIdProp={mountainId}
-              trailIdProp={trailId}
-              onClose={() => setShowAddLocation(false)}
-              embedded
-            />
-          </div>
-        ) : activeLocationId ? (
+        {activeLocationId ? (
           <div className="overflow-y-auto flex-1">
             <LocationDetail
               mountainIdProp={mountainId}
@@ -168,12 +161,16 @@ export function TrailDetailModal({
                 </div>
 
                 <button
-                  onClick={() => setShowAddLocation(true)}
+                  onClick={() => startAddLocation(trailId)}
                   className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:opacity-80"
                 >
                   <Plus size={18} />
                   Add Location
                 </button>
+
+                {picking && (
+                  <ChooseSiteAssessmentModal assessments={picking} onChoose={choose} onClose={cancelPicking} />
+                )}
 
                 {trailLocations.length === 0 ? (
                   <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-8 text-center">
@@ -188,6 +185,9 @@ export function TrailDetailModal({
                       const locAssets = getAssetsByLocationId(location.id).filter(a => a.type !== 'Miscellaneous');
                       const inspections = getInspectionsByLocationId(location.id);
                       const media = mediaCounts[location.id];
+                      const deviceType = location.deviceType as DeviceType | undefined;
+                      const typeConfig = deviceType ? DEVICE_TYPE_CONFIG[deviceType] : null;
+                      const TypeIcon = typeConfig?.Icon || MapPin;
                       return (
                         <button
                           key={location.id}
@@ -195,14 +195,16 @@ export function TrailDetailModal({
                           className="w-full bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-3 text-left active:bg-[#f9fafb] transition-colors"
                         >
                           <div className="flex items-start gap-3">
-                            <MapPin size={18} className="text-[#ff5c39] flex-shrink-0 mt-0.5" />
+                            <TypeIcon size={18} style={{ color: typeConfig?.color || '#ff5c39' }} className="flex-shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
                               <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px]">{location.name}</h3>
                               {location.notes && (
                                 <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px] mt-0.5 truncate">{location.notes}</p>
                               )}
                               <div className="flex flex-wrap gap-1.5 mt-2">
-                                {location.locationType && (
+                                {typeConfig ? (
+                                  <span className="bg-[#f3f3f5] text-[#6a7282] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">{typeConfig.label}</span>
+                                ) : location.locationType && (
                                   <span className="bg-[#f3f3f5] text-[#6a7282] text-[11px] font-['Inter:Medium',sans-serif] font-medium px-2 py-0.5 rounded-full">{location.locationType}</span>
                                 )}
                                 {location.difficulty && (

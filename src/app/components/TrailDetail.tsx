@@ -7,6 +7,9 @@ import {
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { ChooseSiteAssessmentModal } from './ChooseSiteAssessmentModal';
+import { useAddLocationToMap } from '../hooks/useAddLocationToMap';
+import { LocationDetail } from './LocationDetail';
 
 const assetIcons = { Camera, 'Network Gear': Wifi, Miscellaneous: Box, Server };
 
@@ -22,12 +25,14 @@ export function TrailDetail() {
 
   const mountain = getMountainById(mountainId!);
   const trail = trails.find(t => t.id === trailId);
+  const { start: startAddLocation, picking, choose, cancelPicking } = useAddLocationToMap(mountainId!, mountain?.name || '');
   // Include locations linked by trailId OR by matching trailName (legacy)
   const trailLocations = locations.filter(
     l => l.mountainId === mountainId &&
       (l.trailId === trailId || (!l.trailId && l.trailName === trail?.name))
   );
 
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(trail?.name || '');
@@ -148,12 +153,16 @@ export function TrailDetail() {
           </div>
 
           <button
-            onClick={() => navigate(`/mountains/${mountainId}/trails/${trailId}/locations/new`)}
+            onClick={() => startAddLocation(trailId)}
             className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:opacity-80"
           >
             <Plus size={20} />
             Add Location
           </button>
+
+          {picking && (
+            <ChooseSiteAssessmentModal assessments={picking} onChoose={choose} onClose={cancelPicking} />
+          )}
 
           {trailLocations.length === 0 ? (
             <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-8 text-center">
@@ -168,7 +177,7 @@ export function TrailDetail() {
                 const locAssets = getAssetsByLocationId(location.id).filter(a => a.type !== 'Miscellaneous');
                 const inspCount = getInspectionsByLocationId(location.id)[0]?.items.reduce((s, i) => s + i.count, 0) || 0;
                 return (
-                  <Link key={location.id} to={`/mountains/${mountainId}/locations/${location.id}`}>
+                  <button key={location.id} onClick={() => setActiveLocationId(location.id)} className="w-full text-left">
                     <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 active:bg-[#f3f3f5] transition-colors">
                       <div className="flex items-start gap-3">
                         <MapPin size={20} className="text-[#ff5c39] flex-shrink-0 mt-0.5" />
@@ -200,7 +209,7 @@ export function TrailDetail() {
                         </div>
                       </div>
                     </div>
-                  </Link>
+                  </button>
                 );
               })}
             </div>

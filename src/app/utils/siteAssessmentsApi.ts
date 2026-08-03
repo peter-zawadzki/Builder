@@ -66,7 +66,7 @@ export interface SiteAssessment {
 }
 
 export async function listSiteAssessments(): Promise<SiteAssessment[]> {
-  const res = await apiCall('/');
+  const res = await apiCall('');
   return res.siteAssessments;
 }
 
@@ -86,7 +86,7 @@ export async function createSiteAssessment(data: {
   resort_representative_email?: string;
   general_notes?: string;
 }): Promise<SiteAssessment> {
-  const res = await apiCall('/', { method: 'POST', body: JSON.stringify(data) });
+  const res = await apiCall('', { method: 'POST', body: JSON.stringify(data) });
   return res.siteAssessment;
 }
 
@@ -109,16 +109,8 @@ export type ObjectType = 'camera' | 'server' | 'network' | 'power' | 'building' 
 export interface CameraProperties {
   heading: number;        // compass bearing, 0-359 (0 = North)
   horizontalFov: number;  // degrees
-  verticalFov?: number;   // degrees
   rangeMeters: number;    // estimated coverage distance
-  mountingHeightFt?: number;
-  tilt?: number;          // degrees
-  model?: string;
-  lens?: string;
-  resolution?: string;
-  mountingType?: string;
-  powerSource?: string;
-  networkConnection?: string;
+  networkConnection?: 'Hard Wired' | 'VLAN Connection' | 'Wireless Link';
 }
 
 export interface SiteAssessmentObject {
@@ -184,4 +176,49 @@ export async function updateObject(
 
 export async function deleteObject(assessmentId: string, objectId: string): Promise<void> {
   await apiCall(`/${assessmentId}/objects/${objectId}`, { method: 'DELETE' });
+}
+
+// ── Measurements (Phase 7) ────────────────────────────────────────────────
+
+export interface SiteAssessmentMeasurement {
+  id: string;
+  site_assessment_id: string;
+  measurement_type: string;
+  geometry_json: { type: 'LineString'; coordinates: [number, number][] };
+  horizontal_distance: number | null;
+  terrain_distance: number | null;
+  elevation_gain: number | null;
+  elevation_loss: number | null;
+  start_elevation: number | null;
+  end_elevation: number | null;
+  bearing: number | null;
+  area: number | null;
+  units: string;
+  properties_json: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export async function createMeasurement(
+  assessmentId: string,
+  data: {
+    measurement_type: string;
+    geometry_json: { type: 'LineString'; coordinates: [number, number][] };
+    horizontal_distance?: number;
+    terrain_distance?: number;
+    elevation_gain?: number;
+    elevation_loss?: number;
+    start_elevation?: number;
+    end_elevation?: number;
+    units?: string;
+  }
+): Promise<SiteAssessmentMeasurement> {
+  const res = await apiCall(`/${assessmentId}/measurements`, { method: 'POST', body: JSON.stringify(data) });
+  return res.measurement;
+}
+
+export async function deleteMeasurement(assessmentId: string, measurementId: string): Promise<void> {
+  await apiCall(`/${assessmentId}/measurements/${measurementId}`, { method: 'DELETE' });
 }

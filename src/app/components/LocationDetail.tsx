@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { useData, SiteInspectionItem, Annotation, ContactActivity, Inspection, buildActivitySummaries } from '../context/DataContext';
 import {
-  ArrowLeft, Plus, MapPin,
+  ArrowLeft, MapPin,
   ClipboardList, Pencil, Image as ImageIcon, Video as VideoIcon,
   ChevronLeft, ChevronRight, X, Edit3, LayoutGrid, List as ListIcon, Film,
 } from 'lucide-react';
@@ -15,6 +15,8 @@ import { ActivitySection } from './ActivitySection';
 import { ImageAnnotator } from './ImageAnnotator';
 import { MountainMapView } from './MountainMapView';
 import { InspectionForm } from './InspectionForm';
+import { deviceSummaryLines } from './LocationPropertiesPanel';
+import { type DeviceType, DEVICE_TYPE_CONFIG } from '../utils/deviceTypes';
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
@@ -275,16 +277,27 @@ export function LocationDetail({
               {location.name}
             </h1>
           </div>
-          <Link to={`/mountains/${mountainId}/locations/${locationId}/edit`}>
-            <button
-              className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
-              aria-label="Edit location">
-              <Pencil size={20} className="text-[#0a0a0a]" />
-            </button>
-          </Link>
+          {/* Devices are edited from their Site Assessment, not this classic
+              form — hide the pencil rather than open an editor that doesn't
+              know about heading/FOV/subtype/etc. */}
+          {!location.deviceType && (
+            <Link to={`/mountains/${mountainId}/locations/${locationId}/edit`}>
+              <button
+                className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e8e8ea]"
+                aria-label="Edit location">
+                <Pencil size={20} className="text-[#0a0a0a]" />
+              </button>
+            </Link>
+          )}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {location.locationType && (
+          {location.deviceType ? (
+            <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">
+              {location.deviceType === 'startfinish'
+                ? (location.locationType || DEVICE_TYPE_CONFIG[location.deviceType as DeviceType]?.label)
+                : DEVICE_TYPE_CONFIG[location.deviceType as DeviceType]?.label}
+            </span>
+          ) : location.locationType && (
             <span className="text-[11px] bg-[#f3f3f5] text-[#6a7282] px-2 py-0.5 rounded-full">{location.locationType}</span>
           )}
           {mediaLoaded && locMedia.photos.length > 0 && (
@@ -300,6 +313,18 @@ export function LocationDetail({
       </div>
 
       <div className="p-4 space-y-4">
+
+        {/* ── Device fields (camera heading/FOV/range, network equipment, power, etc.) ── */}
+        {location.deviceType && deviceSummaryLines(location).length > 0 && (
+          <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-4 space-y-2.5">
+            {deviceSummaryLines(location).map(line => (
+              <div key={line.label} className="flex items-center gap-2">
+                <span className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">{line.label}:</span>
+                <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[14px]">{line.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ── Location meta ── */}
         {(location.trailName || location.coordinates || location.difficulty || location.notes) && (
@@ -454,26 +479,19 @@ export function LocationDetail({
           </div>
         )}
 
-        {/* ── Inspections section ── */}
+        {/* ── Inspections section — read-only history. Adding new inspections
+             is retired now that Site Assessment devices cover this; the
+             section only renders at all if this location already has some
+             from before, so old proposals/exports built from them keep working. ── */}
+        {inspections.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">
-              Inspections{inspections.length > 0 && <span className="ml-2 text-[#6a7282] text-[14px] font-normal">({inspections.length})</span>}
+              Inspections<span className="ml-2 text-[#6a7282] text-[14px] font-normal">({inspections.length})</span>
             </h2>
-            <button onClick={() => setShowInspectionForm('new')} className="bg-[#0a0a0a] text-white rounded-[8px] px-3 py-2 flex items-center gap-1.5 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80">
-              <Plus size={15} /> Add
-            </button>
           </div>
 
-          {inspections.length === 0 ? (
-            <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.1)] p-6 text-center">
-              <ClipboardList className="mx-auto mb-3 text-[#6a7282]" size={36} />
-              <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px]">
-                No inspections yet. Document what equipment is at this site.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
+          <div className="space-y-3">
               {inspections.map((insp, idx) => {
                 const count = insp.items.reduce((s, i) => s + i.count, 0);
                 return (
@@ -527,9 +545,9 @@ export function LocationDetail({
                   </div>
                 );
               })}
-            </div>
-          )}
+          </div>
         </div>
+        )}
 
       </div>
 

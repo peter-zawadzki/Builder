@@ -221,3 +221,71 @@ siteAssessments.delete("/:id/objects/:objectId", async (c) => {
   );
   return c.json({ ok: true });
 });
+
+// ── Measurements (Phase 7) ─────────────────────────────────────────────────
+// terrain_distance/elevation_gain/elevation_loss/start_elevation/end_elevation
+// are populated client-side via Mapbox's queryTerrainElevation against the
+// already-loaded terrain-DEM source — no server-side elevation lookup needed.
+
+const MEASUREMENT_COLS = [
+  "measurement_type", "geometry_json", "horizontal_distance", "terrain_distance",
+  "elevation_gain", "elevation_loss", "start_elevation", "end_elevation",
+  "bearing", "area", "units", "properties_json",
+] as const;
+
+function pickMeasurement(body: any) {
+  const out: Record<string, any> = {};
+  for (const col of MEASUREMENT_COLS) if (col in body) out[col] = body[col];
+  return out;
+}
+
+siteAssessments.post("/:id/measurements", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  if (!body?.measurement_type) return c.json({ error: "measurement_type is required" }, 400);
+  if (!body?.geometry_json) return c.json({ error: "geometry_json is required" }, 400);
+
+  const assessment = await queryOne(`SELECT id FROM site_assessments WHERE id = $1`, [id]);
+  if (!assessment) return c.json({ error: "Site Assessment not found" }, 404);
+
+  const fields = { ...pickMeasurement(body), site_assessment_id: id, created_by: user.id };
+  const cols = Object.keys(fields);
+  const vals = Object.values(fields);
+  const placeholders = cols.map((_, i) => `$${i + 1}`);
+  const measurement = await queryOne(
+    `INSERT INTO site_assessment_measurements (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`,
+    vals
+  );
+  return c.json({ measurement }, 201);
+});
+
+siteAssessments.put("/:id/measurements/:measurementId", async (c) => {
+  const id = c.req.param("id");
+  const measurementId = c.req.param("measurementId");
+  const body = await c.req.json().catch(() => ({}));
+  const fields = pickMeasurement(body);
+  if (Object.keys(fields).length === 0) return c.json({ error: "no updatable fields" }, 400);
+  const cols = Object.keys(fields);
+  const vals = Object.values(fields);
+  const set = cols.map((col, i) => `${col} = $${i + 1}`).join(", ");
+  const measurement = await queryOne(
+    `UPDATE site_assessment_measurements SET ${set}
+      WHERE id = $${cols.length + 1} AND site_assessment_id = $${cols.length + 2} AND deleted_at IS NULL
+      RETURNING *`,
+    [...vals, measurementId, id]
+  );
+  return measurement ? c.json({ measurement }) : c.json({ error: "Not found" }, 404);
+});
+
+siteAssessments.delete("/:id/measurements/:measurementId", async (c) => {
+  const id = c.req.param("id");
+  const measurementId = c.req.param("measurementId");
+  const measurement = await queryOne(
+    `UPDATE site_assessment_measurements SET deleted_at = now()
+      WHERE id = $1 AND site_assessment_id = $2 AND deleted_at IS NULL RETURNING *`,
+    [measurementId, id]
+  );
+  if (!measurement) return c.json({ error: "Not found" }, 404);
+  return c.json({ ok: true });
+});

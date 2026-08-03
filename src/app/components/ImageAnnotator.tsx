@@ -226,16 +226,16 @@ export function ImageAnnotator({
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const newId = newId();
+      const annId = newId();
 
       // Text input position is in display coordinates (already scaled)
       setTextInputPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
       setTextInputValue('');
-      setPendingAnnotationId(newId);
+      setPendingAnnotationId(annId);
 
       // Store the canvas point for the annotation (in canvas coordinates)
       const newAnn: Annotation = {
-        id: newId,
+        id: annId,
         type: 'text',
         points: [point],
         color: selectedColor,
@@ -248,16 +248,16 @@ export function ImageAnnotator({
     } else if (selectedTool === 'line') {
       // Start new stroke
       setIsDrawing(true);
-      const newId = newId();
+      const annId = newId();
       const newAnn: Annotation = {
-        id: newId,
+        id: annId,
         type: 'line',
         points: [point],
         color: selectedColor,
         createdAt: new Date().toISOString(),
       };
       setAnnotations((prev) => [...prev, newAnn]);
-      setActiveDrawingId(newId);
+      setActiveDrawingId(annId);
     }
   };
 
@@ -311,12 +311,12 @@ export function ImageAnnotator({
       // Text input position is in display coordinates (already scaled)
       setTextInputPosition({ x: touch.clientX - rect.left, y: touch.clientY - rect.top });
       setTextInputValue('');
-      const newId = newId();
-      setPendingAnnotationId(newId);
+      const annId = newId();
+      setPendingAnnotationId(annId);
 
       // Store the canvas point for the annotation (in canvas coordinates)
       const newAnn: Annotation = {
-        id: newId,
+        id: annId,
         type: 'text',
         points: [point],
         color: selectedColor,
@@ -327,16 +327,16 @@ export function ImageAnnotator({
       setTimeout(() => textInputRef.current?.focus(), 10);
     } else if (selectedTool === 'line') {
       setIsDrawing(true);
-      const newId = newId();
+      const annId = newId();
       const newAnn: Annotation = {
-        id: newId,
+        id: annId,
         type: 'line',
         points: [point],
         color: selectedColor,
         createdAt: new Date().toISOString(),
       };
       setAnnotations((prev) => [...prev, newAnn]);
-      setActiveDrawingId(newId);
+      setActiveDrawingId(annId);
     }
   };
 

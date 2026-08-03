@@ -218,6 +218,17 @@ export interface Location {
   notes?: string;
   difficulty?: 1 | 2 | 3 | 4 | 5; // legacy — difficulty now lives on the inspection
   locationType?: 'Install Site' | 'Power' | 'Start' | 'Finish';
+  // Set when this Location was placed as a piece of equipment from the Site
+  // Assessment (or Map View) toolbar rather than the plain "add a location"
+  // flow — every dropped item is a real Location either way (same record,
+  // same LocationDetail page, same visibility everywhere), this just tags
+  // which ones also carry type-specific data below.
+  deviceType?: 'camera' | 'server' | 'network' | 'power' | 'building' | 'misc';
+  // Camera: { heading, horizontalFov, rangeMeters, networkConnection }. Only
+  // cameras use this today; other device types have no extra fields yet.
+  deviceProperties?: Record<string, unknown>;
+  // Prevents accidental drags once a device's position is finalized.
+  isLocked?: boolean;
   coordinates?: {
     latitude: number;
     longitude: number;
