@@ -5,9 +5,11 @@ import * as locMediaDB from '../utils/locationMediaDB';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
 import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import * as cloudLocSync from '../utils/cloudLocationSync';
+import * as mountainDocsSync from '../utils/mountainDocsSync';
 import { ImageAnnotator } from './ImageAnnotator';
 import type { Annotation } from '../context/DataContext';
 import { newId } from '../utils/id';
+import { toast } from 'sonner';
 
 interface Document {
   id: string;
@@ -252,6 +254,29 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         };
       });
 
+      // Merge in cloud-stored documents this device doesn't have locally yet
+      // (uploaded from another device) — matches by id, so a doc that's
+      // already local (and possibly still mid-upload) isn't duplicated.
+      const localIds = new Set(uploadedDocs.map(d => d.id));
+      try {
+        const cloudDocs = await mountainDocsSync.fetchMountainDocuments(mountainId);
+        for (const cd of cloudDocs) {
+          if (localIds.has(cd.id)) continue;
+          uploadedDocs.push({
+            id: cd.id,
+            name: cd.name,
+            type: cd.type,
+            size: cd.size,
+            url: cd.url,
+            uploadedAt: cd.uploadedAt,
+            thumbnail: cd.type.startsWith('image/') ? cd.url : undefined,
+            source: 'upload',
+          });
+        }
+      } catch (e) {
+        console.error('[MountainDocuments] cloud documents fetch error:', e);
+      }
+
       // Fully-executed proposals save themselves here as a real signed PDF
       // (see ProposalBuilder's saveSignedProposalToDocuments) — they land in
       // uploadedDocs above like any other document, nothing extra to do here.
@@ -355,7 +380,7 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         });
       }
 
-      // Save to IndexedDB
+      // Save to IndexedDB first — the durable local copy
       const currentDocs = await mountainDocsDB.getDocuments(mountainId);
       await mountainDocsDB.saveDocuments(mountainId, [...currentDocs, ...docsToSave]);
 
@@ -365,6 +390,25 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         const uploaded = prev.filter(d => d.source !== 'inspection');
         return [...inspection, ...uploaded, ...newDocs];
       });
+
+      // Then push each to the cloud so other devices can see it.
+      if (!navigator.onLine) {
+        docsToSave.forEach(d => mountainDocsSync.addPendingMountainDoc(mountainId, d.id));
+        toast('📄 Saved locally — will sync when back online', { duration: 3000 });
+      } else {
+        const results = await Promise.allSettled(
+          docsToSave.map(d => mountainDocsSync.uploadMountainDocument(mountainId, d.id, d.name, d.type, d.data))
+        );
+        const isFailed = (r: PromiseSettledResult<mountainDocsSync.CloudMountainDoc | null>) =>
+          r.status === 'rejected' || r.value === null;
+        const failed = results.filter(isFailed).length;
+        results.forEach((r, i) => {
+          if (isFailed(r)) mountainDocsSync.addPendingMountainDoc(mountainId, docsToSave[i].id);
+        });
+        if (failed > 0) {
+          toast.error(`${failed} document${failed !== 1 ? 's' : ''} failed to sync to the cloud — will retry when reconnected`, { duration: 4000 });
+        }
+      }
     } catch (err) {
       console.error('Upload error:', err);
     } finally {
@@ -394,6 +438,9 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
     const currentDocs = await mountainDocsDB.getDocuments(mountainId);
     const updatedDocs = currentDocs.filter(d => d.id !== id);
     await mountainDocsDB.saveDocuments(mountainId, updatedDocs);
+
+    mountainDocsSync.removePendingMountainDoc(mountainId, id);
+    mountainDocsSync.deleteMountainDocument(mountainId, id).catch(() => {});
 
     setDocuments(prev => prev.filter(d => d.id !== id));
   };

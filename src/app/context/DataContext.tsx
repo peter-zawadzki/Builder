@@ -5,6 +5,8 @@ import * as imageAnnotationsDB from '../utils/imageAnnotationsDB';
 import * as cloudPhotos from '../utils/cloudPhotoSync';
 import * as cloudLocSync from '../utils/cloudLocationSync';
 import * as cloudAnnotationSync from '../utils/cloudAnnotationSync';
+import * as mountainDocsDB from '../utils/mountainDocumentsDB';
+import * as mountainDocsSync from '../utils/mountainDocsSync';
 import * as offlineQueue from '../utils/offlineQueue';
 import { CA_INTRO_PARAGRAPHS, CA_BODY_PARAGRAPHS } from '../data/customerAgreementText';
 import { toast } from 'sonner';
@@ -1941,12 +1943,67 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ─── Flush pending mountain-document uploads on reconnect ─────────────────
+  const warnedMountainDocKeysRef = useRef(new Set<string>());
+  const flushPendingMountainDocs = useCallback(async () => {
+    const pending = mountainDocsSync.getPendingMountainDocs();
+    if (pending.length === 0) return;
+    console.log(`[mountainDocSync] Retrying ${pending.length} pending mountain document upload(s)…`);
+    let syncedCount = 0;
+    let failedCount = 0;
+    // Group by mountain so each mountain's IndexedDB list is only fetched once.
+    const byMountain = new Map<string, string[]>();
+    for (const { mountainId, docId } of pending) {
+      const arr = byMountain.get(mountainId);
+      if (arr) arr.push(docId); else byMountain.set(mountainId, [docId]);
+    }
+    for (const [mountainId, docIds] of byMountain) {
+      const docs = await mountainDocsDB.getDocuments(mountainId);
+      for (const docId of docIds) {
+        const warnKey = `${mountainId}:${docId}`;
+        const doc = docs.find(d => d.id === docId);
+        if (!doc) {
+          mountainDocsSync.removePendingMountainDoc(mountainId, docId);
+          continue;
+        }
+        try {
+          const result = await mountainDocsSync.uploadMountainDocument(mountainId, doc.id, doc.name, doc.type, doc.data);
+          if (result) {
+            mountainDocsSync.removePendingMountainDoc(mountainId, docId);
+            warnedMountainDocKeysRef.current.delete(warnKey);
+            syncedCount++;
+            console.log(`[mountainDocSync] Synced document ${docId} for mountain ${mountainId}`);
+          } else {
+            console.warn(`[mountainDocSync] Retry failed for document ${docId} — will try again later`);
+            if (!warnedMountainDocKeysRef.current.has(warnKey)) {
+              warnedMountainDocKeysRef.current.add(warnKey);
+              failedCount++;
+            }
+          }
+        } catch (err) {
+          console.error(`[mountainDocSync] Error retrying document ${docId}:`, err);
+          if (!warnedMountainDocKeysRef.current.has(warnKey)) {
+            warnedMountainDocKeysRef.current.add(warnKey);
+            failedCount++;
+          }
+        }
+      }
+    }
+    if (syncedCount > 0) {
+      toast.success(`${syncedCount} document${syncedCount !== 1 ? 's' : ''} synced to cloud ☁️`, { duration: 3000 });
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} document${failedCount !== 1 ? 's' : ''} couldn't sync to the cloud — will keep retrying`, { duration: 5000 });
+    }
+  }, []);
+
   useEffect(() => {
     const flushAll = () => {
       flushQueue();
       flushPendingPhotos();
       flushPendingLocationMedia();
       flushPendingAnnotations();
+      flushPendingMountainDocs();
     };
 
     // Try to flush any ops that were queued during a previous offline session
@@ -1969,7 +2026,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', flushAll);
       clearInterval(retryInterval);
     };
-  }, [flushQueue, flushPendingPhotos, flushPendingLocationMedia, flushPendingAnnotations]);
+  }, [flushQueue, flushPendingPhotos, flushPendingLocationMedia, flushPendingAnnotations, flushPendingMountainDocs]);
 
   useEffect(() => {
     if (!isLoading) {

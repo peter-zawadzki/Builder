@@ -259,6 +259,74 @@ documents.delete("/trail-map/:mountainId", async (c) => {
   return c.json({ success: true });
 });
 
+// ─── Mountain-level documents (the "Documents" panel Upload button) ───────────
+// One row per uploaded file (no fixed slot — MountainDocuments.tsx lets users
+// upload any number of arbitrary files), distinguished from trail_map by
+// field = 'mountainDoc'.
+
+documents.post("/mountain-docs/upload", async (c) => {
+  const user = c.get("user");
+  const { mountainId, dataUrl, fileName, mimeType, id } = await c.req.json().catch(() => ({}));
+  if (!mountainId || !dataUrl || !fileName) {
+    return c.json({ error: "mountainId, dataUrl, and fileName are required" }, 400);
+  }
+  try {
+    const { mime, bytes } = decodeDataUrl(dataUrl);
+    const finalMime = mimeType || mime;
+    const ext = extFromMime(finalMime);
+    // Client supplies the id (matches the local IndexedDB record it already
+    // created) so the local cache and the cloud row share one identity —
+    // otherwise a device would see the same file twice after a resync.
+    const docId = id || crypto.randomUUID();
+    const key = `mountains/${mountainId}/documents/${docId}.${ext}`;
+    await putObject(key, bytes, finalMime);
+
+    const kind = finalMime.startsWith("image/") ? "photo" : finalMime.startsWith("video/") ? "video" : "file";
+    const row = await queryOne<{ uploaded_at: string }>(
+      `INSERT INTO documents (id, mountain_id, kind, field, storage_path, file_name, mime_type, file_size, uploaded_by)
+         VALUES ($1,$2,$3::document_kind,'mountainDoc',$4,$5,$6,$7,$8)
+       ON CONFLICT (id) DO UPDATE SET
+         storage_path = EXCLUDED.storage_path, file_name = EXCLUDED.file_name,
+         mime_type = EXCLUDED.mime_type, file_size = EXCLUDED.file_size, uploaded_at = now()
+       RETURNING uploaded_at`,
+      [docId, mountainId, kind, key, fileName, finalMime, bytes.length, user.id]
+    );
+
+    const url = await getSignedGetUrl(key);
+    return c.json({
+      success: true,
+      document: { id: docId, name: fileName, type: finalMime, size: bytes.length, url, uploadedAt: row!.uploaded_at },
+    });
+  } catch (err) {
+    console.error("[documents] mountain-doc upload error:", err);
+    return c.json({ error: `Failed to upload document: ${err}` }, 500);
+  }
+});
+
+documents.get("/mountain-docs/:mountainId", async (c) => {
+  const mountainId = c.req.param("mountainId");
+  const rows = await query<{ id: string; file_name: string; mime_type: string; file_size: number | null; uploaded_at: string; storage_path: string }>(
+    `SELECT id, file_name, mime_type, file_size, uploaded_at, storage_path FROM documents
+       WHERE mountain_id = $1 AND field = 'mountainDoc' ORDER BY uploaded_at DESC`,
+    [mountainId]
+  );
+  const docs = await Promise.all(rows.map(async r => ({
+    id: r.id, name: r.file_name, type: r.mime_type, size: Number(r.file_size) || 0,
+    uploadedAt: r.uploaded_at, url: await getSignedGetUrl(r.storage_path),
+  })));
+  return c.json({ documents: docs });
+});
+
+documents.delete("/mountain-docs/:mountainId/:id", async (c) => {
+  const { mountainId, id } = c.req.param();
+  const row = await queryOne<{ storage_path: string }>(
+    `DELETE FROM documents WHERE id = $1 AND mountain_id = $2 AND field = 'mountainDoc' RETURNING storage_path`,
+    [id, mountainId]
+  );
+  if (row) await deleteObjects([row.storage_path]);
+  return c.json({ success: true });
+});
+
 // ─── Image annotations ─────────────────────────────────────────────────────────
 // Keyed by an opaque imageId minted by the annotator, independent of any
 // documents row — kept as a small dedicated KV table (image_annotations, 0014).
