@@ -63,8 +63,16 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
       await Promise.all(locations.map(async loc => {
         locFullById.set(loc.id, await mountainDocsSync.fetchLocationMediaFull(loc.id));
       }));
+      // `index` here is a position in the already-compacted display array
+      // (gaps from earlier deletions removed) — it does NOT equal the row's
+      // raw slot_index once any prior deletion has left a gap. The server
+      // compacts by filtering a sparse array built in slot_index order, which
+      // is equivalent to "existing rows sorted by slot_index ascending" — so
+      // match position-after-sorting instead of raw slot_index equality.
       const findLocDocId = (locationId: string, mediaType: 'loc' | 'insp', field: 'photos' | 'videos', index: number) =>
-        locFullById.get(locationId)?.find(i => i.mediaType === mediaType && i.field === field && i.slotIndex === index)?.id;
+        (locFullById.get(locationId) ?? [])
+          .filter(i => i.mediaType === mediaType && i.field === field)
+          .sort((a, b) => (a.slotIndex ?? 0) - (b.slotIndex ?? 0))[index]?.id;
 
       // Load all media from all locations
       for (const loc of locations) {
@@ -147,8 +155,16 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
       await Promise.all(assets.map(async asset => {
         assetFullById.set(asset.id, await mountainDocsSync.fetchAssetPhotosFull(asset.id));
       }));
-      const findAssetDocId = (assetId: string, field: string, index: number | null) =>
-        assetFullById.get(assetId)?.find(i => i.field === field && i.slotIndex === index)?.id;
+      // Named single-slot fields (serialPhoto etc.) match directly by null
+      // slotIndex. miscPhotos is an array, so — same reasoning as
+      // findLocDocId above — match position-after-sorting-by-slotIndex, not
+      // raw slotIndex equality, since a gap from an earlier deletion would
+      // otherwise make `index` (a compacted display-array position) miss.
+      const findAssetDocId = (assetId: string, field: string, index: number | null) => {
+        const items = (assetFullById.get(assetId) ?? []).filter(i => i.field === field);
+        if (index === null) return items[0]?.id;
+        return items.sort((a, b) => (a.slotIndex ?? 0) - (b.slotIndex ?? 0))[index]?.id;
+      };
 
       // Load asset photos
       assets.forEach(asset => {
