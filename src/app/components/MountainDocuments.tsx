@@ -259,8 +259,35 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         }
       });
 
-      // Load uploaded documents from IndexedDB
-      const savedDocs = await mountainDocsDB.getDocuments(mountainId);
+      // Load uploaded documents from IndexedDB, then reconcile with the cloud:
+      // add anything uploaded from another device, AND drop anything this
+      // device still has locally that another device has since deleted —
+      // otherwise a doc only ever gets ADDED here, never removed, so a
+      // delete on another device would never reach a device that already
+      // had its own local copy (same class of bug as location media).
+      // Still-pending (not yet uploaded) local docs are kept either way.
+      let savedDocs = await mountainDocsDB.getDocuments(mountainId);
+      const pendingIds = new Set(
+        mountainDocsSync.getPendingMountainDocs().filter(p => p.mountainId === mountainId).map(p => p.docId)
+      );
+      let cloudDocs: mountainDocsSync.CloudMountainDoc[] = [];
+      let cloudReachable = false;
+      try {
+        cloudDocs = await mountainDocsSync.fetchMountainDocuments(mountainId);
+        cloudReachable = true;
+      } catch (e) {
+        console.error('[MountainDocuments] cloud documents fetch error:', e);
+      }
+
+      if (cloudReachable) {
+        const cloudIds = new Set(cloudDocs.map(d => d.id));
+        const prunedSavedDocs = savedDocs.filter(d => cloudIds.has(d.id) || pendingIds.has(d.id));
+        if (prunedSavedDocs.length !== savedDocs.length) {
+          savedDocs = prunedSavedDocs;
+          await mountainDocsDB.saveDocuments(mountainId, savedDocs);
+        }
+      }
+
       const uploadedDocs: Document[] = savedDocs.map(doc => {
         // Convert base64 to blob URL for display (more efficient than base64)
         const blob = dataURLtoBlob(doc.data);
@@ -284,12 +311,11 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
         };
       });
 
-      // Merge in cloud-stored documents this device doesn't have locally yet
+      // Add cloud-stored documents this device doesn't have locally yet
       // (uploaded from another device) — matches by id, so a doc that's
       // already local (and possibly still mid-upload) isn't duplicated.
       const localIds = new Set(uploadedDocs.map(d => d.id));
-      try {
-        const cloudDocs = await mountainDocsSync.fetchMountainDocuments(mountainId);
+      {
         for (const cd of cloudDocs) {
           if (localIds.has(cd.id)) continue;
           uploadedDocs.push({
@@ -303,8 +329,6 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
             source: 'upload',
           });
         }
-      } catch (e) {
-        console.error('[MountainDocuments] cloud documents fetch error:', e);
       }
 
       // Fully-executed proposals save themselves here as a real signed PDF
