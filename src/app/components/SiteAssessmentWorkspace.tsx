@@ -1078,7 +1078,7 @@ export function SiteAssessmentWorkspace() {
         {initialTrailId && (() => {
           const t = trails.find(tr => tr.id === initialTrailId);
           return t ? (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#1D2930] text-white rounded-full px-4 py-2 shadow z-10">
+            <div className="hidden sm:block absolute top-4 left-1/2 -translate-x-1/2 bg-[#1D2930] text-white rounded-full px-4 py-2 shadow z-10">
               <span className="font-['Inter:Medium',sans-serif] text-[13px]">Adding to trail: {t.name}</span>
             </div>
           ) : null;
@@ -1112,6 +1112,20 @@ export function SiteAssessmentWorkspace() {
             >
               <Layers size={16} />
             </button>
+            {/* GPS quick-add — was a separate floating button bottom-right,
+                which got lost off-screen after the iOS rotation zoom-lock
+                bug. Grouped with the other top icons instead, same size,
+                orange to stand out as the one "add" action in this row. */}
+            {!selectedLocation && (
+              <button
+                onClick={captureGpsLocation}
+                disabled={gpsCapturing}
+                title="Add device at my current location"
+                className="sm:hidden bg-[#ff5c39] rounded-full shadow-lg p-2.5 text-white disabled:opacity-60"
+              >
+                {gpsCapturing ? <Loader2 size={16} className="animate-spin" /> : <LocateFixed size={16} />}
+              </button>
+            )}
             <div className="hidden sm:flex items-center bg-white rounded-full shadow-lg p-1 gap-0.5">
               {(Object.keys(STYLE_OPTIONS) as Array<keyof typeof STYLE_OPTIONS>).map(key => (
                 <button
@@ -1209,19 +1223,6 @@ export function SiteAssessmentWorkspace() {
           />
         )}
 
-        {/* Mobile-only "add at my current location" — rendered unconditionally
-            with sm:hidden so it hides/shows at the exact same breakpoint as
-            the rest of the mobile layout (no separate JS mobile check). */}
-        {!selectedLocation && (
-          <button
-            onClick={captureGpsLocation}
-            disabled={gpsCapturing}
-            title="Add device at my current location"
-            className="sm:hidden absolute bottom-4 right-4 z-10 w-14 h-14 rounded-full bg-[#ff5c39] text-white shadow-lg flex items-center justify-center active:opacity-80 disabled:opacity-60"
-          >
-            {gpsCapturing ? <Loader2 size={22} className="animate-spin" /> : <LocateFixed size={22} />}
-          </button>
-        )}
 
         {gpsCoords && (
           <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setGpsCoords(null)}>
