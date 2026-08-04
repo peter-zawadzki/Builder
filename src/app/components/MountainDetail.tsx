@@ -8,7 +8,6 @@ import { useMyContact } from '../hooks/useMyContact';
 import { ContactDetail, ContactForm, ContactAssociationPills, STAGE_COLORS } from './crm/CRM';
 import { ProjectsPane } from './projects/ProjectsPane';
 import { ProposalsPane } from './projects/ProposalsPane';
-import { SiteAssessmentsPane } from './SiteAssessmentsPane';
 import { AssignInventoryModal } from './CheckInOutModal';
 import {
   ArrowLeft, Plus, Info, MapPin, Building2, ClipboardList, Map,
@@ -538,9 +537,6 @@ export function MountainDetail() {
 
         {/* Proposals — one per project */}
         <ProposalsPane mountainId={mountainId!} />
-
-        {/* Site Assessments — mountain-scoped, no standalone top-level nav */}
-        <SiteAssessmentsPane mountainId={mountainId!} />
 
         {/* Top Row: Trails + Notes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

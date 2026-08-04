@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import mapboxgl from 'mapbox-gl';
 import {
   ArrowLeft, Loader2, LocateFixed, Search, MousePointer2,
-  ChevronDown, ChevronUp, Trash2, X,
+  Trash2, X,
   Mountain, Ruler, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ import { LocationPropertiesPanel } from './LocationPropertiesPanel';
 import { LocationDetail } from './LocationDetail';
 import { geocodeWithMapbox } from '../utils/mapboxGeocode';
 import { bearingBetween, distanceBetween, destinationPoint, buildCoverageCone, compassLabel, METERS_PER_FOOT } from '../utils/geo';
+import { isGeolocationBlockedByInsecureContext, INSECURE_CONTEXT_LOCATION_MESSAGE } from '../utils/geolocation';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
 
@@ -186,13 +187,20 @@ export function SiteAssessmentWorkspace() {
 
   const [activeTool, setActiveTool] = useState<'select' | 'measure' | DeviceType>('select');
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  // Mobile "add at my current location" — capture GPS first, then show a
+  // device-type picker; picking one places the device at those coordinates
+  // directly, skipping the usual tap-the-map step. Button itself is
+  // rendered unconditionally with `sm:hidden` (see JSX below) rather than
+  // gated by a JS mobile check, so it hides at the exact same breakpoint as
+  // the rest of the mobile layout with no dead zone.
+  const [gpsCapturing, setGpsCapturing] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   // Only true right after placing/aiming a device — opens its panel straight
   // into edit mode so you can configure it immediately. Re-selecting an
   // existing device later opens the read-only summary instead.
   const [openInEditMode, setOpenInEditMode] = useState(false);
   const [detailsLocationId, setDetailsLocationId] = useState<string | null>(null);
   const [cameraAimingId, setCameraAimingId] = useState<string | null>(null);
-  const [listOpen, setListOpen] = useState(false);
   const [terrainOn, setTerrainOn] = useState(false);
   const [pitchVal, setPitchVal] = useState(0);
   const [bearingVal, setBearingVal] = useState(0);
@@ -478,6 +486,34 @@ export function SiteAssessmentWorkspace() {
     // while just trying to select the one just placed.
     if (type === 'camera') setCameraAimingId(newId);
     else setActiveTool('select');
+  }
+
+  // Mobile "add at my current location" — same capture pattern as
+  // CreateLocation.tsx's GPS button, then hands off to the device-type
+  // action sheet (below) once a position is captured.
+  function captureGpsLocation() {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation not supported on this device');
+      return;
+    }
+    if (isGeolocationBlockedByInsecureContext()) {
+      toast.error(INSECURE_CONTEXT_LOCATION_MESSAGE, { duration: 6000 });
+      return;
+    }
+    setGpsCapturing(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setGpsCapturing(false);
+        setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        toast.success('Location captured');
+      },
+      err => {
+        setGpsCapturing(false);
+        console.error('[SiteAssessmentWorkspace] GPS capture error:', err);
+        toast.error('Could not get your location');
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
   }
 
   // Camera placement is two clicks: the first drops the camera (default
@@ -913,12 +949,14 @@ export function SiteAssessmentWorkspace() {
           style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
         />
 
-        {/* Left toolbar */}
-        <div className="absolute top-4 left-4 z-10 bg-white rounded-[12px] shadow-lg p-1.5 flex flex-col gap-1">
+        {/* Left toolbar — a horizontal, scrollable row on mobile (the
+            vertical column overflowed short screens with no way to scroll
+            to the last few tools), a vertical column on sm:+ as before. */}
+        <div className="absolute top-4 left-4 right-4 sm:right-auto z-10 bg-white rounded-[12px] shadow-lg p-1.5 flex flex-row sm:flex-col gap-1 overflow-x-auto sm:overflow-x-visible max-w-full">
           <button
             onClick={() => setActiveTool('select')}
             title="Select"
-            className={`w-11 h-11 rounded-[8px] flex items-center justify-center ${activeTool === 'select' ? 'bg-[#1D2930] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
+            className={`w-11 h-11 shrink-0 rounded-[8px] flex items-center justify-center ${activeTool === 'select' ? 'bg-[#1D2930] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
           >
             <MousePointer2 size={18} />
           </button>
@@ -929,24 +967,24 @@ export function SiteAssessmentWorkspace() {
                 key={type}
                 onClick={() => setActiveTool(activeTool === type ? 'select' : type)}
                 title={`Add ${label}`}
-                className={`w-11 h-11 rounded-[8px] flex items-center justify-center ${activeTool === type ? 'bg-[#ff5c39] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
+                className={`w-11 h-11 shrink-0 rounded-[8px] flex items-center justify-center ${activeTool === type ? 'bg-[#ff5c39] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
               >
                 <Icon size={18} />
               </button>
             );
           })}
-          <div className="h-px bg-[rgba(0,0,0,0.08)] mx-1 my-0.5" />
+          <div className="w-px h-8 sm:w-full sm:h-px shrink-0 bg-[rgba(0,0,0,0.08)] mx-0.5 my-auto sm:mx-1 sm:my-0.5" />
           <button
             onClick={() => { setActiveTool(activeTool === 'measure' ? 'select' : 'measure'); setMeasureDraft([]); }}
             title="Measure distance (terrain-aware)"
-            className={`w-11 h-11 rounded-[8px] flex items-center justify-center ${activeTool === 'measure' ? 'bg-[#a855f7] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
+            className={`w-11 h-11 shrink-0 rounded-[8px] flex items-center justify-center ${activeTool === 'measure' ? 'bg-[#a855f7] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
           >
             <Ruler size={18} />
           </button>
         </div>
 
         {activeTool !== 'select' && (
-          <div className="absolute top-4 left-20 z-10 bg-white rounded-full shadow-lg pl-3 pr-2 py-2 flex items-center gap-3">
+          <div className="absolute top-20 left-4 sm:top-4 sm:left-20 z-10 bg-white rounded-full shadow-lg pl-3 pr-2 py-2 flex items-center gap-3 max-w-[calc(100%-2rem)]">
             <span className="text-[12px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
               {activeTool === 'camera' && cameraAimingId
                 ? 'Click to aim the camera'
@@ -995,10 +1033,9 @@ export function SiteAssessmentWorkspace() {
         )}
 
         <div
-          className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2"
-          style={{ marginRight: selectedLocation ? 296 : 0 }}
+          className={`absolute top-4 right-4 z-10 flex flex-col items-end gap-2 max-w-[calc(100vw-2rem)] ${selectedLocation ? 'sm:mr-[296px]' : ''}`}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center flex-wrap justify-end gap-2">
             <div className="flex items-center bg-white rounded-full shadow-lg p-1 gap-0.5">
               {(Object.keys(STYLE_OPTIONS) as Array<keyof typeof STYLE_OPTIONS>).map(key => (
                 <button
@@ -1018,13 +1055,13 @@ export function SiteAssessmentWorkspace() {
                 terrainOn ? 'bg-[#0a0a0a] text-white' : 'bg-white text-[#0a0a0a]'
               }`}
             >
-              <Mountain size={14} /> 3D Terrain
+              <Mountain size={14} /> <span className="hidden sm:inline">3D Terrain</span>
             </button>
             <button
               onClick={resetToResort}
               className="flex items-center gap-1.5 bg-white px-3 py-2 rounded-full shadow-lg text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] active:opacity-70"
             >
-              <LocateFixed size={14} /> Reset to Resort
+              <LocateFixed size={14} /> <span className="hidden sm:inline">Reset to Resort</span>
             </button>
           </div>
 
@@ -1071,6 +1108,48 @@ export function SiteAssessmentWorkspace() {
             onClose={() => setSelectedLocationId(null)}
             onViewFullDetails={() => setDetailsLocationId(selectedLocation.id)}
           />
+        )}
+
+        {/* Mobile-only "add at my current location" — rendered unconditionally
+            with sm:hidden so it hides/shows at the exact same breakpoint as
+            the rest of the mobile layout (no separate JS mobile check). */}
+        {!selectedLocation && (
+          <button
+            onClick={captureGpsLocation}
+            disabled={gpsCapturing}
+            title="Add device at my current location"
+            className="sm:hidden absolute bottom-4 right-4 z-10 w-14 h-14 rounded-full bg-[#ff5c39] text-white shadow-lg flex items-center justify-center active:opacity-80 disabled:opacity-60"
+          >
+            {gpsCapturing ? <Loader2 size={22} className="animate-spin" /> : <LocateFixed size={22} />}
+          </button>
+        )}
+
+        {gpsCoords && (
+          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setGpsCoords(null)}>
+            <div className="bg-white w-full rounded-t-[20px] p-4 pb-6 space-y-1" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-1 pb-2">
+                <span className="text-[15px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Add at this location</span>
+                <button onClick={() => setGpsCoords(null)} className="p-1.5 rounded-full bg-[#f3f3f5]">
+                  <X size={16} className="text-[#6a7282]" />
+                </button>
+              </div>
+              {DEVICE_TYPES.map(type => {
+                const { Icon, label, color } = DEVICE_TYPE_CONFIG[type];
+                return (
+                  <button
+                    key={type}
+                    onClick={() => { placeDevice(type, gpsCoords.lat, gpsCoords.lng); setGpsCoords(null); }}
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-[10px] active:bg-[#f9fafb]"
+                  >
+                    <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}1a` }}>
+                      <Icon size={18} style={{ color }} />
+                    </span>
+                    <span className="text-[14px] font-['Inter:Regular',sans-serif] text-[#0a0a0a]">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* Full LocationDetail (photos/videos/annotations) in a modal — this
@@ -1134,45 +1213,6 @@ export function SiteAssessmentWorkspace() {
           />
         )}
 
-        {/* Device list (bottom drawer) */}
-        <div
-          className={`absolute bottom-0 left-0 right-0 z-10 bg-white rounded-t-[16px] shadow-[0_-4px_24px_rgba(0,0,0,0.15)] transition-transform duration-200 ${
-            listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-44px)]'
-          }`}
-        >
-          <button onClick={() => setListOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-2.5">
-            <span className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
-              Devices ({devices.length})
-            </span>
-            {listOpen ? <ChevronDown size={16} className="text-[#6a7282]" /> : <ChevronUp size={16} className="text-[#6a7282]" />}
-          </button>
-          {listOpen && (
-            <div className="max-h-52 overflow-y-auto px-2 pb-2">
-              {devices.length === 0 ? (
-                <p className="text-center py-4 text-[#8992a0] font-['Inter:Regular',sans-serif] text-[13px]">No devices placed yet.</p>
-              ) : devices.map(loc => {
-                const config = DEVICE_TYPE_CONFIG[loc.deviceType as DeviceType] || DEVICE_TYPE_CONFIG.misc;
-                return (
-                  <button
-                    key={loc.id}
-                    onClick={() => {
-                      setOpenInEditMode(false);
-                      setSelectedLocationId(loc.id);
-                      if (loc.coordinates) {
-                        mapRef.current?.flyTo({ center: [loc.coordinates.longitude, loc.coordinates.latitude] });
-                      }
-                    }}
-                    className={`w-full flex items-center gap-2 px-2 py-2 rounded-[8px] text-left ${selectedLocationId === loc.id ? 'bg-[#fff5f3]' : 'hover:bg-[#f9fafb]'}`}
-                  >
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: config.color }} />
-                    <span className="flex-1 text-[13px] text-[#0a0a0a] font-['Inter:Regular',sans-serif] truncate">{loc.name}</span>
-                    <span className="text-[11px] text-[#8992a0]">{config.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

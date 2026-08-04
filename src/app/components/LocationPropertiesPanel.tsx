@@ -559,7 +559,11 @@ export function LocationPropertiesPanel({
     : (config?.label || location.locationType || 'Location');
 
   return (
-    <div className="absolute top-4 right-4 bottom-20 w-72 bg-white rounded-[12px] shadow-lg z-10 flex flex-col overflow-hidden">
+    // Bottom sheet on mobile (fixed to the viewport, full width, capped
+    // height so the map stays partly visible above it) — a fixed w-72
+    // sidebar is unusable on a phone. Reverts to the original sidebar at
+    // sm:+.
+    <div className="fixed inset-x-0 bottom-0 sm:absolute sm:inset-x-auto sm:left-auto sm:top-4 sm:right-4 sm:bottom-4 z-20 sm:z-10 w-full sm:w-72 max-h-[70vh] sm:max-h-none bg-white rounded-t-[16px] sm:rounded-[12px] shadow-[0_-4px_24px_rgba(0,0,0,0.18)] sm:shadow-lg flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(0,0,0,0.08)] shrink-0">
         <div className="flex items-center gap-2">
           {config && <span className="w-3 h-3 rounded-full shrink-0" style={{ background: config.color }} />}

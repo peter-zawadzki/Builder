@@ -40,7 +40,7 @@ export function TrailDetailModal({
   const [editNotes, setEditNotes] = useState(trail?.notes || '');
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   const [mediaCounts, setMediaCounts] = useState<Record<string, { photos: number; videos: number }>>({});
-  const { start: startAddLocation, picking, choose, cancelPicking } = useAddLocationToMap(mountainId, mountain?.name || '');
+  const { start: startAddLocation, picking, choose, cancelPicking, hasAssessment, assessmentsLoading } = useAddLocationToMap(mountainId, mountain?.name || '');
 
   useEffect(() => {
     let alive = true;
@@ -162,11 +162,21 @@ export function TrailDetailModal({
 
                 <button
                   onClick={() => startAddLocation(trailId)}
-                  className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:opacity-80"
+                  className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-2 active:opacity-80"
                 >
                   <Plus size={18} />
                   Add Location
                 </button>
+
+                {!assessmentsLoading && (
+                  <button
+                    onClick={() => startAddLocation(trailId)}
+                    className="w-full bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:bg-[#e8e8ea]"
+                  >
+                    <ClipboardList size={16} />
+                    {hasAssessment ? 'View Assessment' : 'Add Assessment'}
+                  </button>
+                )}
 
                 {picking && (
                   <ChooseSiteAssessmentModal assessments={picking} onChoose={choose} onClose={cancelPicking} />
