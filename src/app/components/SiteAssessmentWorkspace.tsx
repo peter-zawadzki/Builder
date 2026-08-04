@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import mapboxgl from 'mapbox-gl';
 import {
   ArrowLeft, Loader2, LocateFixed, Search, MousePointer2,
-  Trash2, X,
+  Trash2, X, Layers,
   Mountain, Ruler, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ import { LocationDetail } from './LocationDetail';
 import { geocodeWithMapbox } from '../utils/mapboxGeocode';
 import { bearingBetween, distanceBetween, destinationPoint, buildCoverageCone, compassLabel, METERS_PER_FOOT } from '../utils/geo';
 import { isGeolocationBlockedByInsecureContext, INSECURE_CONTEXT_LOCATION_MESSAGE } from '../utils/geolocation';
+import { useLockViewportZoom } from '../hooks/useLockViewportZoom';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
 
@@ -165,6 +166,7 @@ function EditAssessmentModal({
 }
 
 export function SiteAssessmentWorkspace() {
+  useLockViewportZoom();
   const { mountainId: mountainIdParam, id } = useParams<{ mountainId: string; id: string }>();
   const navigate = useNavigate();
   // Arriving here from a Trail's "Add Location" button — pre-fills the
@@ -195,6 +197,13 @@ export function SiteAssessmentWorkspace() {
   // the rest of the mobile layout with no dead zone.
   const [gpsCapturing, setGpsCapturing] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // Mobile: the tools column and the style switcher used to sit right next
+  // to each other at the same top-4 band and both spanned significant
+  // width, overlapping each other. On mobile each collapses to a single
+  // icon button that opens a sheet instead; sm:+ keeps the original
+  // always-expanded rows, unchanged.
+  const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
+  const [styleSheetOpen, setStyleSheetOpen] = useState(false);
   // Only true right after placing/aiming a device — opens its panel straight
   // into edit mode so you can configure it immediately. Re-selecting an
   // existing device later opens the read-only summary instead.
@@ -949,10 +958,12 @@ export function SiteAssessmentWorkspace() {
           style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
         />
 
-        {/* Left toolbar — a horizontal, scrollable row on mobile (the
-            vertical column overflowed short screens with no way to scroll
-            to the last few tools), a vertical column on sm:+ as before. */}
-        <div className="absolute top-4 left-4 right-4 sm:right-auto z-10 bg-white rounded-[12px] shadow-lg p-1.5 flex flex-row sm:flex-col gap-1 overflow-x-auto sm:overflow-x-visible max-w-full">
+        {/* Left toolbar — sm:+: the original always-expanded vertical
+            column. Mobile: collapses to a single icon button (showing the
+            active tool) that opens a bottom sheet instead — the column and
+            the top-right style switcher used to both be wide, always-open
+            rows sharing the same top-4 band and would overlap. */}
+        <div className="hidden sm:flex absolute top-4 left-4 z-10 bg-white rounded-[12px] shadow-lg p-1.5 flex-col gap-1">
           <button
             onClick={() => setActiveTool('select')}
             title="Select"
@@ -973,7 +984,7 @@ export function SiteAssessmentWorkspace() {
               </button>
             );
           })}
-          <div className="w-px h-8 sm:w-full sm:h-px shrink-0 bg-[rgba(0,0,0,0.08)] mx-0.5 my-auto sm:mx-1 sm:my-0.5" />
+          <div className="w-full h-px shrink-0 bg-[rgba(0,0,0,0.08)] mx-1 my-0.5" />
           <button
             onClick={() => { setActiveTool(activeTool === 'measure' ? 'select' : 'measure'); setMeasureDraft([]); }}
             title="Measure distance (terrain-aware)"
@@ -982,6 +993,61 @@ export function SiteAssessmentWorkspace() {
             <Ruler size={18} />
           </button>
         </div>
+
+        {/* Mobile-only single-icon trigger, opens the tools sheet below. */}
+        <button
+          onClick={() => setToolsSheetOpen(true)}
+          title="Tools"
+          className={`sm:hidden absolute top-4 left-4 z-10 w-12 h-12 rounded-[12px] shadow-lg flex items-center justify-center ${
+            activeTool === 'select' ? 'bg-white text-[#0a0a0a]' : activeTool === 'measure' ? 'bg-[#a855f7] text-white' : 'bg-[#ff5c39] text-white'
+          }`}
+        >
+          {activeTool === 'select' ? <MousePointer2 size={20} />
+            : activeTool === 'measure' ? <Ruler size={20} />
+            : (() => { const { Icon } = DEVICE_TYPE_CONFIG[activeTool as DeviceType]; return <Icon size={20} />; })()}
+        </button>
+
+        {toolsSheetOpen && (
+          <div className="sm:hidden fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setToolsSheetOpen(false)}>
+            <div className="bg-white w-full rounded-t-[20px] p-4 pb-6 space-y-1 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-1 pb-2">
+                <span className="text-[15px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Tools</span>
+                <button onClick={() => setToolsSheetOpen(false)} className="p-1.5 rounded-full bg-[#f3f3f5]">
+                  <X size={16} className="text-[#6a7282]" />
+                </button>
+              </div>
+              <button
+                onClick={() => { setActiveTool('select'); setToolsSheetOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-[10px] text-left ${activeTool === 'select' ? 'bg-[#f3f3f5]' : 'active:bg-[#f9fafb]'}`}
+              >
+                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[#1D2930]/10 text-[#1D2930]"><MousePointer2 size={18} /></span>
+                <span className="text-[14px] font-['Inter:Regular',sans-serif] text-[#0a0a0a]">Select</span>
+              </button>
+              {DEVICE_TYPES.map(type => {
+                const { Icon, label, color } = DEVICE_TYPE_CONFIG[type];
+                return (
+                  <button
+                    key={type}
+                    onClick={() => { setActiveTool(activeTool === type ? 'select' : type); setToolsSheetOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-[10px] text-left ${activeTool === type ? 'bg-[#f3f3f5]' : 'active:bg-[#f9fafb]'}`}
+                  >
+                    <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}1a` }}>
+                      <Icon size={18} style={{ color }} />
+                    </span>
+                    <span className="text-[14px] font-['Inter:Regular',sans-serif] text-[#0a0a0a]">Add {label}</span>
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => { setActiveTool(activeTool === 'measure' ? 'select' : 'measure'); setMeasureDraft([]); setToolsSheetOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-[10px] text-left ${activeTool === 'measure' ? 'bg-[#f3f3f5]' : 'active:bg-[#f9fafb]'}`}
+              >
+                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[#a855f7]/10 text-[#a855f7]"><Ruler size={18} /></span>
+                <span className="text-[14px] font-['Inter:Regular',sans-serif] text-[#0a0a0a]">Measure distance</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {activeTool !== 'select' && (
           <div className="absolute top-20 left-4 sm:top-4 sm:left-20 z-10 bg-white rounded-full shadow-lg pl-3 pr-2 py-2 flex items-center gap-3 max-w-[calc(100%-2rem)]">
@@ -1036,7 +1102,17 @@ export function SiteAssessmentWorkspace() {
           className={`absolute top-4 right-4 z-10 flex flex-col items-end gap-2 max-w-[calc(100vw-2rem)] ${selectedLocation ? 'sm:mr-[296px]' : ''}`}
         >
           <div className="flex items-center flex-wrap justify-end gap-2">
-            <div className="flex items-center bg-white rounded-full shadow-lg p-1 gap-0.5">
+            {/* Mobile: single icon opens the style sheet below — the
+                always-expanded 3-way switcher was wide enough to overlap
+                the tools toolbar on the opposite side. sm:+: unchanged. */}
+            <button
+              onClick={() => setStyleSheetOpen(true)}
+              title="Map view"
+              className="sm:hidden bg-white rounded-full shadow-lg p-2.5 text-[#0a0a0a]"
+            >
+              <Layers size={16} />
+            </button>
+            <div className="hidden sm:flex items-center bg-white rounded-full shadow-lg p-1 gap-0.5">
               {(Object.keys(STYLE_OPTIONS) as Array<keyof typeof STYLE_OPTIONS>).map(key => (
                 <button
                   key={key}
@@ -1096,6 +1172,29 @@ export function SiteAssessmentWorkspace() {
             </div>
           )}
         </div>
+
+        {styleSheetOpen && (
+          <div className="sm:hidden fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setStyleSheetOpen(false)}>
+            <div className="bg-white w-full rounded-t-[20px] p-4 pb-6 space-y-1" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-1 pb-2">
+                <span className="text-[15px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Map view</span>
+                <button onClick={() => setStyleSheetOpen(false)} className="p-1.5 rounded-full bg-[#f3f3f5]">
+                  <X size={16} className="text-[#6a7282]" />
+                </button>
+              </div>
+              {(Object.keys(STYLE_OPTIONS) as Array<keyof typeof STYLE_OPTIONS>).map(key => (
+                <button
+                  key={key}
+                  onClick={() => { changeMapStyle(key); setStyleSheetOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-[10px] text-left ${mapStyle === key ? 'bg-[#f3f3f5]' : 'active:bg-[#f9fafb]'}`}
+                >
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[#1D2930]/10 text-[#1D2930]"><Layers size={18} /></span>
+                  <span className="text-[14px] font-['Inter:Regular',sans-serif] text-[#0a0a0a]">{STYLE_OPTIONS[key].label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {selectedLocation && (
           <LocationPropertiesPanel

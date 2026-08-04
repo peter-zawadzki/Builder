@@ -9,6 +9,7 @@ import type { Location } from '../context/DataContext';
 import { toast } from 'sonner';
 import { geocodeWithMapbox } from '../utils/mapboxGeocode';
 import { buildCoverageCone } from '../utils/geo';
+import { useLockViewportZoom } from '../hooks/useLockViewportZoom';
 import {
   type DeviceType, type CameraProperties, DEVICE_TYPE_CONFIG, DEFAULT_CAMERA_PROPS, START_FINISH_COLORS,
   createDeviceMarkerElement, createCameraMarkerElement,
@@ -155,6 +156,7 @@ interface Props {
 }
 
 export function MountainMapView({ mountainId, onClose, initialFocusLocationId }: Props) {
+  useLockViewportZoom();
   const { getMountainById, getLocationsByMountainId, getAssetsByLocationId, getInspectionsByLocationId, updateMountain, locations: allLocations } = useData();
   const mountain = getMountainById(mountainId);
   const locations = useMemo(
