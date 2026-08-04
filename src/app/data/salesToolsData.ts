@@ -37,6 +37,6 @@ export const SALES_TOOLS: SalesTool[] = [
     type: 'PDF',
     url: `${BASE}/YULLR Subscription Pricing.pdf`,
     thumbnailUrl: `${BASE}/thumbnails/subscription-pricing.png`,
-    sizeKB: 273,
+    sizeKB: 253,
   },
 ];
