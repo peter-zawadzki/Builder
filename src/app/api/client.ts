@@ -145,6 +145,54 @@ export function useApi() {
           method: "POST",
           body: JSON.stringify(data),
         }),
+
+      // FAQ assistant
+      askFaq: (question: string, sessionId: string, history: FaqHistoryTurn[] = []) =>
+        request<FaqAskResult>("/faq-agent/ask", { method: "POST", body: JSON.stringify({ question, sessionId, history }) }),
+      sendFaqFeedback: (data: {
+        question: string;
+        answer: string;
+        rating: "up" | "down";
+        sources: FaqSource[];
+        sessionId: string;
+      }) => request<{ ok: true }>("/faq-agent/feedback", { method: "POST", body: JSON.stringify(data) }),
     };
   }, [getToken]);
+}
+
+export interface FaqSource {
+  type: "faq" | "code";
+  label: string;
+}
+
+export interface FaqHistoryTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+export interface FaqVisualHighlight {
+  xPct: number;
+  yPct: number;
+  wPct: number;
+  hPct: number;
+  label?: string;
+}
+
+export interface FaqVisualStep {
+  imageUrl: string;
+  caption: string;
+  highlights?: FaqVisualHighlight[];
+}
+
+export interface FaqVisual {
+  key: string;
+  label: string;
+  steps: FaqVisualStep[];
+}
+
+export interface FaqAskResult {
+  answer: string;
+  confident: boolean;
+  sources: FaqSource[];
+  visuals: FaqVisual[];
 }

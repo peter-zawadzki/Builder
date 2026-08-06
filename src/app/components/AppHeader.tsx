@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, HelpCircle } from 'lucide-react';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsAdminOrAbove } from '../hooks/useRole';
 import { useData, getMyNotifications } from '../context/DataContext';
 import type { MyNotificationEntry } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
+import { HelpModal } from './HelpModal';
 
 // The one nav header shared across every page and sub-page. The icon for the
 // section you're on is highlighted orange. Projects live inside each mountain,
@@ -26,6 +27,7 @@ export function AppHeader() {
   const me = useMyContact();
   const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = useData();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const notifications = getMyNotifications(me?.id, { mountains, contacts, organizations, teams, projects, locations, inspections, notes });
 
@@ -71,6 +73,9 @@ export function AppHeader() {
               </span>
             )}
           </button>
+          <button onClick={() => setShowHelp(true)} className="p-2 rounded-[8px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title="Help">
+            <HelpCircle size={20} className="text-[#6a7282]" />
+          </button>
           <div className="flex items-center h-9 pl-1">
             <UserButton appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }}>
               <UserButton.MenuItems>
@@ -115,6 +120,8 @@ export function AppHeader() {
           </div>
         </div>
       )}
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

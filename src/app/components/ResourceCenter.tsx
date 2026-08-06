@@ -1,11 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
   PlayCircle, ExternalLink, ChevronLeft, ChevronRight,
+  Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight } from '../api/client';
 import { FAQ_ENTRIES, type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
@@ -63,7 +66,341 @@ function tokenMatches(token: string, haystack: string): boolean {
   return (SYNONYMS[token] || []).some(syn => new RegExp(`\\b${escapeRegExp(syn)}\\b`, 'i').test(haystack));
 }
 
-function FAQSection() {
+interface FaqChatMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  sources?: FaqSource[];
+  visuals?: FaqVisual[];
+  confident?: boolean;
+  feedback?: 'up' | 'down';
+}
+
+// Percentage-based (not pixel) so the same highlight data lines up whether
+// the image is rendered at chat-bubble width or full-screen in the lightbox.
+function HighlightOverlay({ highlights }: { highlights?: FaqVisualHighlight[] }) {
+  if (!highlights || highlights.length === 0) return null;
+  return (
+    <>
+      {highlights.map((h, i) => (
+        <div
+          key={i}
+          className="absolute border-2 border-[#ff5c39] rounded-[4px] pointer-events-none"
+          style={{ left: `${h.xPct}%`, top: `${h.yPct}%`, width: `${h.wPct}%`, height: `${h.hPct}%` }}
+        >
+          {h.label && (
+            <span className="absolute -top-6 left-0 bg-[#ff5c39] text-white text-[10px] px-1.5 py-0.5 rounded-[4px] whitespace-nowrap">
+              {h.label}
+            </span>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function HelpVisualLightbox({ visual, initialStep, onClose }: { visual: FaqVisual; initialStep: number; onClose: () => void }) {
+  const [stepIndex, setStepIndex] = useState(initialStep);
+  const step = visual.steps[stepIndex];
+  const multi = visual.steps.length > 1;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') setStepIndex(i => Math.max(0, i - 1));
+      if (e.key === 'ArrowRight') setStepIndex(i => Math.min(visual.steps.length - 1, i + 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visual.steps.length, onClose]);
+
+  return (
+    <div className="fixed inset-0 bg-black/90 z-[70] flex flex-col items-center justify-center p-4" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-white/10 active:bg-white/20" aria-label="Close">
+        <X size={20} className="text-white" />
+      </button>
+      <div className="relative max-w-5xl max-h-[75vh] w-full" onClick={e => e.stopPropagation()}>
+        <img src={step.imageUrl} alt={visual.label} className="w-full h-auto max-h-[75vh] object-contain rounded-[8px]" />
+        <HighlightOverlay highlights={step.highlights} />
+      </div>
+      <p className="text-white text-[13px] mt-3 max-w-2xl text-center">{step.caption}</p>
+      {multi && (
+        <div className="flex items-center gap-4 mt-3">
+          <button
+            onClick={() => setStepIndex(i => Math.max(0, i - 1))}
+            disabled={stepIndex === 0}
+            className="p-2 rounded-full bg-white/10 disabled:opacity-30 active:bg-white/20"
+            aria-label="Previous step"
+          >
+            <ChevronLeft size={18} className="text-white" />
+          </button>
+          <span className="text-white text-[12px]">Step {stepIndex + 1} of {visual.steps.length}</span>
+          <button
+            onClick={() => setStepIndex(i => Math.min(visual.steps.length - 1, i + 1))}
+            disabled={stepIndex === visual.steps.length - 1}
+            className="p-2 rounded-full bg-white/10 disabled:opacity-30 active:bg-white/20"
+            aria-label="Next step"
+          >
+            <ChevronRight size={18} className="text-white" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HelpVisualCard({ visual }: { visual: FaqVisual }) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const step = visual.steps[stepIndex];
+  const multi = visual.steps.length > 1;
+
+  return (
+    <div className="rounded-[8px] overflow-hidden border border-[rgba(0,0,0,0.08)]">
+      <button type="button" onClick={() => setLightboxOpen(true)} className="relative w-full block" aria-label={`View ${visual.label} full screen`}>
+        <img src={step.imageUrl} alt={visual.label} className="w-full block" loading="lazy" />
+        <HighlightOverlay highlights={step.highlights} />
+      </button>
+      <div className="px-2 py-1.5 bg-white space-y-1">
+        <p className="text-[11px] text-[#6a7282]">{step.caption}</p>
+        {multi && (
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setStepIndex(i => Math.max(0, i - 1))}
+              disabled={stepIndex === 0}
+              className="p-1 rounded disabled:opacity-30 text-[#6a7282]"
+              aria-label="Previous step"
+            >
+              <ChevronLeft size={13} />
+            </button>
+            <span className="text-[10px] text-[#8992a0]">Step {stepIndex + 1} of {visual.steps.length}</span>
+            <button
+              type="button"
+              onClick={() => setStepIndex(i => Math.min(visual.steps.length - 1, i + 1))}
+              disabled={stepIndex === visual.steps.length - 1}
+              className="p-1 rounded disabled:opacity-30 text-[#6a7282]"
+              aria-label="Next step"
+            >
+              <ChevronRight size={13} />
+            </button>
+          </div>
+        )}
+      </div>
+      {lightboxOpen && <HelpVisualLightbox visual={visual} initialStep={stepIndex} onClose={() => setLightboxOpen(false)} />}
+    </div>
+  );
+}
+
+// Answers can take a few seconds (cold questions run a real Claude + code
+// search loop) — a static spinner reads as stuck, so this cycles through
+// on-brand ski chatter instead. Purely cosmetic, no bearing on actual state.
+const LOADING_MESSAGES = [
+  'Setting up the course…',
+  'Riding the lift…',
+  'Waxing the skis…',
+  'Scouting the trail map…',
+  'Checking the snow report…',
+  'Tuning the bindings…',
+  'Carving through the code…',
+  'Warming up at the lodge…',
+  'Dialing in the edge angle…',
+  'Sending it…',
+];
+
+// Renders the assistant's markdown (see faqAgent.ts system prompt — it's
+// asked to answer in clean, minimal markdown) using the app's own type scale
+// and colors rather than react-markdown's defaults, so it reads like part of
+// the product instead of a generic chat widget. #307fe2 is Mountain Blue
+// (brandStyle.ts) — the same accent already used for the FAQ list's category
+// labels, reused here for links.
+function AssistantMarkdown({ text }: { text: string }) {
+  const navigate = useNavigate();
+  return (
+    <ReactMarkdown
+      components={{
+        p: ({ children }) => <p className="text-[13px] leading-relaxed text-[#0a0a0a] mb-2 last:mb-0">{children}</p>,
+        strong: ({ children }) => <strong className="font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a]">{children}</strong>,
+        em: ({ children }) => <em className="italic">{children}</em>,
+        ul: ({ children }) => <ul className="list-disc pl-4 my-1.5 space-y-1 marker:text-[#ff5c39]">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal pl-4 my-1.5 space-y-1 marker:text-[#ff5c39] marker:font-medium">{children}</ol>,
+        li: ({ children }) => <li className="text-[13px] leading-relaxed text-[#0a0a0a]">{children}</li>,
+        a: ({ href, children }) => {
+          const linkCls = "text-[#307fe2] underline decoration-[#307fe2]/40 hover:opacity-80";
+          // Internal routes (e.g. /resources?tab=logos) navigate within the
+          // app instead of popping a whole new browser tab — only links
+          // leaving the app get target="_blank".
+          if (href && href.startsWith('/')) {
+            return (
+              <a href={href} className={linkCls} onClick={e => { e.preventDefault(); navigate(href); }}>
+                {children}
+              </a>
+            );
+          }
+          return (
+            <a href={href} target="_blank" rel="noreferrer" className={linkCls}>
+              {children}
+            </a>
+          );
+        },
+        code: ({ children }) => (
+          <code className="bg-white/70 text-[#0a0a0a] px-1 py-0.5 rounded-[4px] text-[12px] font-mono">{children}</code>
+        ),
+        pre: ({ children }) => (
+          <pre className="bg-white/70 rounded-[8px] p-2 my-1.5 text-[12px] font-mono overflow-x-auto">{children}</pre>
+        ),
+        h1: ({ children }) => <p className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] mt-2 mb-1">{children}</p>,
+        h2: ({ children }) => <p className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] mt-2 mb-1">{children}</p>,
+        h3: ({ children }) => <p className="text-[13px] font-['Inter:Medium',sans-serif] font-medium text-[#0a0a0a] mt-2 mb-1">{children}</p>,
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+}
+
+function useLoadingMessage(active: boolean): string {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!active) { setIndex(0); return; }
+    const id = setInterval(() => setIndex(i => (i + 1) % LOADING_MESSAGES.length), 3400);
+    return () => clearInterval(id);
+  }, [active]);
+  return LOADING_MESSAGES[index];
+}
+
+// Ad-hoc chat for questions that don't map cleanly onto a single curated FAQ
+// row (paraphrased, multi-part, or "how does this app feature work") — the
+// curated list below stays the fast path for canonical questions, this is the
+// fallback for everything else. One assistant, two knowledge sources.
+export function FaqAssistant() {
+  const api = useApi();
+  const [sessionId] = useState(() => Math.random().toString(36).slice(2));
+  const [messages, setMessages] = useState<FaqChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const loadingMessage = useLoadingMessage(loading);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, loading]);
+
+  async function handleAsk() {
+    const question = input.trim();
+    if (!question || loading) return;
+    // Prior turns only — the model resolves follow-ups ("what about...")
+    // against this, and it's why a repeat of the exact same first question
+    // still gets a fresh (uncached) answer once a conversation is underway.
+    const history = messages.map(m => ({ role: m.role, text: m.text }));
+    setInput('');
+    setMessages(m => [...m, { role: 'user', text: question }]);
+    setLoading(true);
+    try {
+      const result = await api.askFaq(question, sessionId, history);
+      setMessages(m => [...m, { role: 'assistant', text: result.answer, sources: result.sources, visuals: result.visuals, confident: result.confident }]);
+    } catch (err) {
+      setMessages(m => [...m, { role: 'assistant', text: "Sorry, I couldn't reach the assistant just now. Please try again." }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleFeedback(index: number, rating: 'up' | 'down') {
+    const msg = messages[index];
+    const question = messages[index - 1]?.text ?? '';
+    setMessages(m => m.map((mm, i) => (i === index ? { ...mm, feedback: rating } : mm)));
+    try {
+      await api.sendFaqFeedback({ question, answer: msg.text, rating, sources: msg.sources ?? [], sessionId });
+    } catch {
+      // Best-effort — feedback isn't critical to the chat working.
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-[rgba(0,0,0,0.06)]">
+        <Sparkles size={15} className="text-[#307fe2]" />
+        <span className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">
+          Ask <span className="font-bold text-[#ff5c39]">ODIN</span>
+        </span>
+        <span className="text-[11px] text-[#6a7282]">how things work or what you need</span>
+      </div>
+
+      {messages.length > 0 && (
+        <div ref={scrollRef} className="max-h-80 overflow-y-auto px-4 py-3 space-y-3">
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+              <div
+                className={`max-w-[85%] rounded-[10px] px-3 py-2 text-[13px] leading-relaxed ${
+                  m.role === 'user' ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#0a0a0a]'
+                }`}
+              >
+                {m.role === 'assistant' ? <AssistantMarkdown text={m.text} /> : <p className="whitespace-pre-wrap">{m.text}</p>}
+                {/* Sources aren't shown in the chat itself — still captured in
+                    m.sources and sent along with feedback for the review loop. */}
+                {m.role === 'assistant' && m.visuals && m.visuals.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {m.visuals.map(v => <HelpVisualCard key={v.key} visual={v} />)}
+                  </div>
+                )}
+                {m.role === 'assistant' && m.confident === false && (
+                  <p className="mt-1.5 text-[11px] text-[#b45309]">Low confidence — consider routing this to a human.</p>
+                )}
+                {m.role === 'assistant' && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      onClick={() => handleFeedback(i, 'up')}
+                      className={`p-1 rounded ${m.feedback === 'up' ? 'text-[#307fe2]' : 'text-[#6a7282] hover:text-[#0a0a0a]'}`}
+                      aria-label="Helpful"
+                    >
+                      <ThumbsUp size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(i, 'down')}
+                      className={`p-1 rounded ${m.feedback === 'down' ? 'text-[#307fe2]' : 'text-[#6a7282] hover:text-[#0a0a0a]'}`}
+                      aria-label="Not helpful"
+                    >
+                      <ThumbsDown size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-[#f3f3f5] rounded-[10px] px-3 py-2 flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin text-[#6a7282] shrink-0" />
+                <span className="text-[13px] text-[#6a7282]">{loadingMessage}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 px-4 py-3 border-t border-[rgba(0,0,0,0.06)]">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAsk()}
+          placeholder="e.g. how much for a 120-person team including cameras?"
+          className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[#0a0a0a] text-[13px] outline-none"
+        />
+        <button
+          onClick={handleAsk}
+          disabled={loading || !input.trim()}
+          className="shrink-0 w-8 h-8 rounded-[8px] bg-[#1D2930] text-white flex items-center justify-center disabled:opacity-40"
+          aria-label="Ask"
+        >
+          <Send size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function FAQSection() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<FAQCategory | 'All'>('All');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -105,6 +442,7 @@ function FAQSection() {
 
   return (
     <div className="space-y-3">
+      <FaqAssistant />
       <div className="relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
         <input
@@ -568,7 +906,9 @@ function DemoHubSection() {
 
 export function ResourceCenterPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<ResourceTab>('faq');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = (searchParams.get('tab') as ResourceTab) || 'faq';
+  const setTab = (t: ResourceTab) => setSearchParams({ tab: t });
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
