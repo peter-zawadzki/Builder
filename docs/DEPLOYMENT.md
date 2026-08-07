@@ -21,10 +21,13 @@ AWS Console.
   `db/README.md`, "Current runtime data model." `peter@yullr.com` is
   auto-provisioned as `super_admin` on first login (see `server/auth.ts` —
   email match is hardcoded there, no manual seeding was done or is needed).
-- **Last deployed:** 2026-08-03, via the manual rsync process below (Site
-  Assessment device-panel rework: shared properties panel, real-Location map
-  tools, marker-drift fix, Start/Finish multi-discipline checkboxes, media
-  thumbnails). No new migration in that deploy.
+- **Last deployed:** 2026-08-07 — ODIN auto-generated video tutorials
+  (`server/odin/video/*`), migration `0020_odin_video.sql` applied. This
+  deploy needed one-time setup beyond the usual rsync/build/restart — see
+  "One-time setup for the video-tutorial feature" below — since it's the
+  first thing on this box to need a real browser (Playwright/Chromium) and
+  audio/video encoding (ffmpeg). Also added two new env vars:
+  `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID`.
 
 ## AWS resources
 
@@ -211,6 +214,41 @@ ssh -i ~/.ssh/builder-prod.pem ec2-user@52.86.78.62 '
 (`migrate.sh` reads `DATABASE_URL` from the shell environment, not from
 `.env.local` directly — it has its own fallback to a local dev default,
 so it needs to be passed in explicitly like this.)
+
+## One-time setup for the video-tutorial feature (already done, documented for reference)
+
+The ODIN video pipeline (`server/odin/video/*`) needs a real Chromium browser
+and ffmpeg on the server — nothing before it did. This box is Amazon Linux
+2023, which Playwright doesn't officially support: `npx playwright install
+--with-deps` fails outright (`apt-get: command not found` — it assumes
+Ubuntu/Debian). Done instead:
+
+```bash
+# Chromium's shared-library dependencies, translated from Playwright's
+# Debian package list to their AL2023/RHEL equivalents:
+sudo dnf install -y atk at-spi2-atk cups-libs libxcb libxkbcommon alsa-lib \
+  mesa-libgbm libX11 libXext cairo pango libXcomposite libXdamage libXfixes \
+  libXrandr at-spi2-core
+
+# Then just the browser binary itself (no --with-deps, since that's what fails):
+cd /home/ec2-user/builder && npx playwright install chromium
+```
+Verify with a quick `chromium.launch()` smoke test if anything changes here —
+"BEWARE: your OS is not officially supported" in the output is expected and
+harmless (it falls back to an Ubuntu-built binary that runs fine once the
+libraries above are present).
+
+**ffmpeg version gotcha:** `@ffmpeg-installer/linux-arm64` bundles a much
+older static ffmpeg build than what's on a typical dev machine — old enough
+that `adelay`'s `all=1` shorthand and `amix`'s `normalize` option don't
+exist (`ffmpeg -h filter=adelay` / `-h filter=amix` on the box confirms
+exactly which options a given build actually has). `server/odin/video/
+assemble.ts`'s filter graph is written to avoid both — explicit per-channel
+delays instead of `all=1`, and a manual `volume` boost instead of
+`normalize=0` to counter amix's unconditional divide-by-input-count. If that
+file's filter graph changes again, re-verify against this box's actual
+ffmpeg (`node_modules/@ffmpeg-installer/linux-arm64/ffmpeg -h filter=...`),
+not just local dev's.
 
 ## Known gaps / deliberately deferred
 
