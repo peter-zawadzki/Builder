@@ -168,6 +168,8 @@ export function useApi() {
       reviseMockup: (id: string, feedbackText: string) =>
         request<{ mockupHtml: string; revisionCount: number; capped: boolean }>(`/feedback/${id}/revise-mockup`, { method: "POST", body: JSON.stringify({ feedback: feedbackText }) }),
       approveMockup: (id: string) => request<{ ok: true }>(`/feedback/${id}/approve-mockup`, { method: "POST" }),
+      listFeedbackSubmissions: () => request<{ submissions: FeedbackSubmissionSummary[] }>("/feedback"),
+      completeFeedback: (id: string) => request<{ ok: true }>(`/feedback/${id}/complete`, { method: "POST" }),
       listFeedbackNotifications: () => request<{ notifications: FeedbackNotification[] }>("/feedback/notifications"),
       markFeedbackNotificationRead: (id: string) => request<{ ok: true }>(`/feedback/notifications/${id}/read`, { method: "POST" }),
       sendFaqFeedback: (data: {
@@ -330,9 +332,26 @@ export interface FeedbackSubmission {
   bugRevisionCount: number;
   mockupHtml: string | null;
   mockupRevisionCount: number;
+  devBrief: string | null;
   approvedAt: string | null;
   emailedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
+}
+
+export interface FeedbackSubmissionSummary {
+  id: string;
+  type: FeedbackType;
+  platform: FeedbackPlatform;
+  status: "in_review" | "approved" | "submitted" | "resolved";
+  summary: string;
+  submitterName: string | null;
+  submitterEmail: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  hasFix: boolean;
+  hasBrief: boolean;
+  hasMockup: boolean;
 }
 
 export interface FeedbackNotification {

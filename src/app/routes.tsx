@@ -9,6 +9,7 @@ import { CreateMountain } from "./components/CreateMountain";
 import { OdinVideoPage } from "./components/OdinVideoPage";
 import { FeedbackReviewPage } from "./components/FeedbackReviewPage";
 import { KnowledgeBasePage } from "./components/KnowledgeBasePage";
+import { FeedbackDashboardPage } from "./components/FeedbackDashboardPage";
 import { EditMountain } from "./components/EditMountain";
 import { CreateLocation } from "./components/CreateLocation";
 import { EditLocation } from "./components/EditLocation";
@@ -85,6 +86,7 @@ export const router = createBrowserRouter([
           { path: "/agreement-template", Component: AgreementTemplatePage },
           { path: "/contact-tags", Component: ContactTagsPage },
           { path: "/admin/knowledge-base", Component: KnowledgeBasePage },
+          { path: "/admin/feedback", Component: FeedbackDashboardPage },
           { path: "/resources", Component: ResourceCenterPage },
           { path: "/odin-videos/:videoId", Component: OdinVideoPage },
           { path: "/feedback/:id", Component: FeedbackReviewPage },

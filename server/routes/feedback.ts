@@ -2,11 +2,12 @@
 // conversation itself lives in feedbackAgent.ts; this is everything that
 // happens once a conversation is ready to become a real submission.
 import { Hono } from "hono";
-import type { HonoEnv } from "../auth";
+import { requireAdmin, type HonoEnv } from "../auth";
 import { query, queryOne } from "../db";
 import { sendEmail } from "../email";
 import { analyzeBug, checkStaleness, type AffectedFile } from "../feedback/analysis";
 import { generateMockup, reviseMockup as reviseMockupHtml } from "../feedback/mockup";
+import { generateDevBrief } from "../feedback/story";
 import { findSimilarSubmission } from "../feedback/duplicates";
 import { REQUIRED_FIELDS, type CollectedSummary, type HistoryTurn } from "./feedbackAgent";
 
@@ -31,8 +32,10 @@ interface SubmissionRow {
   bug_revision_count: number;
   mockup_html: string | null;
   mockup_revision_count: number;
+  dev_brief: string | null;
   approved_at: string | null;
   emailed_at: string | null;
+  completed_at: string | null;
   created_at: string;
 }
 
@@ -110,9 +113,18 @@ feedback.post("/finalize", async (c) => {
   }
 
   if (summary.type === "feature" && summary.platform === "Builder") {
-    const html = await generateMockup(summary);
-    await query(`UPDATE feedback_submissions SET mockup_html=$2, updated_at=now() WHERE id=$1`, [id, html]);
+    const [html, devBrief] = await Promise.all([generateMockup(summary), generateDevBrief(summary)]);
+    await query(`UPDATE feedback_submissions SET mockup_html=$2, dev_brief=$3, updated_at=now() WHERE id=$1`, [id, html, devBrief]);
     return c.json({ id, status: "in_review", mockupHtml: html });
+  }
+
+  // Bug/non-Builder and feature/non-Builder both get a Claude-Code-ready
+  // user story (no code access to YULLR.com/Portal, so it's a plain story
+  // rather than a fix recommendation) — general feedback isn't actionable
+  // dev work, so it skips this and just gets logged + emailed.
+  if (summary.type !== "general") {
+    const devBrief = await generateDevBrief(summary);
+    await query(`UPDATE feedback_submissions SET dev_brief=$2, updated_at=now() WHERE id=$1`, [id, devBrief]);
   }
 
   // Bug/non-Builder, feature/non-Builder, and general (any platform): email immediately.
@@ -147,8 +159,52 @@ async function sendSubmissionEmail(opts: {
   });
 }
 
+// Admin dashboard — every submission across all platforms/types, so admins
+// can track feature/bug/feedback requests to completion in one place.
 // Static paths before "/:id" — a dynamic segment would otherwise swallow
 // "/notifications" (learned the hard way in odinVideo.ts).
+feedback.get("/", requireAdmin, async (c) => {
+  const rows = await query<{
+    id: string;
+    type: string;
+    platform: string;
+    status: string;
+    summary: string;
+    submitter_name: string | null;
+    submitter_email: string | null;
+    created_at: string;
+    completed_at: string | null;
+    bug_analysis: string | null;
+    dev_brief: string | null;
+    mockup_html: string | null;
+  }>(
+    `SELECT id, type, platform, status, summary, submitter_name, submitter_email, created_at, completed_at, bug_analysis, dev_brief, mockup_html
+     FROM feedback_submissions ORDER BY created_at DESC LIMIT 300`
+  );
+  return c.json({
+    submissions: rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      platform: r.platform,
+      status: r.status,
+      summary: r.summary,
+      submitterName: r.submitter_name,
+      submitterEmail: r.submitter_email,
+      createdAt: r.created_at,
+      completedAt: r.completed_at,
+      hasFix: !!r.bug_analysis,
+      hasBrief: !!r.dev_brief,
+      hasMockup: !!r.mockup_html,
+    })),
+  });
+});
+
+feedback.post("/:id/complete", requireAdmin, async (c) => {
+  const id = c.req.param("id");
+  await query(`UPDATE feedback_submissions SET status='resolved', completed_at=now(), updated_at=now() WHERE id=$1`, [id]);
+  return c.json({ ok: true });
+});
+
 feedback.get("/notifications", async (c) => {
   const user = c.get("user");
   const rows = await query<{ id: string; kind: string; submission_id: string; text: string; created_at: string }>(
@@ -168,17 +224,13 @@ feedback.post("/notifications/:id/read", async (c) => {
   return c.json({ ok: true });
 });
 
-feedback.post("/:id/approve-bug", async (c) => {
-  const user = c.get("user");
-  if (user.email?.toLowerCase() !== PETER_EMAIL) return c.json({ error: "Not authorized" }, 403);
+feedback.post("/:id/approve-bug", requireAdmin, async (c) => {
   const id = c.req.param("id");
   await query(`UPDATE feedback_submissions SET status='approved', approved_at=now(), updated_at=now() WHERE id=$1`, [id]);
   return c.json({ ok: true });
 });
 
-feedback.post("/:id/request-bug-changes", async (c) => {
-  const user = c.get("user");
-  if (user.email?.toLowerCase() !== PETER_EMAIL) return c.json({ error: "Not authorized" }, 403);
+feedback.post("/:id/request-bug-changes", requireAdmin, async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json<{ feedback: string }>();
   const row = await queryOne<SubmissionRow>(`SELECT * FROM feedback_submissions WHERE id=$1`, [id]);
@@ -255,8 +307,10 @@ feedback.get("/:id", async (c) => {
     bugRevisionCount: row.bug_revision_count,
     mockupHtml: row.mockup_html,
     mockupRevisionCount: row.mockup_revision_count,
+    devBrief: row.dev_brief,
     approvedAt: row.approved_at,
     emailedAt: row.emailed_at,
+    completedAt: row.completed_at,
     createdAt: row.created_at,
   });
 });
