@@ -149,6 +149,12 @@ export function useApi() {
       // FAQ assistant
       askFaq: (question: string, sessionId: string, history: FaqHistoryTurn[] = []) =>
         request<FaqAskResult>("/faq-agent/ask", { method: "POST", body: JSON.stringify({ question, sessionId, history }) }),
+      listOdinVideos: () => request<{ videos: OdinVideoListItem[] }>("/odin-video"),
+      requestOdinVideo: (flowKey: string, detailLevel: number) =>
+        request<{ id: string; status: string }>("/odin-video/request", { method: "POST", body: JSON.stringify({ flowKey, detailLevel }) }),
+      getOdinVideo: (id: string) => request<OdinVideoResult>(`/odin-video/${id}`),
+      listOdinNotifications: () => request<{ notifications: OdinNotification[] }>("/odin-video/notifications"),
+      markOdinNotificationRead: (id: string) => request<{ ok: true }>(`/odin-video/notifications/${id}/read`, { method: "POST" }),
       sendFaqFeedback: (data: {
         question: string;
         answer: string;
@@ -193,6 +199,35 @@ export interface FaqVisual {
 export interface FaqAskResult {
   answer: string;
   confident: boolean;
+  needsUserInput: boolean;
   sources: FaqSource[];
   visuals: FaqVisual[];
+  videoOffer: { flowKey: string; label: string } | null;
+}
+
+export interface OdinVideoResult {
+  id: string;
+  flowKey: string;
+  detailLevel: number;
+  status: "generating" | "ready" | "failed";
+  videoUrl: string | null;
+  durationMs: number | null;
+  error: string | null;
+}
+
+export interface OdinNotification {
+  id: string;
+  kind: "video_ready" | "video_failed";
+  videoId: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface OdinVideoListItem {
+  id: string;
+  flowKey: string;
+  label: string;
+  detailLevel: number;
+  durationMs: number | null;
+  createdAt: string;
 }

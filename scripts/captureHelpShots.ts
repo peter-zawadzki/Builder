@@ -10,30 +10,17 @@
 // Project" / etc. UI in one browser session, which both creates a realistic
 // fixture AND captures the exact form a user would see.
 import "../server/env";
-import { createClerkClient } from "@clerk/backend";
 import { chromium } from "playwright";
 import { pool } from "../server/db";
+import { createAuthenticatedPage } from "../server/playwright/authSession";
 
 const APP_BASE_URL = process.env.APP_BASE_URL ?? "http://localhost:5173";
 const OUT_DIR = "public/resource-assets/help-visuals";
 const MOUNTAIN_NAME = "Sample Mountain (Help Screenshots)";
 
 async function main() {
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) throw new Error("Missing CLERK_SECRET_KEY");
-  const clerk = createClerkClient({ secretKey });
-
-  const { rows } = await pool.query<{ clerk_user_id: string }>(
-    `SELECT clerk_user_id FROM users WHERE email = 'peter@yullr.com' LIMIT 1`
-  );
-  if (!rows[0]) throw new Error("peter@yullr.com not found in users table");
-  const { token } = await clerk.signInTokens.createSignInToken({
-    userId: rows[0].clerk_user_id,
-    expiresInSeconds: 120,
-  });
-
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } } as any);
+  const { page } = await createAuthenticatedPage(browser);
   const results: Record<string, "ok" | string> = {};
 
   const shot = async (key: string, fn: () => Promise<void>) => {
@@ -48,16 +35,6 @@ async function main() {
   };
 
   try {
-    await page.goto(`${APP_BASE_URL}/sign-in?__clerk_ticket=${token}`, { waitUntil: "networkidle" });
-    try {
-      await page.getByTitle("Mountains").waitFor({ timeout: 15000 });
-    } catch (err) {
-      console.error("Login check failed. Current URL:", page.url());
-      await page.screenshot({ path: "/tmp/debug-after-login.png" });
-      console.error(await page.content());
-      throw err;
-    }
-
     let mountainDetailUrl = "";
 
     // Idempotent: only create the fixture mountain once. Reruns (e.g. after a

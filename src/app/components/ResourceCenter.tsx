@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
-import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight } from '../api/client';
+import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type OdinVideoListItem } from '../api/client';
+import { OdinVideoOffer } from './OdinVideoOffer';
 import { FAQ_ENTRIES, type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
@@ -19,7 +20,7 @@ type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo'
 
 const TABS: { id: ResourceTab; label: string; icon: React.ReactNode }[] = [
   { id: 'faq',       label: 'FAQ',               icon: <HelpCircle size={14} /> },
-  { id: 'training',  label: 'Training Documents', icon: <GraduationCap size={14} /> },
+  { id: 'training',  label: 'Training Materials', icon: <GraduationCap size={14} /> },
   { id: 'sales',     label: 'Sales Tools',        icon: <Briefcase size={14} /> },
   { id: 'marketing', label: 'Marketing Assets',   icon: <ImageIcon size={14} /> },
   { id: 'logos',     label: 'Brand Assets',       icon: <Palette size={14} /> },
@@ -72,8 +73,22 @@ interface FaqChatMessage {
   sources?: FaqSource[];
   visuals?: FaqVisual[];
   confident?: boolean;
+  needsUserInput?: boolean;
+  lowConfidenceNote?: string;
+  videoOffer?: { flowKey: string; label: string } | null;
   feedback?: 'up' | 'down';
 }
+
+// Rotated (one picked per message, not re-randomized on re-render) instead of
+// always showing the identical line for a genuine "don't know" answer.
+const LOW_CONFIDENCE_VARIANTS = [
+  "Skied a bit off-piste on this one — might be worth flagging down patrol for backup.",
+  "Hit some low visibility on this run — worth double-checking with a human.",
+  "This one might be above my pay grade on the lift — flag it for a second look.",
+  "Caught an edge on this answer — might want ski patrol to check the trail map.",
+  "Not fully groomed terrain here — worth confirming with someone on the mountain.",
+  "This run's got a few moguls I couldn't clear — a human might smooth it out.",
+];
 
 // Percentage-based (not pixel) so the same highlight data lines up whether
 // the image is rendered at chat-bubble width or full-screen in the lightbox.
@@ -258,11 +273,22 @@ function AssistantMarkdown({ text }: { text: string }) {
   );
 }
 
+// Picks a random message, different from whichever one is currently showing,
+// so back-to-back questions don't always open on "Setting up the course…"
+// and repeats within one loading spinner don't happen either.
+function randomMessageIndex(excluding: number): number {
+  if (LOADING_MESSAGES.length <= 1) return 0;
+  let next = Math.floor(Math.random() * LOADING_MESSAGES.length);
+  while (next === excluding) next = Math.floor(Math.random() * LOADING_MESSAGES.length);
+  return next;
+}
+
 function useLoadingMessage(active: boolean): string {
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => randomMessageIndex(-1));
   useEffect(() => {
-    if (!active) { setIndex(0); return; }
-    const id = setInterval(() => setIndex(i => (i + 1) % LOADING_MESSAGES.length), 3400);
+    if (!active) return;
+    setIndex(i => randomMessageIndex(i));
+    const id = setInterval(() => setIndex(i => randomMessageIndex(i)), 3400);
     return () => clearInterval(id);
   }, [active]);
   return LOADING_MESSAGES[index];
@@ -297,7 +323,19 @@ export function FaqAssistant() {
     setLoading(true);
     try {
       const result = await api.askFaq(question, sessionId, history);
-      setMessages(m => [...m, { role: 'assistant', text: result.answer, sources: result.sources, visuals: result.visuals, confident: result.confident }]);
+      const lowConfidenceNote = (!result.confident && !result.needsUserInput)
+        ? LOW_CONFIDENCE_VARIANTS[Math.floor(Math.random() * LOW_CONFIDENCE_VARIANTS.length)]
+        : undefined;
+      setMessages(m => [...m, {
+        role: 'assistant',
+        text: result.answer,
+        sources: result.sources,
+        visuals: result.visuals,
+        confident: result.confident,
+        needsUserInput: result.needsUserInput,
+        lowConfidenceNote,
+        videoOffer: result.videoOffer,
+      }]);
     } catch (err) {
       setMessages(m => [...m, { role: 'assistant', text: "Sorry, I couldn't reach the assistant just now. Please try again." }]);
     } finally {
@@ -343,8 +381,11 @@ export function FaqAssistant() {
                     {m.visuals.map(v => <HelpVisualCard key={v.key} visual={v} />)}
                   </div>
                 )}
-                {m.role === 'assistant' && m.confident === false && (
-                  <p className="mt-1.5 text-[11px] text-[#b45309]">Low confidence — consider routing this to a human.</p>
+                {m.role === 'assistant' && m.lowConfidenceNote && (
+                  <p className="mt-1.5 text-[11px] text-[#b45309]">{m.lowConfidenceNote}</p>
+                )}
+                {m.role === 'assistant' && m.videoOffer && (
+                  <OdinVideoOffer flowKey={m.videoOffer.flowKey} label={m.videoOffer.label} />
                 )}
                 {m.role === 'assistant' && (
                   <div className="mt-2 flex items-center gap-2">
@@ -520,6 +561,54 @@ function EmptyPlaceholder({ label }: { label: string }) {
 
 function formatFileSize(sizeKB: number): string {
   return sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
+}
+
+// Every video ODIN has generated (server/odin/video/pipeline.ts), browsable
+// in one place instead of only being reachable via a chat offer or a
+// notification click. Cache-hit videos regenerate rarely, so this list is
+// short and stable — a plain fetch-on-mount is enough, no polling.
+function TrainingMaterialsSection() {
+  const api = useApi();
+  const navigate = useNavigate();
+  const [videos, setVideos] = useState<OdinVideoListItem[] | null>(null);
+
+  useEffect(() => {
+    api.listOdinVideos().then(r => setVideos(r.videos)).catch(() => setVideos([]));
+  }, [api]);
+
+  if (videos === null) {
+    return (
+      <div className="flex items-center gap-2 text-[13px] text-[#6a7282] py-10 justify-center">
+        <Loader2 size={14} className="animate-spin" /> Loading…
+      </div>
+    );
+  }
+
+  if (videos.length === 0) {
+    return <EmptyPlaceholder label="Training videos" />;
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {videos.map(v => (
+        <button
+          key={v.id}
+          onClick={() => navigate(`/odin-videos/${v.id}`)}
+          className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col text-left active:opacity-80"
+        >
+          <div className="h-28 bg-[#f9fafb] flex items-center justify-center">
+            <PlayCircle size={32} className="text-[#307fe2]" />
+          </div>
+          <div className="p-3">
+            <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{v.label}</p>
+            <p className="text-[11px] text-[#8992a0]">
+              Level {v.detailLevel}{v.durationMs ? ` · ${Math.round(v.durationMs / 1000)}s` : ''}
+            </p>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function SalesToolsSection() {
@@ -934,7 +1023,7 @@ export function ResourceCenterPage() {
 
       <div className="p-4 pb-16">
         {tab === 'faq' && <FAQSection />}
-        {tab === 'training' && <EmptyPlaceholder label="Training documents" />}
+        {tab === 'training' && <TrainingMaterialsSection />}
         {tab === 'sales' && <SalesToolsSection />}
         {tab === 'marketing' && <EmptyPlaceholder label="Marketing assets" />}
         {tab === 'logos' && <LogoFilesSection />}

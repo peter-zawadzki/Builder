@@ -14,6 +14,7 @@ import { siteAssessments } from "./routes/siteAssessments";
 import { documents } from "./routes/documents";
 import { places } from "./routes/places";
 import { faqAgent } from "./routes/faqAgent";
+import { odinVideo } from "./routes/odinVideo";
 import { proposalPublicSign } from "./routes/proposalPublicSign";
 import { agreementPublicSign } from "./routes/agreementPublicSign";
 
@@ -56,6 +57,7 @@ app.use("/api/site-assessments/*", requireAuth);
 app.use("/api/documents/*", requireAuth);
 app.use("/api/places/*", requireAuth);
 app.use("/api/faq-agent/*", requireAuth);
+app.use("/api/odin-video/*", requireAuth);
 app.use("/api/me", requireAuth);
 
 // Who am I — verifies the auth chain and returns the synced app user.
@@ -69,8 +71,30 @@ app.route("/api/site-assessments", siteAssessments);
 app.route("/api/documents", documents);
 app.route("/api/places", places);
 app.route("/api/faq-agent", faqAgent);
+app.route("/api/odin-video", odinVideo);
 // Legacy shapes for the existing UI running losslessly on the local DB.
 app.route("/api/legacy", legacy);
+
+// A row still "generating" at process boot is necessarily orphaned by a
+// previous instance dying mid-job — no supervisor exists to detect this any
+// other way (see server/odin/video/pipeline.ts's staleness handling for the
+// per-request equivalent, used while the process stays alive).
+async function sweepOrphanedVideoJobs() {
+  const orphaned = await pool.query<{ id: string; requested_by: string | null; flow_key: string }>(
+    `UPDATE odin_videos SET status='failed', error='Interrupted by server restart', updated_at=now()
+     WHERE status='generating' RETURNING id, requested_by, flow_key`
+  );
+  for (const row of orphaned.rows) {
+    if (!row.requested_by) continue;
+    await pool.query(`INSERT INTO odin_notifications (user_id, kind, video_id, text) VALUES ($1, 'video_failed', $2, $3)`, [
+      row.requested_by,
+      row.id,
+      `Your video generation was interrupted — ask ODIN again to retry.`,
+    ]);
+  }
+  if (orphaned.rows.length > 0) console.log(`[odin-video] marked ${orphaned.rows.length} orphaned job(s) as failed`);
+}
+await sweepOrphanedVideoJobs();
 
 const port = Number(process.env.API_PORT ?? 8787);
 serve({ fetch: app.fetch, port });

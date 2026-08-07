@@ -5,8 +5,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { HonoEnv } from "../auth";
 import { pool, query, queryOne } from "../db";
 import { matchHelpVisuals, type HelpVisual } from "../data/helpVisuals";
+import { ODIN_VIDEO_FLOWS } from "../data/odinVideoFlows";
 import { APP_NAVIGATION } from "../data/appNavigation";
 import { BUSINESS_DATA_SCHEMA } from "../data/businessDataSchema";
+import { upsert, insertActivity } from "./legacy";
+import { searchPlaces, getPlaceDetails } from "../utils/googlePlaces";
+import { regionFromAddress, REGIONS, type Region } from "../data/regionMapping";
+import { TONE_GUIDE } from "../data/brandVoice";
 
 export const faqAgent = new Hono<HonoEnv>();
 
@@ -17,6 +22,7 @@ const CACHE_TTL_HOURS = 24;
 interface CachedAnswer {
   answer: string;
   confident: boolean;
+  needsUserInput: boolean;
   sources: { type: string; label: string }[];
   visuals: {
     key: string;
@@ -27,6 +33,7 @@ interface CachedAnswer {
       highlights?: { xPct: number; yPct: number; wPct: number; hPct: number; label?: string }[];
     }[];
   }[];
+  videoOffer: { flowKey: string; label: string } | null;
 }
 
 function normalizeQuestion(question: string): string {
@@ -161,6 +168,133 @@ async function queryDatabase(sql: string): Promise<string> {
   }
 }
 
+async function searchPlacesTool(searchQuery: string): Promise<string> {
+  const result = await searchPlaces(searchQuery);
+  if ("error" in result) return result.error;
+  if (result.length === 0) return `No places found for "${searchQuery}".`;
+  return result.map((r) => `${r.placeId} :: ${r.description}`).join("\n");
+}
+
+async function getPlaceDetailsTool(placeId: string): Promise<string> {
+  const result = await getPlaceDetails(placeId);
+  if ("error" in result) return result.error;
+  const suggestedRegion = regionFromAddress(result.address);
+  return JSON.stringify({ ...result, suggestedRegion });
+}
+
+async function createMountainTool(input: {
+  name: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  region?: string;
+  notes?: string;
+  trailCount?: number;
+  acreage?: number;
+  verticalDrop?: number;
+  userConfirmed?: boolean;
+}): Promise<string> {
+  if (!input.userConfirmed) {
+    return "Refused: userConfirmed must be true. Only call create_mountain after the user has explicitly confirmed which real place is meant, in a reply to your own confirmation question.";
+  }
+  if (!input.name?.trim()) return "Refused: name is required.";
+  if (input.region && !REGIONS.includes(input.region as Region)) {
+    return `Refused: region must be one of ${REGIONS.join(", ")}.`;
+  }
+
+  const dup = await queryOne<{ id: string; name: string }>(
+    `SELECT id, data->>'name' AS name FROM legacy_records WHERE collection = 'mountains' AND lower(data->>'name') = lower($1)`,
+    [input.name.trim()]
+  );
+
+  const id = crypto.randomUUID();
+  const record = {
+    id,
+    name: input.name.trim(),
+    address: input.address ?? "",
+    phone: input.phone ?? "",
+    website: input.website ?? "",
+    region: input.region ?? undefined,
+    notes: input.notes ?? "",
+    trailCount: typeof input.trailCount === "number" ? input.trailCount : undefined,
+    acreage: typeof input.acreage === "number" ? input.acreage : undefined,
+    verticalDrop: typeof input.verticalDrop === "number" ? input.verticalDrop : undefined,
+    adminContact: { name: "", email: "", phone: "", notes: "" },
+    technicalContact: { name: "", email: "", phone: "", notes: "" },
+    additionalContacts: [],
+    activities: [],
+  };
+  await upsert("mountains", id, record);
+  await insertActivity({
+    mountainId: id,
+    type: "mountain_added",
+    summary: `Added mountain "${record.name}"`,
+    actor: "ODIN",
+  });
+
+  return JSON.stringify({
+    created: true,
+    id,
+    duplicateWarning: dup ? `Note: a mountain named "${dup.name}" already existed (id ${dup.id}) — created a new, separate record anyway.` : null,
+  });
+}
+
+// upsert() replaces the whole JSONB blob, so an update has to read the
+// existing record and merge onto it — never write a partial record that
+// would silently wipe untouched fields (contacts, activities, etc.).
+async function updateMountainTool(input: {
+  mountainId: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  region?: string;
+  notes?: string;
+  trailCount?: number;
+  acreage?: number;
+  verticalDrop?: number;
+  userConfirmed?: boolean;
+}): Promise<string> {
+  if (!input.userConfirmed) {
+    return "Refused: userConfirmed must be true. Only call update_mountain after the user has explicitly given or confirmed the specific new values in this conversation.";
+  }
+  if (!input.mountainId?.trim()) return "Refused: mountainId is required — look up the record's id with query_database first.";
+  if (input.region && !REGIONS.includes(input.region as Region)) {
+    return `Refused: region must be one of ${REGIONS.join(", ")}.`;
+  }
+
+  const existing = await queryOne<{ data: any }>(
+    `SELECT data FROM legacy_records WHERE collection = 'mountains' AND id = $1`,
+    [input.mountainId]
+  );
+  if (!existing) return `Refused: no mountain found with id ${input.mountainId}.`;
+
+  const record = { ...existing.data };
+  const changed: string[] = [];
+  for (const field of ["address", "phone", "website", "region", "notes"] as const) {
+    if (typeof input[field] === "string") {
+      record[field] = input[field];
+      changed.push(field);
+    }
+  }
+  for (const field of ["trailCount", "acreage", "verticalDrop"] as const) {
+    if (typeof input[field] === "number") {
+      record[field] = input[field];
+      changed.push(field);
+    }
+  }
+  if (changed.length === 0) return "Refused: no fields provided to update.";
+
+  await upsert("mountains", input.mountainId, record);
+  await insertActivity({
+    mountainId: input.mountainId,
+    type: "mountain_updated",
+    summary: `Updated ${changed.join(", ")} for "${record.name}"`,
+    actor: "ODIN",
+  });
+
+  return JSON.stringify({ updated: true, id: input.mountainId, name: record.name, fields: changed });
+}
+
 async function readFileTool(path: string, startLine?: number, endLine?: number): Promise<string> {
   const abs = resolveWithinRepo(path);
   if (!abs) return `Refused: "${path}" is outside the readable code areas (${ALLOWED_ROOTS.join(", ")}).`;
@@ -175,7 +309,7 @@ async function readFileTool(path: string, startLine?: number, endLine?: number):
   return slice.join("\n") || "(empty range)";
 }
 
-const TOOLS: Anthropic.Tool[] = [
+const TOOLS: Anthropic.ToolUnion[] = [
   {
     name: "search_code",
     description:
@@ -210,6 +344,69 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "search_places",
+    description:
+      "Search for a real-world place by name (e.g. a ski mountain/resort) via Google Places. Returns candidate places with a placeId — use this when the user asks to add a mountain, to find out which real place(s) match and disambiguate (e.g. 'Wildcat Mountain' exists in more than one state).",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string", description: "Place name to search for, optionally with a location hint" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_place_details",
+    description:
+      "Get full details (address, phone, website, coordinates, and a suggested app Region) for one specific place found via search_places. Call this on the placeId the user confirmed before creating a mountain.",
+    input_schema: {
+      type: "object",
+      properties: { placeId: { type: "string", description: "The placeId from a search_places result" } },
+      required: ["placeId"],
+    },
+  },
+  {
+    name: "create_mountain",
+    description:
+      "Create a new mountain record. ONLY call this after the user has explicitly confirmed (in their own reply) which specific real-world place is meant — never on the first mention of a mountain name. Fill address/phone/website from get_place_details, not from memory. Fill trailCount/acreage/verticalDrop from web_search results when you found a real, sourced number — leave any of them unset rather than guess if you didn't find a solid source.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        address: { type: "string" },
+        phone: { type: "string" },
+        website: { type: "string" },
+        region: { type: "string", enum: REGIONS, description: "Use the suggestedRegion from get_place_details unless the user said otherwise" },
+        notes: { type: "string" },
+        trailCount: { type: "number", description: "Number of trails, only if found via web_search from a real source" },
+        acreage: { type: "number", description: "Skiable acreage, only if found via web_search from a real source" },
+        verticalDrop: { type: "number", description: "Vertical drop in feet, only if found via web_search from a real source" },
+        userConfirmed: { type: "boolean", description: "Must be true — set only after the user explicitly confirmed the specific place in this conversation" },
+      },
+      required: ["name", "userConfirmed"],
+    },
+  },
+  {
+    name: "update_mountain",
+    description:
+      "Update fields on an EXISTING mountain record (address/phone/website/region/notes/trailCount/acreage/verticalDrop). First look up the mountain's id with query_database (SELECT id, data->>'name' FROM legacy_records WHERE collection = 'mountains' AND ...) to confirm exactly which record you mean, especially if the name could match more than one. Only call this after the user has stated or explicitly confirmed the specific new value(s) in this conversation — never invent or estimate a number yourself; if they didn't give you a value for a field, don't touch that field at all.",
+    input_schema: {
+      type: "object",
+      properties: {
+        mountainId: { type: "string", description: "The legacy_records id of the mountain to update, found via query_database" },
+        address: { type: "string" },
+        phone: { type: "string" },
+        website: { type: "string" },
+        region: { type: "string", enum: REGIONS },
+        notes: { type: "string" },
+        trailCount: { type: "number" },
+        acreage: { type: "number" },
+        verticalDrop: { type: "number" },
+        userConfirmed: { type: "boolean", description: "Must be true — set only after the user gave or confirmed these specific values in this conversation" },
+      },
+      required: ["mountainId", "userConfirmed"],
+    },
+  },
+  { type: "web_search_20250305", name: "web_search" },
+  {
     name: "provide_answer",
     description:
       "Give the final answer to the user. Always call this to finish, even when you don't have a confident answer.",
@@ -221,6 +418,11 @@ const TOOLS: Anthropic.Tool[] = [
           type: "boolean",
           description:
             "True only if you gave a real, substantive answer fully supported by the FAQ set or retrieved code. False whenever the answer is a refusal/'I don't have that information' — this flag is what gets a question logged as a gap to fill, so a refusal must never be marked confident.",
+        },
+        needsUserInput: {
+          type: "boolean",
+          description:
+            "True when this 'answer' is actually a question of your own — e.g. confirming which real-world place is meant, or asking which of two readings someone meant — and you're waiting on their reply, not stating a conclusion. False for a normal completed answer OR a genuine refusal. This must never be true at the same time as confident=true.",
         },
         sources: {
           type: "array",
@@ -234,7 +436,7 @@ const TOOLS: Anthropic.Tool[] = [
           },
         },
       },
-      required: ["answer", "confident", "sources"],
+      required: ["answer", "confident", "needsUserInput", "sources"],
     },
   },
 ];
@@ -246,13 +448,25 @@ function systemPrompt(faqs: FaqRow[]): string {
         `- [${f.category}]${f.status === "rolling_out" ? " (status: rolling out, not fully live yet)" : ""} Q: ${f.question}\n  A: ${f.answer}`
     )
     .join("\n");
-  return `You are the support assistant embedded in the Yullr Resource Center's FAQ tab. You answer four kinds of questions: (1) curated company FAQs about the Yullr product, pricing, and install process, (2) "where do I find X" navigational questions about this Builder app, answerable from the App Navigation reference below, (3) "how does X work" questions about this app's own features, answerable by reading its source code with the search_code/read_file tools, and (4) data/analytics questions about the app's actual business data (mountain/project/proposal counts, what needs action, etc.), answerable with the query_database tool.
+  return `You are ODIN, the support assistant embedded in the Yullr Resource Center's FAQ tab.
+
+Brand voice — write every answer in this tone: ${TONE_GUIDE}
+
+You answer six kinds of requests: (1) curated company FAQs about the Yullr product, pricing, and install process, (2) "where do I find X" navigational questions about this Builder app, answerable from the App Navigation reference below, (3) "how does X work" / "how do I do X" questions about this app's own features and workflows, answerable by reading its source code with the search_code/read_file tools, (4) data/analytics questions about the app's actual business data (mountain/project/proposal counts, what needs action, etc.), answerable with the query_database tool, (5) "add a mountain" requests, using search_places/get_place_details/create_mountain, and (6) "update mountain X with these stats/details" requests for a mountain that already exists, using query_database to find its id and update_mountain to write the change.
+
+Many questions are (3) even when phrased like "how do I..." or "where do I go to create X" — anything asking about the STEPS or PROCESS for doing something in the app (creating, editing, assigning, submitting, signing, etc.) is a (3), not a (2). App Navigation only tells you which section/tab a feature lives in, not the click-by-click flow inside it. Never conclude "I don't have that information" for a how-do-I-do-X question just because App Navigation and the FAQ list didn't cover it in full — call search_code (try the feature name and the specific action, e.g. "proposal create", "new proposal", "assessment submit") and read_file on promising matches before giving up. Only fall back to "I don't have that information" if search_code also turns up nothing relevant after a real attempt.
 
 For navigational questions ("where are the logos", "where do I find X", "how do I get to Y") — check App Navigation FIRST. It's authoritative and always current; don't grep the codebase to guess where something lives in the UI when this already tells you. Whenever App Navigation gives a route for what's being asked about — including a "?tab=" deep link — that route IS the direct link; give it confidently as a markdown link, e.g. [Brand Assets](/resources?tab=logos). Don't hedge or say you're unsure of "the exact URL" when App Navigation already states it. Only say you don't have a link when App Navigation genuinely has nothing for that item (e.g. a specific mountain/project/proposal record — those aren't in App Navigation since it only covers static app sections, not database records).
 
 For data/count/analytics questions ("how many mountains have X", "what needs action", "which are pending Y") — use query_database against the real data. It's read-only (writes are blocked at the database level regardless of what you write), so query freely and run more than one query if you need to check a field name first. Answer with real numbers from the query results, never estimate or guess a count.
 
-Ground every answer ONLY in the FAQ list, the App Navigation reference, code/files you actually retrieved, or query_database results. Never answer from general outside knowledge about skiing, video platforms, or software in general. If a question is genuinely ambiguous between two very different meanings (e.g. "find logos" could mean the brand's own logo files, or uploading a logo to a specific mountain; "signed contracts" could mean signed proposals or signed customer agreements, which are different documents), briefly answer the more likely reading AND explicitly ask which one they meant, rather than silently picking one — or, when it's cheap to just compute both (as with signed proposals vs. agreements), report both clearly labeled instead of asking. If neither source covers the question at all, say "I don't have that information" plainly — do not guess or infer.
+For "add [mountain name]" requests: this is the one flow that writes real data, so never call create_mountain on the first mention of a name. First call search_places — if it returns more than one plausible candidate (a name like "Wildcat Mountain" often does), list them and ask which one is meant (set needsUserInput=true, confident=false on that turn — this is a pending question, not a failure); if there's one obvious match, still confirm it in plain language ("Wildcat Mountain in Pinkham Notch, NH — that the one?") before creating anything. Only call create_mountain in a LATER turn, after the user's reply confirms which specific place — that's what userConfirmed=true means, and it must never be set otherwise. Once confirmed, call get_place_details on the chosen placeId and pass its address/phone/website/suggestedRegion straight through to create_mountain — don't retype them from memory. If suggestedRegion comes back null, ask which region to use rather than guessing (again needsUserInput=true). Before calling create_mountain, use web_search to try to find real, publicly reported trailCount/acreage/verticalDrop numbers for this specific resort (search something like "[mountain name] trail count acreage vertical drop"), and pass along whatever you find real sources for; cite the source in your final answer. Only pass a number you actually found in search results — never estimate or fill these from your own general knowledge of the resort, since a plausible-sounding wrong number is worse than a blank field; if search doesn't turn up a reliable number for a field, leave it unset and say plainly it wasn't found. If create_mountain returns a duplicateWarning, mention it, but the record is already created either way.
+
+For "update mountain X" requests (correcting or filling in address/phone/website/region/notes/trailCount/acreage/verticalDrop for a mountain that already exists) — this is a real write, same seriousness as create_mountain, but there's no identity-search step since the mountain already exists: query_database for its id (SELECT id, data->>'name' FROM legacy_records WHERE collection = 'mountains' AND data->>'name' ILIKE '%...%'), and if more than one record matches, list them and ask which one (needsUserInput=true) before doing anything else. Only call update_mountain with userConfirmed=true when the user has themselves stated or explicitly confirmed the specific new value(s) — if they just say "update it with the right stats" without giving numbers, that's not enough; ask for the actual values or use web_search to find real sourced ones and show them to the user before writing, same as create_mountain. Never say something can't be done and hand the user manual instructions when update_mountain can do it directly — you DO have the ability to update existing mountain records, this is not a create-only assistant.
+
+Ground every answer ONLY in the FAQ list, the App Navigation reference, code/files you actually retrieved, or query_database results. Never answer from general outside knowledge about skiing, video platforms, or software in general. If a question is genuinely ambiguous between two very different meanings (e.g. "find logos" could mean the brand's own logo files, or uploading a logo to a specific mountain; "signed contracts" could mean signed proposals or signed customer agreements, which are different documents), briefly answer the more likely reading AND explicitly ask which one they meant, rather than silently picking one (set needsUserInput=true when you do this) — or, when it's cheap to just compute both (as with signed proposals vs. agreements), report both clearly labeled instead of asking. If neither source covers the question at all, say "I don't have that information" plainly — do not guess or infer.
+
+needsUserInput vs confident — these describe two different situations and must never both be true at once. The test is mechanical, not example-based: does the LAST sentence of your answer field end in a question mark asking the user to decide, confirm, or pick something before you'd act or finish? If yes, needsUserInput MUST be true, no matter what kind of question it is — confirming which real-world place they mean, which of two ambiguous readings they intended, which region to file something under, whether to proceed with a list of items you just surfaced ("should I go ahead and add all five?"), or anything else you're waiting on a reply to. This is a pending reply, not a content gap, so confident should be false alongside it. Set confident=false with needsUserInput=false ONLY for a genuine "I don't have that information" refusal, where nothing in the FAQ/navigation/code/data covers the question and your answer is NOT itself ending in a question — this is the only case that gets logged as a real gap to fix. Set confident=true (needsUserInput=false) when the FAQ set, App Navigation, retrieved code, or query_database results fully answer the question with nothing left pending. Before calling provide_answer, reread your own answer text and check: does it end by asking the user something? That single check determines needsUserInput.
 
 FAQ entries marked "rolling out" describe something not fully live yet — reflect that hedge in your answer instead of stating it as settled fact.
 
@@ -262,6 +476,7 @@ Format the answer field as clean, minimal markdown so it renders well in a chat 
 
 Always finish by calling provide_answer with:
 - confident=true only when the FAQ set, App Navigation, retrieved code, or query_database results fully support the answer. If your answer is a refusal or "I don't have that information," confident MUST be false — that's how these gaps get tracked for follow-up.
+- needsUserInput=true whenever the answer is actually a question waiting on the user's reply (see above) — not a refusal.
 - sources citing the FAQ category+question you used, the App Navigation section, the file path(s) you read, and/or a short description of the query you ran (type "data").
 
 App Navigation reference:
@@ -282,13 +497,14 @@ export interface HistoryTurn {
 export async function runAgent(question: string, history: HistoryTurn[] = []): Promise<{
   answer: string;
   confident: boolean;
+  needsUserInput: boolean;
   sources: { type: string; label: string }[];
   usedCode: boolean;
   usedData: boolean;
 }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { answer: "The FAQ assistant isn't configured yet (missing ANTHROPIC_API_KEY).", confident: false, sources: [], usedCode: false, usedData: false };
+    return { answer: "The FAQ assistant isn't configured yet (missing ANTHROPIC_API_KEY).", confident: false, needsUserInput: false, sources: [], usedCode: false, usedData: false };
   }
   const client = new Anthropic({ apiKey });
   const faqs = await query<FaqRow>(
@@ -314,25 +530,44 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
       messages,
     });
 
+    // web_search is server-executed — Anthropic runs it and returns
+    // web_search_tool_result blocks in this same response, so it never shows
+    // up in `toolUses` below (that's client-dispatched tool_use only). Detect
+    // it separately so a search still marks the answer as data-derived
+    // (never cached, since results can go stale).
+    usedData = usedData || response.content.some((b) => b.type === "server_tool_use");
+
     const toolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     const finalCall = toolUses.find((t) => t.name === "provide_answer");
     if (finalCall) {
-      const input = finalCall.input as { answer: string; confident: boolean; sources?: { type: string; label: string }[] };
-      return { answer: input.answer, confident: !!input.confident, sources: input.sources ?? [], usedCode, usedData };
+      const input = finalCall.input as {
+        answer: string;
+        confident: boolean;
+        needsUserInput?: boolean;
+        sources?: { type: string; label: string }[];
+      };
+      return {
+        answer: input.answer,
+        confident: !!input.confident,
+        needsUserInput: !!input.needsUserInput,
+        sources: input.sources ?? [],
+        usedCode,
+        usedData,
+      };
     }
 
     if (toolUses.length === 0) {
       // Model returned plain text without calling provide_answer — treat as
       // the answer but not confident, since it skipped the citation contract.
       const text = response.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
-      return { answer: text || "I don't have that information.", confident: false, sources: [], usedCode, usedData };
+      return { answer: text || "I don't have that information.", confident: false, needsUserInput: false, sources: [], usedCode, usedData };
     }
 
     messages.push({ role: "assistant", content: response.content });
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const call of toolUses) {
       usedCode = usedCode || call.name === "search_code" || call.name === "read_file";
-      usedData = usedData || call.name === "query_database";
+      usedData = usedData || ["query_database", "search_places", "get_place_details", "create_mountain", "update_mountain"].includes(call.name);
       let result = "";
       if (call.name === "search_code") {
         result = await searchCode((call.input as { query: string }).query);
@@ -341,6 +576,14 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
         result = await readFileTool(input.path, input.start_line, input.end_line);
       } else if (call.name === "query_database") {
         result = await queryDatabase((call.input as { sql: string }).sql);
+      } else if (call.name === "search_places") {
+        result = await searchPlacesTool((call.input as { query: string }).query);
+      } else if (call.name === "get_place_details") {
+        result = await getPlaceDetailsTool((call.input as { placeId: string }).placeId);
+      } else if (call.name === "create_mountain") {
+        result = await createMountainTool(call.input as any);
+      } else if (call.name === "update_mountain") {
+        result = await updateMountainTool(call.input as any);
       } else {
         result = `Unknown tool: ${call.name}`;
       }
@@ -371,10 +614,22 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
   });
   const finalCall = finalResponse.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   if (finalCall) {
-    const input = finalCall.input as { answer: string; confident: boolean; sources?: { type: string; label: string }[] };
-    return { answer: input.answer, confident: !!input.confident, sources: input.sources ?? [], usedCode, usedData };
+    const input = finalCall.input as {
+      answer: string;
+      confident: boolean;
+      needsUserInput?: boolean;
+      sources?: { type: string; label: string }[];
+    };
+    return {
+      answer: input.answer,
+      confident: !!input.confident,
+      needsUserInput: !!input.needsUserInput,
+      sources: input.sources ?? [],
+      usedCode,
+      usedData,
+    };
   }
-  return { answer: "I don't have that information.", confident: false, sources: [], usedCode, usedData };
+  return { answer: "I don't have that information.", confident: false, needsUserInput: false, sources: [], usedCode, usedData };
 }
 
 // Prior turns are supplied by the client (it already holds the visible
@@ -408,16 +663,32 @@ faqAgent.post("/ask", async (c) => {
 
   const user = c.get("user");
   const result = await runAgent(question, history);
-  const visuals = toVisualPayload(matchHelpVisuals(question, result.answer));
-  const payload: CachedAnswer = { answer: result.answer, confident: result.confident, sources: result.sources, visuals };
+  const matchedVisuals = matchHelpVisuals(question, result.answer);
+  const visuals = toVisualPayload(matchedVisuals);
+  // Video generation is only offered for flows with a real, generated
+  // manifest available (currently just "add-mountain") — never for every
+  // matched visual, so unsupported flows never dangle a broken offer.
+  const videoFlow = matchedVisuals.find((v) => ODIN_VIDEO_FLOWS[v.key]);
+  const videoOffer = videoFlow ? { flowKey: videoFlow.key, label: ODIN_VIDEO_FLOWS[videoFlow.key].label } : null;
+  const payload: CachedAnswer = {
+    answer: result.answer,
+    confident: result.confident,
+    needsUserInput: result.needsUserInput,
+    sources: result.sources,
+    visuals,
+    videoOffer,
+  };
   const pathTried = ["faq", result.usedCode && "code", result.usedData && "data"].filter(Boolean).join("+");
 
-  if (!result.confident) {
+  // A clarifying/confirmation question isn't a gap to log — it's mid-flow,
+  // waiting on the user's next reply — nor is it safe to cache (its "answer"
+  // is context-dependent on whatever they say back).
+  if (!result.confident && !result.needsUserInput) {
     await pool.query(
       `INSERT INTO faq_unanswered_log (question, path_tried, user_id, session_id) VALUES ($1, $2, $3, $4)`,
       [question, pathTried, user?.id ?? null, sessionId]
     );
-  } else if (!isFollowUp && !result.usedData) {
+  } else if (result.confident && !isFollowUp && !result.usedData) {
     await pool.query(
       `INSERT INTO faq_answer_cache (question_norm, answer) VALUES ($1, $2)
        ON CONFLICT (question_norm) DO UPDATE SET answer = EXCLUDED.answer, created_at = now()`,

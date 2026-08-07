@@ -6,6 +6,7 @@ import { LocationDetail } from "./components/LocationDetail";
 import { AddAsset } from "./components/AddAsset";
 import { AssetDetail } from "./components/AssetDetail";
 import { CreateMountain } from "./components/CreateMountain";
+import { OdinVideoPage } from "./components/OdinVideoPage";
 import { EditMountain } from "./components/EditMountain";
 import { CreateLocation } from "./components/CreateLocation";
 import { EditLocation } from "./components/EditLocation";
@@ -82,6 +83,7 @@ export const router = createBrowserRouter([
           { path: "/agreement-template", Component: AgreementTemplatePage },
           { path: "/contact-tags", Component: ContactTagsPage },
           { path: "/resources", Component: ResourceCenterPage },
+          { path: "/odin-videos/:videoId", Component: OdinVideoPage },
           { path: "/crm", Component: CRMSection },
           { path: "/team/*", Component: TeamPage },
           { path: "/system-check", Component: SystemCheck },
