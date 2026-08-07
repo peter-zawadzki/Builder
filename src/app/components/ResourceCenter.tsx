@@ -8,9 +8,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
-import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type OdinVideoListItem } from '../api/client';
+import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type OdinVideoListItem, type FaqEntry } from '../api/client';
 import { OdinVideoOffer } from './OdinVideoOffer';
-import { FAQ_ENTRIES, type FAQCategory } from '../data/faqData';
+import { type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
 import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES } from '../data/demoHubData';
@@ -442,9 +442,19 @@ export function FaqAssistant() {
 }
 
 export function FAQSection() {
+  const api = useApi();
+  const [entries, setEntries] = useState<FaqEntry[] | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<FAQCategory | 'All'>('All');
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // faq_entries (DB) is ODIN's own grounding source and, since the
+  // knowledge-base promote workflow, the only place new FAQ content is
+  // added — fetching it live here means a promoted question shows up in
+  // this tab immediately, with no redeploy.
+  useEffect(() => {
+    api.listFaqEntries().then(r => setEntries(r.entries)).catch(() => setEntries([]));
+  }, [api]);
 
   // "Deep search" — matches against both the question AND the answer body,
   // not just the question title, so e.g. searching "PoE" or "NVIDIA" finds
@@ -461,7 +471,7 @@ export function FAQSection() {
   // fewer, so the best-fitting FAQ shows up first instead of in doc order.
   const results = useMemo(() => {
     const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const scored = FAQ_ENTRIES
+    const scored = (entries ?? [])
       .filter(f => category === 'All' || f.category === category)
       .map(f => {
         if (tokens.length === 0) return { entry: f, score: 0 };
@@ -479,7 +489,7 @@ export function FAQSection() {
       .filter(r => r.score >= 0)
       .sort((a, b) => b.score - a.score);
     return scored.map(r => r.entry);
-  }, [query, category]);
+  }, [query, category, entries]);
 
   return (
     <div className="space-y-3">
@@ -513,7 +523,11 @@ export function FAQSection() {
       </div>
 
       <div className="space-y-2">
-        {results.length === 0 ? (
+        {entries === null ? (
+          <div className="flex justify-center py-12">
+            <Loader2 size={20} className="animate-spin text-[#6a7282]" />
+          </div>
+        ) : results.length === 0 ? (
           <div className="text-center py-12 px-4">
             <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] text-[14px] mb-1">No matching FAQ</p>
             <p className="text-[#6a7282] text-[13px]">

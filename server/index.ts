@@ -15,6 +15,9 @@ import { documents } from "./routes/documents";
 import { places } from "./routes/places";
 import { faqAgent } from "./routes/faqAgent";
 import { odinVideo } from "./routes/odinVideo";
+import { feedbackAgent } from "./routes/feedbackAgent";
+import { feedback } from "./routes/feedback";
+import { knowledgeBase } from "./routes/knowledgeBase";
 import { proposalPublicSign } from "./routes/proposalPublicSign";
 import { agreementPublicSign } from "./routes/agreementPublicSign";
 
@@ -58,6 +61,9 @@ app.use("/api/documents/*", requireAuth);
 app.use("/api/places/*", requireAuth);
 app.use("/api/faq-agent/*", requireAuth);
 app.use("/api/odin-video/*", requireAuth);
+app.use("/api/feedback-agent/*", requireAuth);
+app.use("/api/feedback/*", requireAuth);
+app.use("/api/knowledge-base/*", requireAuth);
 app.use("/api/me", requireAuth);
 
 // Who am I — verifies the auth chain and returns the synced app user.
@@ -72,6 +78,9 @@ app.route("/api/documents", documents);
 app.route("/api/places", places);
 app.route("/api/faq-agent", faqAgent);
 app.route("/api/odin-video", odinVideo);
+app.route("/api/feedback-agent", feedbackAgent);
+app.route("/api/feedback", feedback);
+app.route("/api/knowledge-base", knowledgeBase);
 // Legacy shapes for the existing UI running losslessly on the local DB.
 app.route("/api/legacy", legacy);
 

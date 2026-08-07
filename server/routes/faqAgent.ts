@@ -1,6 +1,4 @@
 import { Hono } from "hono";
-import { readdir, readFile as fsReadFile, stat } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import type { HonoEnv } from "../auth";
 import { pool, query, queryOne } from "../db";
@@ -12,11 +10,12 @@ import { upsert, insertActivity } from "./legacy";
 import { searchPlaces, getPlaceDetails } from "../utils/googlePlaces";
 import { regionFromAddress, REGIONS, type Region } from "../data/regionMapping";
 import { TONE_GUIDE } from "../data/brandVoice";
+import { searchCode, readFileTool } from "../utils/codeSearch";
+import { logInteraction } from "../utils/interactionLog";
 
 export const faqAgent = new Hono<HonoEnv>();
 
 const MODEL = "claude-sonnet-4-5";
-const REPO_ROOT = resolve(process.cwd());
 const CACHE_TTL_HOURS = 24;
 
 interface CachedAnswer {
@@ -48,13 +47,6 @@ function toVisualPayload(visuals: HelpVisual[]): CachedAnswer["visuals"] {
   }));
 }
 
-// Code lookups are scoped to user-facing feature code and server routes —
-// not the whole repo — per the spec's "start scoped, not whole-repo" guidance,
-// to keep tool-call latency/noise down and avoid ever surfacing infra/secrets.
-const ALLOWED_ROOTS = ["src/app", "server/routes"];
-const SEARCHABLE_EXTENSIONS = new Set([".ts", ".tsx", ".sql", ".md"]);
-const MAX_SEARCH_RESULTS = 20;
-const MAX_READ_LINES = 250;
 const MAX_TOOL_ITERATIONS = 10;
 
 interface FaqRow {
@@ -64,69 +56,6 @@ interface FaqRow {
   answer: string;
   status: "active" | "rolling_out" | "archived";
   as_of: string;
-}
-
-function resolveWithinRepo(relPath: string): string | null {
-  const abs = resolve(REPO_ROOT, relPath);
-  const rel = relative(REPO_ROOT, abs);
-  if (rel.startsWith("..") || rel === "") return null;
-  if (!ALLOWED_ROOTS.some((root) => rel === root || rel.startsWith(root + "/"))) return null;
-  return abs;
-}
-
-async function walkFiles(dir: string, out: string[]): Promise<void> {
-  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-  for (const entry of entries) {
-    if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      await walkFiles(full, out);
-    } else if (SEARCHABLE_EXTENSIONS.has(entry.name.slice(entry.name.lastIndexOf(".")))) {
-      out.push(full);
-    }
-  }
-}
-
-const STOPWORDS = new Set([
-  "the", "a", "an", "is", "are", "do", "does", "did", "how", "what", "when", "where",
-  "why", "on", "in", "of", "for", "to", "and", "or", "it", "this", "that", "mean", "means",
-]);
-
-// Natural-language questions rarely appear as literal substrings in source
-// code ("what do the icons mean" never occurs verbatim), so a plain substring
-// search mostly returns zero hits and burns tool-call turns. Instead: split
-// the query into tokens, match lines containing ANY token, and rank lines by
-// how many distinct tokens they hit — the same token-OR-then-rank approach
-// the FAQ tab's own search uses (ResourceCenter.tsx), just applied to code.
-async function searchCode(rawQuery: string): Promise<string> {
-  const tokens = rawQuery
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 2 && !STOPWORDS.has(t));
-  if (tokens.length === 0) return "Empty or too-generic query — use specific terms (component name, feature word).";
-
-  const files: string[] = [];
-  for (const root of ALLOWED_ROOTS) {
-    await walkFiles(join(REPO_ROOT, root), files);
-  }
-  const scored: { line: string; score: number }[] = [];
-  for (const file of files) {
-    const content = await fsReadFile(file, "utf8").catch(() => null);
-    if (!content) continue;
-    const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const lower = lines[i].toLowerCase();
-      const score = tokens.reduce((acc, t) => acc + (lower.includes(t) ? 1 : 0), 0);
-      if (score > 0) {
-        scored.push({ line: `${relative(REPO_ROOT, file)}:${i + 1}: ${lines[i].trim().slice(0, 200)}`, score });
-      }
-    }
-  }
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, MAX_SEARCH_RESULTS).map((s) => s.line);
-  return top.length
-    ? top.join("\n")
-    : `No matches for any of [${tokens.join(", ")}] under ${ALLOWED_ROOTS.join(", ")}. Try different or more specific terms.`;
 }
 
 const MAX_QUERY_ROWS = 200;
@@ -295,20 +224,6 @@ async function updateMountainTool(input: {
   return JSON.stringify({ updated: true, id: input.mountainId, name: record.name, fields: changed });
 }
 
-async function readFileTool(path: string, startLine?: number, endLine?: number): Promise<string> {
-  const abs = resolveWithinRepo(path);
-  if (!abs) return `Refused: "${path}" is outside the readable code areas (${ALLOWED_ROOTS.join(", ")}).`;
-  const info = await stat(abs).catch(() => null);
-  if (!info || !info.isFile()) return `Not found: ${path}`;
-  const content = await fsReadFile(abs, "utf8").catch(() => null);
-  if (content === null) return `Could not read: ${path}`;
-  const lines = content.split("\n");
-  const start = Math.max(1, startLine ?? 1);
-  const end = Math.min(lines.length, endLine ?? start + MAX_READ_LINES - 1, start + MAX_READ_LINES - 1);
-  const slice = lines.slice(start - 1, end).map((l, i) => `${start + i}: ${l}`);
-  return slice.join("\n") || "(empty range)";
-}
-
 const TOOLS: Anthropic.ToolUnion[] = [
   {
     name: "search_code",
@@ -448,7 +363,10 @@ function systemPrompt(faqs: FaqRow[]): string {
         `- [${f.category}]${f.status === "rolling_out" ? " (status: rolling out, not fully live yet)" : ""} Q: ${f.question}\n  A: ${f.answer}`
     )
     .join("\n");
+  const videoFlowLabels = Object.values(ODIN_VIDEO_FLOWS).map((f) => f.label);
   return `You are ODIN, the support assistant embedded in the Yullr Resource Center's FAQ tab.
+
+You genuinely CAN generate a short narrated video tutorial, fully automatically, for these specific flows: ${videoFlowLabels.join(", ")}. This happens separately from your text answer — a "want a video?" offer button appears automatically underneath any answer that matches one of these flows, you don't need to (and can't) trigger it yourself as a tool call. If asked directly "can you make a video for this" (or similar) about one of these flows, say yes, briefly explain a video option will appear below, and answer the question as normal — never say you can't generate a video for something on this list, since that's simply false and contradicts the offer button that will appear right below your own answer. For any flow NOT on this list, you genuinely cannot yet — say so plainly rather than guessing or promising one.
 
 Brand voice — write every answer in this tone: ${TONE_GUIDE}
 
@@ -638,6 +556,7 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
 const MAX_HISTORY_TURNS = 10;
 
 faqAgent.post("/ask", async (c) => {
+  const startTime = Date.now();
   const body = await c.req.json().catch(() => ({}));
   const question = typeof body.question === "string" ? body.question.trim() : "";
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : null;
@@ -647,6 +566,8 @@ faqAgent.post("/ask", async (c) => {
         .slice(-MAX_HISTORY_TURNS)
     : [];
   if (!question) return c.json({ error: "question is required" }, 400);
+
+  const user = c.get("user");
 
   // A follow-up's meaning depends on the hidden prior context, so its answer
   // isn't safe to cache/reuse for someone else asking the same bare text —
@@ -659,9 +580,23 @@ faqAgent.post("/ask", async (c) => {
         `SELECT answer FROM faq_answer_cache WHERE question_norm = $1 AND created_at > now() - interval '${CACHE_TTL_HOURS} hours'`,
         [questionNorm]
       );
-  if (cached) return c.json(cached.answer);
+  if (cached) {
+    await logInteraction({
+      agent: "faq",
+      sessionId,
+      userId: user?.id ?? null,
+      question,
+      answer: cached.answer.answer,
+      confident: cached.answer.confident,
+      needsUserInput: cached.answer.needsUserInput,
+      sources: cached.answer.sources,
+      isFollowUp,
+      cacheHit: true,
+      latencyMs: Date.now() - startTime,
+    });
+    return c.json(cached.answer);
+  }
 
-  const user = c.get("user");
   const result = await runAgent(question, history);
   const matchedVisuals = matchHelpVisuals(question, result.answer);
   const visuals = toVisualPayload(matchedVisuals);
@@ -695,6 +630,22 @@ faqAgent.post("/ask", async (c) => {
       [questionNorm, JSON.stringify(payload)]
     );
   }
+
+  await logInteraction({
+    agent: "faq",
+    sessionId,
+    userId: user?.id ?? null,
+    question,
+    answer: result.answer,
+    confident: result.confident,
+    needsUserInput: result.needsUserInput,
+    usedCode: result.usedCode,
+    usedData: result.usedData,
+    sources: result.sources,
+    isFollowUp,
+    cacheHit: false,
+    latencyMs: Date.now() - startTime,
+  });
 
   return c.json(payload);
 });

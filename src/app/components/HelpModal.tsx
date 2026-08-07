@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { X, HelpCircle, Sparkles } from 'lucide-react';
+import { X, HelpCircle, Sparkles, MessageSquareWarning } from 'lucide-react';
 import { FaqAssistant, FAQSection } from './ResourceCenter';
+import { FeedbackAssistant } from './FeedbackAssistant';
 
-type HelpTab = 'ask' | 'browse';
+type HelpTab = 'ask' | 'browse' | 'feedback';
 
 // Standalone Help entry point reachable from the app header — reuses the same
 // FaqAssistant/FAQSection the full Resource Center page renders, so there's
@@ -39,10 +40,18 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
           >
             <HelpCircle size={13} /> Browse FAQs
           </button>
+          <button
+            onClick={() => setTab('feedback')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${tab === 'feedback' ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}
+          >
+            <MessageSquareWarning size={13} /> Feedback
+          </button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-4">
-          {tab === 'ask' ? <FaqAssistant /> : <FAQSection />}
+          {tab === 'ask' && <FaqAssistant />}
+          {tab === 'browse' && <FAQSection />}
+          {tab === 'feedback' && <FeedbackAssistant />}
         </div>
       </div>
     </div>

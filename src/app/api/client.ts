@@ -155,6 +155,21 @@ export function useApi() {
       getOdinVideo: (id: string) => request<OdinVideoResult>(`/odin-video/${id}`),
       listOdinNotifications: () => request<{ notifications: OdinNotification[] }>("/odin-video/notifications"),
       markOdinNotificationRead: (id: string) => request<{ ok: true }>(`/odin-video/notifications/${id}/read`, { method: "POST" }),
+
+      // FEEDBACK section
+      feedbackTurn: (question: string, history: FaqHistoryTurn[]) =>
+        request<IntakeTurnResult>("/feedback-agent/turn", { method: "POST", body: JSON.stringify({ question, history }) }),
+      finalizeFeedback: (collectedSummary: CollectedSummary, history: FaqHistoryTurn[], force?: boolean) =>
+        request<FinalizeResult>("/feedback/finalize", { method: "POST", body: JSON.stringify({ collectedSummary, history, force }) }),
+      getFeedbackSubmission: (id: string) => request<FeedbackSubmission>(`/feedback/${id}`),
+      approveBug: (id: string) => request<{ ok: true }>(`/feedback/${id}/approve-bug`, { method: "POST" }),
+      requestBugChanges: (id: string, feedbackText: string) =>
+        request<{ ok: true; analysis: string }>(`/feedback/${id}/request-bug-changes`, { method: "POST", body: JSON.stringify({ feedback: feedbackText }) }),
+      reviseMockup: (id: string, feedbackText: string) =>
+        request<{ mockupHtml: string; revisionCount: number; capped: boolean }>(`/feedback/${id}/revise-mockup`, { method: "POST", body: JSON.stringify({ feedback: feedbackText }) }),
+      approveMockup: (id: string) => request<{ ok: true }>(`/feedback/${id}/approve-mockup`, { method: "POST" }),
+      listFeedbackNotifications: () => request<{ notifications: FeedbackNotification[] }>("/feedback/notifications"),
+      markFeedbackNotificationRead: (id: string) => request<{ ok: true }>(`/feedback/notifications/${id}/read`, { method: "POST" }),
       sendFaqFeedback: (data: {
         question: string;
         answer: string;
@@ -162,6 +177,16 @@ export function useApi() {
         sources: FaqSource[];
         sessionId: string;
       }) => request<{ ok: true }>("/faq-agent/feedback", { method: "POST", body: JSON.stringify(data) }),
+
+      // Knowledge base (admin) — logged interactions turned into curated FAQ entries
+      listFaqEntries: () => request<{ entries: FaqEntry[] }>("/knowledge-base/entries"),
+      listKnowledgeGaps: () => request<{ gaps: KnowledgeGap[] }>("/knowledge-base/gaps"),
+      dismissKnowledgeGap: (ids: number[]) =>
+        request<{ ok: true }>("/knowledge-base/gaps/dismiss", { method: "POST", body: JSON.stringify({ ids }) }),
+      listKnowledgeCandidates: () => request<{ candidates: KnowledgeCandidate[] }>("/knowledge-base/candidates"),
+      promoteToFaq: (data: { question: string; category: string; answer: string; gapIds?: number[] }) =>
+        request<{ ok: true; id: string }>("/knowledge-base/promote", { method: "POST", body: JSON.stringify(data) }),
+      getKnowledgeBaseStats: () => request<KnowledgeBaseStats>("/knowledge-base/stats"),
     };
   }, [getToken]);
 }
@@ -229,5 +254,91 @@ export interface OdinVideoListItem {
   label: string;
   detailLevel: number;
   durationMs: number | null;
+  createdAt: string;
+}
+
+// Knowledge base (admin)
+export interface FaqEntry {
+  id: string;
+  category: string;
+  question: string;
+  answer: string;
+  status: string;
+}
+
+export interface KnowledgeGap {
+  ids: number[];
+  question: string;
+  count: number;
+  pathTried: string;
+  latestAt: string;
+}
+
+export interface KnowledgeCandidate {
+  id: number;
+  question: string;
+  answer: string;
+  sources: FaqSource[] | null;
+  createdAt: string;
+}
+
+export interface KnowledgeBaseStats {
+  totalInteractions: number;
+  confidentRatePct: number;
+  feedback: Record<string, number>;
+  recentGaps: { question: string; created_at: string }[];
+}
+
+// FEEDBACK section
+export type FeedbackType = "bug" | "feature" | "general";
+export type FeedbackPlatform = "Builder" | "YULLR.com" | "Portal";
+
+export interface CollectedSummary {
+  type: FeedbackType;
+  platform: FeedbackPlatform;
+  summary: string;
+  fields: Record<string, string>;
+}
+
+export interface IntakeTurnResult {
+  message: string;
+  stage: "choose_type" | "choose_platform" | "gathering_details" | "ready_to_finalize";
+  quickReplies?: string[];
+  readyToFinalize: boolean;
+  collectedSummary?: CollectedSummary;
+}
+
+export interface FinalizeResult {
+  id?: string;
+  status?: "in_review" | "submitted";
+  mockupHtml?: string;
+  duplicateWarning?: { id: string; summary: string; createdAt: string };
+}
+
+export interface FeedbackSubmission {
+  id: string;
+  type: FeedbackType;
+  platform: FeedbackPlatform;
+  status: "in_review" | "approved" | "submitted" | "resolved";
+  submitterName: string | null;
+  submitterEmail: string | null;
+  summary: string;
+  details: Record<string, string>;
+  bugAnalysis: string | null;
+  affectedFiles: { path: string; sha256: string }[] | null;
+  staleness: { path: string; stale: boolean }[];
+  bugRevisionCount: number;
+  mockupHtml: string | null;
+  mockupRevisionCount: number;
+  approvedAt: string | null;
+  emailedAt: string | null;
+  createdAt: string;
+}
+
+export interface FeedbackNotification {
+  id: string;
+  kind: "review_requested" | "revised";
+  submissionId: string;
+  text: string;
   createdAt: string;
 }
