@@ -51,19 +51,32 @@ export async function assembleVideo(input: AssembleInput): Promise<{ durationMs:
     }
 
     audioClips.forEach((c) => cmd.input(c.filePath));
-    const delayed = audioClips.map((c, i) => `[${i + 1}:a]adelay=${c.startMs}:all=1[a${i}]`);
+    const n = audioClips.length;
+    // Force every clip to the same known format (stereo/44.1kHz) before
+    // delaying it — adelay's delay list must match the channel count
+    // exactly, and clips can otherwise vary (mono vs stereo) depending on
+    // what ElevenLabs returned. This build's adelay has no "all=1" shorthand
+    // (older ffmpeg static binary on the arm64 prod host — verified via
+    // `ffmpeg -h filter=adelay`, which only lists a bare "delays" option),
+    // so both channels are always specified explicitly.
+    const delayed = audioClips.map(
+      (c, i) => `[${i + 1}:a]aformat=channel_layouts=stereo,adelay=${c.startMs}|${c.startMs}[d${i}]`
+    );
+    // This build's amix also has no "normalize" option (same older static
+    // binary — `ffmpeg -h filter=amix` lists only inputs/duration/
+    // dropout_transition/weights) — amix here ALWAYS divides the mixed sum
+    // by the input count, unconditionally. Since these clips are time-
+    // separated (delayed, non-overlapping) rather than actually overlapping,
+    // that division would quietly attenuate every clip by 1/n. Countered by
+    // pre-boosting each delayed clip by exactly n before mixing, canceling
+    // the built-in division out — works identically on old and new ffmpeg,
+    // unlike relying on an option this binary doesn't have.
+    const boosted = audioClips.map((_, i) => `[d${i}]volume=${n}[a${i}]`);
     const mixInputs = audioClips.map((_, i) => `[a${i}]`).join("");
     // duration=longest: the mix spans whichever delayed clip finishes last,
     // not just the first — video is never truncated to match audio (no
     // -shortest), so the recording plays out in full even after narration ends.
-    // normalize=0 is the important part: amix's default (normalize=1) divides
-    // every input's volume by the TOTAL clip count regardless of how many are
-    // actually sounding at a given moment — since these clips are time-
-    // separated (delayed, non-overlapping), that produces inconsistent,
-    // unpredictable loudness across the timeline rather than each clip
-    // playing at its own natural volume. With this many non-overlapping
-    // clips summed, disabling normalization is correct, not just safe.
-    const filterComplex = `${delayed.join(";")};${mixInputs}amix=inputs=${audioClips.length}:duration=longest:dropout_transition=0:normalize=0[aout]`;
+    const filterComplex = `${delayed.join(";")};${boosted.join(";")};${mixInputs}amix=inputs=${n}:duration=longest:dropout_transition=0[aout]`;
 
     cmd
       .complexFilter(filterComplex)
