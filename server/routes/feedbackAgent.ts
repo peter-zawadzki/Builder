@@ -10,6 +10,7 @@ import { Hono } from "hono";
 import Anthropic from "@anthropic-ai/sdk";
 import type { HonoEnv } from "../auth";
 import { logInteraction } from "../utils/interactionLog";
+import { cachedSystem } from "../utils/promptCache";
 
 export const feedbackAgent = new Hono<HonoEnv>();
 
@@ -107,7 +108,7 @@ export async function runIntakeTurn(question: string, history: HistoryTurn[]): P
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 1000,
-    system: systemPrompt(),
+    system: cachedSystem(systemPrompt()),
     tools: TOOLS,
     tool_choice: { type: "tool", name: "provide_turn" },
     messages,

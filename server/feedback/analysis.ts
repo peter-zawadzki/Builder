@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import { searchCode, readFileTool, ALLOWED_ROOTS, resolveWithinRepo } from "../utils/codeSearch";
+import { cachedSystem, cacheableTools } from "../utils/promptCache";
 import type { CollectedSummary } from "../routes/feedbackAgent";
 
 const MODEL = "claude-sonnet-4-5";
@@ -64,6 +65,7 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
 ];
+const CACHED_TOOLS = cacheableTools(TOOLS);
 
 function systemPrompt(summary: CollectedSummary): string {
   return `You are ODIN, investigating a bug report on the Builder app for internal review — you write an analysis and fix recommendation, you never modify or commit any code. Use search_code/read_file to actually locate the relevant code before concluding anything; don't guess at a cause you haven't verified by reading real source. If you can't find anything conclusive after a real search effort, say so plainly in the analysis rather than inventing a plausible-sounding but unverified cause.
@@ -102,8 +104,8 @@ export async function analyzeBug(summary: CollectedSummary, priorFeedback?: stri
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 2000,
-      system: systemPrompt(summary),
-      tools: TOOLS,
+      system: cachedSystem(systemPrompt(summary)),
+      tools: CACHED_TOOLS,
       messages,
     });
 
@@ -133,7 +135,7 @@ export async function analyzeBug(summary: CollectedSummary, priorFeedback?: stri
   const finalResponse = await client.messages.create({
     model: MODEL,
     max_tokens: 2000,
-    system: systemPrompt(summary),
+    system: cachedSystem(systemPrompt(summary)),
     tools: [TOOLS.find((t) => t.name === "provide_analysis")!],
     tool_choice: { type: "tool", name: "provide_analysis" },
     messages,

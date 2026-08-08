@@ -12,6 +12,7 @@ import { regionFromAddress, REGIONS, type Region } from "../data/regionMapping";
 import { TONE_GUIDE } from "../data/brandVoice";
 import { searchCode, readFileTool } from "../utils/codeSearch";
 import { logInteraction } from "../utils/interactionLog";
+import { cachedSystem, cacheableTools } from "../utils/promptCache";
 
 export const faqAgent = new Hono<HonoEnv>();
 
@@ -355,6 +356,10 @@ const TOOLS: Anthropic.ToolUnion[] = [
     },
   },
 ];
+// Static across every call — cache breakpoint on the last tool caches the
+// whole schema, avoiding a full reprocess of all 9 tool descriptions on
+// every question and every iteration of the tool-use loop below.
+const CACHED_TOOLS = cacheableTools(TOOLS);
 
 function systemPrompt(faqs: FaqRow[]): string {
   const faqBlock = faqs
@@ -443,8 +448,8 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 1500,
-      system: systemPrompt(faqs),
-      tools: TOOLS,
+      system: cachedSystem(systemPrompt(faqs)),
+      tools: CACHED_TOOLS,
       messages,
     });
 
@@ -525,7 +530,7 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
   const finalResponse = await client.messages.create({
     model: MODEL,
     max_tokens: 1500,
-    system: systemPrompt(faqs),
+    system: cachedSystem(systemPrompt(faqs)),
     tools: [TOOLS.find((t) => t.name === "provide_answer")!],
     tool_choice: { type: "tool", name: "provide_answer" },
     messages,

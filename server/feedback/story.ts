@@ -7,6 +7,7 @@
 // guessing at files that don't exist here.
 import Anthropic from "@anthropic-ai/sdk";
 import { searchCode, readFileTool, ALLOWED_ROOTS } from "../utils/codeSearch";
+import { cachedSystem, cacheableTools } from "../utils/promptCache";
 import type { CollectedSummary } from "../routes/feedbackAgent";
 
 const MODEL = "claude-sonnet-4-5";
@@ -66,6 +67,7 @@ const PROVIDE_BRIEF_TOOL: Anthropic.Tool = {
     required: ["brief"],
   },
 };
+const CACHED_CODE_TOOLS = cacheableTools([...CODE_TOOLS, PROVIDE_BRIEF_TOOL]);
 
 export async function generateDevBrief(summary: CollectedSummary): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -77,7 +79,7 @@ export async function generateDevBrief(summary: CollectedSummary): Promise<strin
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 1500,
-      system: systemPrompt(summary, false),
+      system: cachedSystem(systemPrompt(summary, false)),
       tools: [PROVIDE_BRIEF_TOOL],
       tool_choice: { type: "tool", name: "provide_brief" },
       messages: [{ role: "user", content: "Write the developer brief now." }],
@@ -91,8 +93,8 @@ export async function generateDevBrief(summary: CollectedSummary): Promise<strin
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 1500,
-      system: systemPrompt(summary, true),
-      tools: [...CODE_TOOLS, PROVIDE_BRIEF_TOOL],
+      system: cachedSystem(systemPrompt(summary, true)),
+      tools: CACHED_CODE_TOOLS,
       messages,
     });
     const toolUses = response.content.filter((b) => b.type === "tool_use");
@@ -120,7 +122,7 @@ export async function generateDevBrief(summary: CollectedSummary): Promise<strin
   const finalResponse = await client.messages.create({
     model: MODEL,
     max_tokens: 1500,
-    system: systemPrompt(summary, true),
+    system: cachedSystem(systemPrompt(summary, true)),
     tools: [PROVIDE_BRIEF_TOOL],
     tool_choice: { type: "tool", name: "provide_brief" },
     messages,
