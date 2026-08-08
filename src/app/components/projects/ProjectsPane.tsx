@@ -10,6 +10,7 @@ import { DiscardChangesModal } from '../DiscardChangesModal';
 import { useMyContact } from '../../hooks/useMyContact';
 import { useIsSuperAdmin } from '../../hooks/useRole';
 import { newId } from '../../utils/id';
+import { useApi } from '../../api/client';
 
 // Project types available when creating a project under a Mountain vs. a Team.
 export const MOUNTAIN_PROJECT_TYPES: ProjectType[] = ['Install', 'Repair', 'Upgrade', 'Special Event'];
@@ -406,6 +407,7 @@ function ProjectForm({ mountainId, teamId, availableTypes, onClose }: { mountain
 function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const { getProjectById, updateProject, deleteProject, transferProjectOwner, contacts, mountains, logActivity } = useData();
   const project = getProjectById(projectId);
+  const api = useApi();
   const me = useMyContact();
   const isSuperAdmin = useIsSuperAdmin();
   const [isEditMode, setIsEditMode] = useState(false);
@@ -502,6 +504,9 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
     updateProject(project.id, { activities: [...(project.activities || []), full] });
     const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountains.find(m => m.id === project.mountainId)?.name]);
     logActivity(project.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, project.mountainId ? undefined : project.teamId ? `/crm?tab=teams&open=${project.teamId}` : undefined, slackText, !!entry.assigneeContactId);
+    if (full.type === 'note') {
+      api.embedNote({ noteSource: 'activity', noteId: full.id, originCollection: 'projects', originId: project.id, mountainId: project.mountainId, content: full.text }).catch(() => {});
+    }
   };
   const toggleActivity = (id: string) => {
     const updated = (project.activities || []).map(a =>
@@ -514,6 +519,10 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
   };
   const archiveActivity = (id: string, archived: boolean) => {
     updateProject(project.id, { activities: (project.activities || []).map(a => a.id === id ? { ...a, archived } : a) });
+  };
+  const editActivity = (id: string, text: string) => {
+    updateProject(project.id, { activities: (project.activities || []).map(a => a.id === id ? { ...a, text } : a) });
+    api.embedNote({ noteSource: 'activity', noteId: id, originCollection: 'projects', originId: project.id, mountainId: project.mountainId, content: text }).catch(() => {});
   };
 
   const inputCls = 'w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none';
@@ -637,6 +646,9 @@ function ProjectDetailModal({ projectId, onClose }: { projectId: string; onClose
                   onToggle={toggleActivity}
                   onDelete={deleteActivity}
                   onArchive={archiveActivity}
+                  onEdit={editActivity}
+                  originCollection="projects"
+                  originId={project.id}
                 />
               </div>
             </>

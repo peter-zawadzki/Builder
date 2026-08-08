@@ -41,7 +41,7 @@ function actionItemHref(appBaseUrl: string, item: DigestActionItem): string | nu
   const base = `${appBaseUrl}/mountains/${item.mountainId}`;
   if (item.kind === "action") return `${base}?highlightActivity=${item.itemId}`;
   if (item.kind === "project") return `${base}?openProject=${item.projectId}`;
-  // kind === "note"
+  // kind === "note" or "reply" (a reply's itemId is the note it replied to) — always attached to a note, never an action.
   return item.projectId ? `${base}?openProject=${item.projectId}` : `${base}?highlightNote=${item.itemId}`;
 }
 

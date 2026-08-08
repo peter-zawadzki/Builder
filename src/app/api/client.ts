@@ -191,6 +191,18 @@ export function useApi() {
       promoteToFaq: (data: { question: string; category: string; answer: string; gapIds?: number[] }) =>
         request<{ ok: true; id: string }>("/knowledge-base/promote", { method: "POST", body: JSON.stringify(data) }),
       getKnowledgeBaseStats: () => request<KnowledgeBaseStats>("/knowledge-base/stats"),
+
+      // Notes — replies, notifications, semantic search, and keeping the RAG in sync
+      embedNote: (data: NoteRef & { content: string; mountainId?: string }) =>
+        request<{ ok: true }>("/notes/embed", { method: "POST", body: JSON.stringify(data) }),
+      listNoteReplies: (ref: NoteRef) =>
+        request<{ replies: NoteReply[] }>(`/notes/replies?noteSource=${ref.noteSource}&noteId=${ref.noteId}`),
+      postNoteReply: (data: NoteRef & { text: string }) =>
+        request<{ id: string; createdAt: string }>("/notes/replies", { method: "POST", body: JSON.stringify(data) }),
+      listNoteNotifications: () => request<{ notifications: NoteNotification[] }>("/notes/notifications"),
+      markNoteNotificationRead: (id: string) => request<{ ok: true }>(`/notes/notifications/${id}/read`, { method: "POST" }),
+      searchNotes: (q: string, mountainId?: string) =>
+        request<{ results: NoteSearchResult[] }>(`/notes/search?q=${encodeURIComponent(q)}${mountainId ? `&mountainId=${mountainId}` : ""}`),
     };
   }, [getToken]);
 }
@@ -202,6 +214,42 @@ export interface AppMeUser {
   role: "user" | "admin" | "super_admin";
   isSuperAdmin: boolean;
   dailyDigestEnabled: boolean;
+}
+
+// Notes
+export interface NoteRef {
+  noteSource: "mountain_note" | "activity";
+  noteId: string;
+  originCollection?: string;
+  originId?: string;
+}
+
+export interface NoteReply {
+  id: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface NoteNotification {
+  id: string;
+  noteSource: string;
+  noteId: string;
+  text: string;
+  createdAt: string;
+  originCollection: string | null;
+  originId: string | null;
+  mountainId: string | null;
+}
+
+export interface NoteSearchResult {
+  noteSource: string;
+  noteId: string;
+  originCollection: string | null;
+  originId: string | null;
+  mountainId: string | null;
+  content: string;
+  score: number;
 }
 
 export interface FaqSource {

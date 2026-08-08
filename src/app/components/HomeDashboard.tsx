@@ -5,7 +5,7 @@ import { ActiveProjects } from "./projects/ActiveProjects";
 import { RecentActivity } from "./RecentActivity";
 import { useMyContact, useCanSeeAll } from "../hooks/useMyContact";
 import { useIsSuperAdmin } from "../hooks/useRole";
-import { useData, getMyNotifications, getAllOpenActivities, useGlobalActivityUpdater, canCompleteActivity } from "../context/DataContext";
+import { useData, getMyNotifications, getAllOpenActivities, useGlobalActivityUpdater, canCompleteActivity, canEditOrArchiveNote } from "../context/DataContext";
 import type { MyNotificationEntry } from "../context/DataContext";
 
 // The landing page after login: one master My/All toggle scopes every section
@@ -119,7 +119,7 @@ function ActivityList({
   return (
     <div className="space-y-2">
       {items.map(n => {
-        const canAct = canCompleteActivity(n, me, isSuperAdmin);
+        const canAct = n.type === 'action' ? canCompleteActivity(n, me, isSuperAdmin) : canEditOrArchiveNote(n, me, isSuperAdmin);
         return (
           <div key={`${n.origin}:${n.id}`} className="w-full bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] px-4 py-3 flex items-start gap-3">
             <button onClick={() => onOpen(n)} className="flex-1 min-w-0 text-left active:opacity-70">
@@ -152,7 +152,7 @@ function ActivityList({
               <button
                 onClick={() => canAct && onAction(n)}
                 disabled={!canAct}
-                title={canAct ? 'Archive' : 'Only the creator or assignee can archive this'}
+                title={canAct ? 'Archive' : 'Only the creator can archive this'}
                 className="mt-0.5 shrink-0 p-1 rounded-[6px] active:bg-[#ffe0da] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {canAct ? <Archive size={14} className="text-[#ff5c39]" /> : <Lock size={11} className="text-[#c0c4cc]" />}

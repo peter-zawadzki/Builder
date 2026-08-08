@@ -16,6 +16,7 @@ import { MountainMapView } from './MountainMapView';
 import { InspectionForm } from './InspectionForm';
 import { deviceSummaryLines } from './LocationPropertiesPanel';
 import { type DeviceType, DEVICE_TYPE_CONFIG } from '../utils/deviceTypes';
+import { useApi } from '../api/client';
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ export function LocationDetail({
   onBack?: () => void;
   embedded?: boolean;
 } = {}) {
+  const api = useApi();
   const params = useParams();
   const mountainId = mountainIdProp || params.mountainId;
   const locationId = locationIdProp || params.locationId;
@@ -509,6 +511,9 @@ export function LocationDetail({
                           updateInspectionActivities(insp.id, [...(insp.activities || []), full]);
                           const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountain.name]);
                           logActivity(location.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/mountains/${location.mountainId}/locations/${location.id}`, slackText, !!entry.assigneeContactId);
+                          if (full.type === 'note') {
+                            api.embedNote({ noteSource: 'activity', noteId: full.id, originCollection: 'inspections', originId: insp.id, mountainId: location.mountainId, content: full.text }).catch(() => {});
+                          }
                         }}
                         onToggle={(id) => {
                           const updated = (insp.activities || []).map(a =>
@@ -518,6 +523,9 @@ export function LocationDetail({
                         }}
                         onDelete={(id) => updateInspectionActivities(insp.id, (insp.activities || []).filter(a => a.id !== id))}
                         onArchive={(id, archived) => updateInspectionActivities(insp.id, (insp.activities || []).map(a => a.id === id ? { ...a, archived } : a))}
+                        onEdit={(id, text) => { updateInspectionActivities(insp.id, (insp.activities || []).map(a => a.id === id ? { ...a, text } : a)); api.embedNote({ noteSource: 'activity', noteId: id, originCollection: 'inspections', originId: insp.id, mountainId: location.mountainId, content: text }).catch(() => {}); }}
+                        originCollection="inspections"
+                        originId={insp.id}
                       />
                     </div>
                   </div>

@@ -1,29 +1,41 @@
 import { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { X, Check, MessageSquare, ListTodo, Lock, Archive, ArchiveRestore } from 'lucide-react';
+import { X, Check, MessageSquare, ListTodo, Lock, Archive, ArchiveRestore, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-import { useData, getYullrMembers, canCompleteActivity } from '../context/DataContext';
+import { useData, getYullrMembers, canCompleteActivity, canEditOrArchiveNote } from '../context/DataContext';
 import type { ContactActivity } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
 import { useIsSuperAdmin } from '../hooks/useRole';
+import { ReplyThread } from './ReplyThread';
 
 // Shared "Notes & Action Items" block — used on Contacts, Organizations,
 // Mountains, Teams, Projects, and Inspections so assignment/tracking works the
 // same everywhere. Assignable only to a person in the YULLR organization —
-// not to a whole team. Every item is stamped with its creator; only the
-// creator or assignee can mark an action item complete, or archive a note.
+// not to a whole team. Every item is stamped with its creator. Actions:
+// creator or assignee can mark complete (canCompleteActivity). Notes are
+// stricter — only the creator can edit or archive (canEditOrArchiveNote);
+// an assignee/tagged person is just notified and can reply.
 export function ActivitySection({
   activities,
   onAdd,
   onToggle,
   onDelete,
   onArchive,
+  onEdit,
+  originCollection,
+  originId,
 }: {
   activities: ContactActivity[];
   onAdd: (entry: Omit<ContactActivity, 'id' | 'createdAt'>) => void;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onArchive: (id: string, archived: boolean) => void;
+  onEdit: (id: string, text: string) => void;
+  // Identifies the parent record (e.g. { collection: 'mountains', id: mountainId })
+  // so replies/notifications/search can resolve back to where a note lives —
+  // omit only for entities not yet wired into the reply system.
+  originCollection?: string;
+  originId?: string;
 }) {
   const { contacts, organizations } = useData();
   const { user } = useUser();
@@ -35,6 +47,15 @@ export function ActivitySection({
   const [newType, setNewType] = useState<'note' | 'action'>('note');
   const [assigneeId, setAssigneeId] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+
+  const startEdit = (n: ContactActivity) => { setEditingId(n.id); setEditDraft(n.text); };
+  const saveEdit = () => {
+    if (!editingId || !editDraft.trim()) return;
+    onEdit(editingId, editDraft.trim());
+    setEditingId(null);
+  };
 
   const sorted = [...activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const openActions = sorted.filter(a => a.type === 'action' && !a.completed);
@@ -141,23 +162,57 @@ export function ActivitySection({
           </div>
           <div className="space-y-2">
             {(showArchived ? archivedNotes : notes).map(n => {
-              const canArchive = canCompleteActivity(n, me, isSuperAdmin);
+              const canEdit = canEditOrArchiveNote(n, me, isSuperAdmin);
+              const isEditing = editingId === n.id;
               return (
                 <div key={n.id} className={`bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] px-3 py-2.5 ${n.archived ? 'opacity-60' : ''}`}>
-                  <p className="text-[13px] text-[#0a0a0a]">{n.text}</p>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-[11px] text-[#6a7282]">
-                      {n.authorName ? `${n.authorName} · ` : ''}{new Date(n.createdAt).toLocaleString()}{assigneeLabel(n) ? ` · ${assigneeLabel(n)}` : ''}
-                    </p>
-                    <button
-                      onClick={() => canArchive && onArchive(n.id, !n.archived)}
-                      disabled={!canArchive}
-                      title={canArchive ? (n.archived ? 'Restore' : 'Archive') : `Only the creator or assignee can ${n.archived ? 'restore' : 'archive'} this`}
-                      className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      {n.archived ? <ArchiveRestore size={12} className="text-[#6a7282]" /> : <Archive size={12} className="text-[#6a7282]" />}
-                    </button>
-                  </div>
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editDraft}
+                        onChange={e => setEditDraft(e.target.value)}
+                        rows={3}
+                        className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none resize-none"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingId(null)} className="px-3 py-1.5 rounded-[6px] bg-[#f3f3f5] text-[#6a7282] text-[12px] font-['Inter:Medium',sans-serif]">Cancel</button>
+                        <button onClick={saveEdit} disabled={!editDraft.trim()} className="px-3 py-1.5 rounded-[6px] bg-[#1D2930] text-white text-[12px] font-['Inter:Medium',sans-serif] disabled:opacity-40">Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[13px] text-[#0a0a0a]">{n.text}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-[11px] text-[#6a7282]">
+                          {n.authorName ? `${n.authorName} · ` : ''}{new Date(n.createdAt).toLocaleString()}{assigneeLabel(n) ? ` · ${assigneeLabel(n)}` : ''}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          {!n.archived && (
+                            <button
+                              onClick={() => canEdit && startEdit(n)}
+                              disabled={!canEdit}
+                              title={canEdit ? 'Edit' : 'Only the creator can edit this'}
+                              className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <Pencil size={12} className="text-[#6a7282]" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => canEdit && onArchive(n.id, !n.archived)}
+                            disabled={!canEdit}
+                            title={canEdit ? (n.archived ? 'Restore' : 'Archive') : `Only the creator can ${n.archived ? 'restore' : 'archive'} this`}
+                            className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            {n.archived ? <ArchiveRestore size={12} className="text-[#6a7282]" /> : <Archive size={12} className="text-[#6a7282]" />}
+                          </button>
+                        </div>
+                      </div>
+                      {originCollection && originId && !n.archived && (
+                        <ReplyThread noteRef={{ noteSource: 'activity', noteId: n.id, originCollection, originId }} />
+                      )}
+                    </>
+                  )}
                 </div>
               );
             })}

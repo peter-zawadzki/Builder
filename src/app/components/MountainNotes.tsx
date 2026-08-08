@@ -2,12 +2,28 @@ import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import { Plus, Pencil, Trash2, Archive, ArchiveRestore, Check, X, StickyNote, ChevronDown, PlusCircle, Maximize2, Lock } from 'lucide-react';
-import { useData, getYullrMembers, getMountainRollupActivities, canCompleteActivity, MountainNote, NoteTopic } from '../context/DataContext';
+import { useData, getYullrMembers, getMountainRollupActivities, canEditOrArchiveNote, MountainNote, NoteTopic } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { RollupNoteRow, RollupEmptyState, useMountainRollupUpdater } from './MountainActivityRollup';
 import { useMyContact } from '../hooks/useMyContact';
 import { useIsSuperAdmin } from '../hooks/useRole';
 import { newId } from '../utils/id';
+import { useApi } from '../api/client';
+import { ReplyThread } from './ReplyThread';
+import { NotesSearchBar } from './NotesSearchBar';
+
+// Maps a rolled-up activity's origin (MountainActivityEntry.origin) to the
+// legacy_records collection it actually lives in, for embedNote's
+// originCollection/originId — 'general' means the mountain's own
+// activities, which has no separate originId (it *is* the mountain).
+const ORIGIN_TO_COLLECTION: Record<string, string> = {
+  general: 'mountains',
+  person: 'contacts',
+  team: 'teams',
+  organization: 'organizations',
+  project: 'projects',
+  inspection: 'inspections',
+};
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
@@ -33,8 +49,9 @@ interface NoteCardProps {
 function NoteCard({ note, onUpdate, forceExpanded, highlighted }: NoteCardProps) {
   const me = useMyContact();
   const isSuperAdmin = useIsSuperAdmin();
-  const canArchive = canCompleteActivity(note, me, isSuperAdmin);
+  const canArchive = canEditOrArchiveNote(note, me, isSuperAdmin);
   const archiveNote = () => canArchive && onUpdate(note.id, { archived: true });
+  const startEditing = () => canArchive && setIsEditing(true);
   const [isExpanded, setIsExpanded] = useState(forceExpanded || highlighted || false);
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingTo, setIsAddingTo] = useState(false);
@@ -294,7 +311,7 @@ function NoteCard({ note, onUpdate, forceExpanded, highlighted }: NoteCardProps)
             disabled={!canArchive}
             className="bg-[#fff0ee] border border-[rgba(255,92,57,0.2)] rounded-[8px] py-2.5 px-3 flex items-center justify-center active:bg-[#ffe0da] disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Archive note"
-            title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
+            title={canArchive ? 'Archive' : 'Only the creator can archive this'}
           >
             <Archive size={16} className="text-[#ff5c39]" />
           </button>
@@ -336,19 +353,20 @@ function NoteCard({ note, onUpdate, forceExpanded, highlighted }: NoteCardProps)
             <PlusCircle size={14} className="text-[#307FE2]" />
           </button>
           <button
-            onClick={e => { e.stopPropagation(); setIsEditing(true); }}
-            className="p-1.5 rounded-[6px] active:bg-[#C5DEFF] flex-shrink-0"
+            onClick={e => { e.stopPropagation(); startEditing(); }}
+            disabled={!canArchive}
+            className="p-1.5 rounded-[6px] active:bg-[#C5DEFF] flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Edit note"
-            title="Edit note"
+            title={canArchive ? 'Edit note' : 'Only the creator can edit this'}
           >
-            <Pencil size={14} className="text-[#307FE2]" />
+            {canArchive ? <Pencil size={14} className="text-[#307FE2]" /> : <Lock size={12} className="text-[#307FE2]" />}
           </button>
           <button
             onClick={e => { e.stopPropagation(); archiveNote(); }}
             disabled={!canArchive}
             className="p-1.5 rounded-[6px] active:bg-[#ffe0da] flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Archive note"
-            title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
+            title={canArchive ? 'Archive' : 'Only the creator can archive this'}
           >
             {canArchive ? <Archive size={14} className="text-[#ff5c39]" /> : <Lock size={12} className="text-[#ff5c39]" />}
           </button>
@@ -372,6 +390,8 @@ function NoteCard({ note, onUpdate, forceExpanded, highlighted }: NoteCardProps)
               Add to Note
             </button>
           </div>
+
+          <ReplyThread noteRef={{ noteSource: 'mountain_note', noteId: note.id }} />
 
           {/* Additional entries */}
           {note.entries && note.entries.length > 0 && (
@@ -432,19 +452,20 @@ function NoteCard({ note, onUpdate, forceExpanded, highlighted }: NoteCardProps)
             <PlusCircle size={14} className="text-[#307FE2]" />
           </button>
           <button
-            onClick={e => { e.stopPropagation(); setIsEditing(true); }}
-            className="p-1.5 rounded-[6px] active:bg-[#C5DEFF] flex-shrink-0"
+            onClick={e => { e.stopPropagation(); startEditing(); }}
+            disabled={!canArchive}
+            className="p-1.5 rounded-[6px] active:bg-[#C5DEFF] flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Edit note"
-            title="Edit note"
+            title={canArchive ? 'Edit note' : 'Only the creator can edit this'}
           >
-            <Pencil size={14} className="text-[#307FE2]" />
+            {canArchive ? <Pencil size={14} className="text-[#307FE2]" /> : <Lock size={12} className="text-[#307FE2]" />}
           </button>
           <button
             onClick={e => { e.stopPropagation(); archiveNote(); }}
             disabled={!canArchive}
             className="p-1.5 rounded-[6px] active:bg-[#ffe0da] flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Archive note"
-            title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
+            title={canArchive ? 'Archive' : 'Only the creator can archive this'}
           >
             {canArchive ? <Archive size={14} className="text-[#ff5c39]" /> : <Lock size={12} className="text-[#ff5c39]" />}
           </button>
@@ -483,6 +504,7 @@ interface MountainNotesProps {
 }
 
 export function MountainNotes({ mountainId, onExpandClick, highlightNoteId }: MountainNotesProps) {
+  const api = useApi();
   const location = useLocation();
   const { user } = useUser();
   const me = useMyContact();
@@ -529,6 +551,7 @@ export function MountainNotes({ mountainId, onExpandClick, highlightNoteId }: Mo
       authorContactId: me?.id,
       ...(assignee ? { assigneeContactId: assignee.id, assigneeName: assignee.name } : {}),
     });
+    api.embedNote({ noteSource: 'mountain_note', noteId: id, mountainId, content: trimmed }).catch(() => {});
 
     setNewText('');
     setNewAssigneeId('');
@@ -548,6 +571,7 @@ export function MountainNotes({ mountainId, onExpandClick, highlightNoteId }: Mo
     }
 
     updateNote(id, updates);
+    if (updates.text) api.embedNote({ noteSource: 'mountain_note', noteId: id, mountainId, content: updates.text }).catch(() => {});
   };
 
   // Separate topic notes from general notes
@@ -596,6 +620,10 @@ export function MountainNotes({ mountainId, onExpandClick, highlightNoteId }: Mo
             New
           </button>
         </div>
+      </div>
+
+      <div className="mb-3">
+        <NotesSearchBar mountainId={mountainId} />
       </div>
 
       {/* Add note modal */}
@@ -694,8 +722,25 @@ export function MountainNotes({ mountainId, onExpandClick, highlightNoteId }: Mo
                   : <RollupNoteRow
                       key={item.entry.id}
                       entry={item.entry}
-                      canArchive={canCompleteActivity(item.entry, me, isSuperAdmin)}
+                      canArchive={canEditOrArchiveNote(item.entry, me, isSuperAdmin)}
+                      noteRef={{
+                        noteSource: 'activity',
+                        noteId: item.entry.id,
+                        originCollection: ORIGIN_TO_COLLECTION[item.entry.origin],
+                        originId: item.entry.origin === 'general' ? mountainId : item.entry.originId,
+                      }}
                       onArchive={() => applyRollupUpdate(item.entry, { archived: true })}
+                      onEdit={(text) => {
+                        applyRollupUpdate(item.entry, { text });
+                        api.embedNote({
+                          noteSource: 'activity',
+                          noteId: item.entry.id,
+                          originCollection: ORIGIN_TO_COLLECTION[item.entry.origin],
+                          originId: item.entry.origin === 'general' ? mountainId : item.entry.originId,
+                          mountainId,
+                          content: text,
+                        }).catch(() => {});
+                      }}
                     />
                 )}
               </div>
@@ -708,10 +753,10 @@ export function MountainNotes({ mountainId, onExpandClick, highlightNoteId }: Mo
 }
 
 // Compact read-only row for a soft-archived note, with a Restore action for
-// whoever's allowed to archive it (creator or assignee).
+// whoever's allowed to archive it (creator, or a super admin).
 function ArchivedNoteRow({ note, me, onRestore }: { note: MountainNote; me: ReturnType<typeof useMyContact>; onRestore: () => void }) {
   const isSuperAdmin = useIsSuperAdmin();
-  const canRestore = canCompleteActivity(note, me, isSuperAdmin);
+  const canRestore = canEditOrArchiveNote(note, me, isSuperAdmin);
   return (
     <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2.5 opacity-70">
       <p className="text-[13px] text-[#0a0a0a]">{note.text}</p>
@@ -722,7 +767,7 @@ function ArchivedNoteRow({ note, me, onRestore }: { note: MountainNote; me: Retu
         <button
           onClick={() => canRestore && onRestore()}
           disabled={!canRestore}
-          title={canRestore ? 'Restore' : 'Only the creator or assignee can restore this'}
+          title={canRestore ? 'Restore' : 'Only the creator can restore this'}
           className="p-1 active:opacity-70 disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <ArchiveRestore size={13} className="text-[#307fe2]" />

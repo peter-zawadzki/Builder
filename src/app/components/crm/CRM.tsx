@@ -22,6 +22,7 @@ import { ActivitySection } from '../ActivitySection';
 import { ProjectsPane } from '../projects/ProjectsPane';
 import { LogoUploader } from '../LogoUploader';
 import { AddressAutocomplete } from '../AddressAutocomplete';
+import { useApi } from '../../api/client';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -601,6 +602,7 @@ export function DealDetailsModal({ mountainId, onClose }: { mountainId: string; 
 
 export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack: () => void }) {
   const { updateContact, deleteContact, getMountainById, organizations, mountains, teams, contacts, logActivity } = useData();
+  const api = useApi();
   const navigate = useNavigate();
   const [isEditMode, setIsEditMode] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -683,6 +685,9 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
     updateContact(contact.id, { activities: [...(contact.activities || []), full] });
     const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, [mountain?.name]);
     logActivity(contact.mountainId, entry.type === 'note' ? 'note_added' : 'action_added', summary, contact.mountainId ? undefined : `/crm?tab=contacts&open=${contact.id}`, slackText, !!entry.assigneeContactId);
+    if (full.type === 'note') {
+      api.embedNote({ noteSource: 'activity', noteId: full.id, originCollection: 'contacts', originId: contact.id, mountainId: contact.mountainId, content: full.text }).catch(() => {});
+    }
   };
 
   const toggleAction = (id: string) => {
@@ -698,6 +703,11 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
 
   const archiveActivity = (id: string, archived: boolean) => {
     updateContact(contact.id, { activities: (contact.activities || []).map(a => a.id === id ? { ...a, archived } : a) });
+  };
+
+  const editActivity = (id: string, text: string) => {
+    updateContact(contact.id, { activities: (contact.activities || []).map(a => a.id === id ? { ...a, text } : a) });
+    api.embedNote({ noteSource: 'activity', noteId: id, originCollection: 'contacts', originId: contact.id, mountainId: contact.mountainId, content: text }).catch(() => {});
   };
 
   return (
@@ -896,6 +906,9 @@ export function ContactDetail({ contact, onBack }: { contact: CRMContact; onBack
           onToggle={toggleAction}
           onDelete={deleteActivity}
           onArchive={archiveActivity}
+          onEdit={editActivity}
+          originCollection="contacts"
+          originId={contact.id}
         />
       </div>
 
@@ -1479,6 +1492,7 @@ function Organizations({ openId }: { openId?: string } = {}) {
 
 function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () => void }) {
   const { addOrganization, updateOrganization, deleteOrganization, mountains, updateMountain, contacts, logActivity } = useData();
+  const api = useApi();
   const [isEditMode, setIsEditMode] = useState(!org);
   const [dirty, setDirty] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -1648,10 +1662,13 @@ function OrgForm({ org, onClose }: { org: CRMOrganization | null; onClose: () =>
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={org.activities || []}
-                onAdd={(entry) => { updateOrganization(org.id, { activities: [...(org.activities || []), { ...entry, id: newId(), createdAt: new Date().toISOString() }] }); const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, org.mountainIds.map(id => mountains.find(m => m.id === id)?.name)); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/crm?tab=organizations&open=${org.id}`, slackText, !!entry.assigneeContactId); }}
+                onAdd={(entry) => { const full = { ...entry, id: newId(), createdAt: new Date().toISOString() }; updateOrganization(org.id, { activities: [...(org.activities || []), full] }); const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, org.mountainIds.map(id => mountains.find(m => m.id === id)?.name)); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/crm?tab=organizations&open=${org.id}`, slackText, !!entry.assigneeContactId); if (full.type === 'note') api.embedNote({ noteSource: 'activity', noteId: full.id, originCollection: 'organizations', originId: org.id, content: full.text }).catch(() => {}); }}
                 onToggle={(id) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateOrganization(org.id, { activities: (org.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
+                onEdit={(id, text) => { updateOrganization(org.id, { activities: (org.activities || []).map(a => a.id === id ? { ...a, text } : a) }); api.embedNote({ noteSource: 'activity', noteId: id, originCollection: 'organizations', originId: org.id, content: text }).catch(() => {}); }}
+                originCollection="organizations"
+                originId={org.id}
               />
             </div>
           )}
@@ -1796,6 +1813,7 @@ function Teams({ openId }: { openId?: string } = {}) {
 
 function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void }) {
   const { mountains, contacts, addTeam, updateTeam, deleteTeam, logActivity } = useData();
+  const api = useApi();
   const { user } = useUser();
   const createdBy = user?.fullName || user?.primaryEmailAddress?.emailAddress || 'You';
   const [isEditMode, setIsEditMode] = useState(!team);
@@ -2027,10 +2045,13 @@ function TeamForm({ team, onClose }: { team: CRMTeam | null; onClose: () => void
               <label className="block text-[12px] font-['Inter:Medium',sans-serif] text-[#6a7282] mb-1.5 uppercase tracking-wide">Notes &amp; Action Items</label>
               <ActivitySection
                 activities={team.activities || []}
-                onAdd={(entry) => { updateTeam(team.id, { activities: [...(team.activities || []), { ...entry, id: newId(), createdAt: new Date().toISOString() }] }); const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, team.mountainIds.map(id => mountains.find(m => m.id === id)?.name)); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/crm?tab=teams&open=${team.id}`, slackText, !!entry.assigneeContactId); }}
+                onAdd={(entry) => { const full = { ...entry, id: newId(), createdAt: new Date().toISOString() }; updateTeam(team.id, { activities: [...(team.activities || []), full] }); const { summary, slackText } = buildActivitySummaries(entry, entry.authorName, contacts, team.mountainIds.map(id => mountains.find(m => m.id === id)?.name)); logActivity(undefined, entry.type === 'note' ? 'note_added' : 'action_added', summary, `/crm?tab=teams&open=${team.id}`, slackText, !!entry.assigneeContactId); if (full.type === 'note') api.embedNote({ noteSource: 'activity', noteId: full.id, originCollection: 'teams', originId: team.id, content: full.text }).catch(() => {}); }}
                 onToggle={(id) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, completed: !a.completed, completedAt: !a.completed ? new Date().toISOString() : undefined } : a) })}
                 onDelete={(id) => updateTeam(team.id, { activities: (team.activities || []).filter(a => a.id !== id) })}
                 onArchive={(id, archived) => updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, archived } : a) })}
+                onEdit={(id, text) => { updateTeam(team.id, { activities: (team.activities || []).map(a => a.id === id ? { ...a, text } : a) }); api.embedNote({ noteSource: 'activity', noteId: id, originCollection: 'teams', originId: team.id, content: text }).catch(() => {}); }}
+                originCollection="teams"
+                originId={team.id}
               />
             </div>
           )}

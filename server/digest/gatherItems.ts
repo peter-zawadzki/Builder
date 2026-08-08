@@ -5,9 +5,10 @@
 // rather than issuing a separate query per staff member.
 import { query } from "../db";
 import { isProjectStale, isProposalStale } from "./staleDetection";
+import { resolveOriginalPoster } from "../notes/resolveOriginalPoster";
 
 export interface DigestActionItem {
-  kind: "action" | "note" | "project";
+  kind: "action" | "note" | "project" | "reply";
   mountainId: string | null;
   mountainName: string;
   projectId?: string; // set when this item lives on a project (or is one) — links via ?openProject=
@@ -80,6 +81,9 @@ export async function loadDigestData(sinceIso: string): Promise<DigestData> {
   ]);
 
   const mountainNameById = new Map(mountains.map((m) => [m.id, m.data?.name ?? "Unknown mountain"]));
+  const projectById = new Map(projects.map((p) => [p.id, p.data]));
+  const contactById = new Map(contacts.map((c) => [c.id, c.data]));
+  const noteById = new Map(notesRows.map((n) => [n.id, n.data]));
   const contactIdByEmail = new Map<string, string>();
   for (const c of contacts) {
     const email = (c.data?.email ?? "").toLowerCase();
@@ -134,6 +138,61 @@ export async function loadDigestData(sinceIso: string): Promise<DigestData> {
     bucket(contactId).staleItems.push({
       kind: "proposal", mountainId: proposal.mountainId ?? null, mountainName,
       name: proposal.title || "Proposal", sinceDate: proposal.sentAt || proposal.createdAt,
+    });
+  }
+
+  // Replies to your notes — the original poster gets notified in-app
+  // (server/routes/notes.ts) and, separately, here in the digest. Resolves
+  // "where does this note live" using the collections already loaded above
+  // where possible; falls back to a live query (resolveOriginalPoster) for
+  // the less common origins (teams/organizations/inspections) this pass
+  // doesn't pre-load in bulk.
+  const replies = await query<{
+    id: string; note_source: "mountain_note" | "activity"; note_id: string;
+    origin_collection: string | null; origin_id: string | null; author_name: string; text: string; created_at: string;
+  }>(`SELECT id, note_source, note_id, origin_collection, origin_id, author_name, text, created_at FROM note_replies WHERE created_at >= $1`, [sinceIso]);
+
+  for (const reply of replies) {
+    let posterContactId: string | null = null;
+    let mountainId: string | null = null;
+    let projectId: string | undefined;
+
+    if (reply.note_source === "mountain_note") {
+      const note = noteById.get(reply.note_id);
+      posterContactId = note?.authorContactId ?? null;
+      mountainId = note?.mountainId ?? null;
+    } else if (reply.origin_collection === "mountains" && reply.origin_id) {
+      const mountain = mountains.find((m) => m.id === reply.origin_id)?.data;
+      posterContactId = mountain?.activities?.find((a: any) => a.id === reply.note_id)?.authorContactId ?? null;
+      mountainId = reply.origin_id;
+    } else if (reply.origin_collection === "projects" && reply.origin_id) {
+      const project = projectById.get(reply.origin_id);
+      posterContactId = project?.activities?.find((a: any) => a.id === reply.note_id)?.authorContactId ?? null;
+      mountainId = project?.mountainId ?? null;
+      projectId = reply.origin_id;
+    } else if (reply.origin_collection === "contacts" && reply.origin_id) {
+      const contact = contactById.get(reply.origin_id);
+      posterContactId = contact?.activities?.find((a: any) => a.id === reply.note_id)?.authorContactId ?? null;
+      mountainId = contact?.mountainId ?? null;
+    } else {
+      // teams/organizations/inspections — not bulk-loaded here; a live query
+      // is fine given how infrequent replies on these origins are.
+      const poster = await resolveOriginalPoster({
+        noteSource: reply.note_source, noteId: reply.note_id,
+        originCollection: reply.origin_collection ?? undefined, originId: reply.origin_id ?? undefined,
+      });
+      posterContactId = poster.authorContactId;
+    }
+
+    if (!posterContactId) continue;
+    bucket(posterContactId).newItems.push({
+      kind: "reply",
+      mountainId,
+      mountainName: mountainId ? mountainNameById.get(mountainId) ?? "Unknown mountain" : "Team project",
+      projectId,
+      itemId: reply.note_id,
+      text: `${reply.author_name} replied: "${reply.text.slice(0, 140)}"`,
+      createdAt: reply.created_at,
     });
   }
 

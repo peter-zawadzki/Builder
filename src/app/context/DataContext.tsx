@@ -490,17 +490,27 @@ export interface ContactActivity {
   archived?: boolean;          // notes: soft-archived (hidden but recoverable) instead of deleted
 }
 
-// Only the person who created an item, or the person it's assigned to, may
-// mark it complete (action items) or archive it (notes) — except a super
-// admin, who can act on anything regardless of ownership. Tasks can only be
-// assigned to a YULLR person, not a team. Loosely typed so it also accepts
-// MountainNote, which has the same author/assignee shape.
+// Only the person who created an ACTION item, or the person it's assigned
+// to, may mark it complete — except a super admin, who can act on anything
+// regardless of ownership. Tasks can only be assigned to a YULLR person,
+// not a team. This is specifically for actions — see canEditOrArchiveNote
+// below for the stricter rule that applies to notes.
 export function canCompleteActivity(activity: { authorContactId?: string; assigneeContactId?: string }, me: CRMContact | undefined, isSuperAdmin?: boolean): boolean {
   if (isSuperAdmin) return true;
   if (!me) return false;
   if (activity.authorContactId === me.id) return true;
   if (activity.assigneeContactId === me.id) return true;
   return false;
+}
+
+// Notes are stricter than actions: being tagged/assigned on a note only
+// means you're notified and can reply to it — it does not grant edit or
+// archive rights. Only the author (or a super admin) may change a note's
+// own content. Loosely typed so it also accepts MountainNote, which has
+// the same author shape as ContactActivity.
+export function canEditOrArchiveNote(note: { authorContactId?: string }, me: CRMContact | undefined, isSuperAdmin?: boolean): boolean {
+  if (isSuperAdmin) return true;
+  return !!me && note.authorContactId === me.id;
 }
 
 // Builds the Slack-mirror summary for a newly-added note/action item. When

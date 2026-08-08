@@ -13,6 +13,7 @@ import { TONE_GUIDE } from "../data/brandVoice";
 import { searchCode, readFileTool } from "../utils/codeSearch";
 import { logInteraction } from "../utils/interactionLog";
 import { cachedSystem, cacheableTools } from "../utils/promptCache";
+import { embedText, toVectorLiteral } from "../utils/embeddings";
 
 export const faqAgent = new Hono<HonoEnv>();
 
@@ -96,6 +97,20 @@ async function queryDatabase(sql: string): Promise<string> {
   } finally {
     client.release();
   }
+}
+
+// Semantic search over notes/replies (server/notes/embedNote.ts keeps this
+// index in sync) — lets ODIN answer "what did we discuss about X" questions
+// that the curated FAQ set, code, and structured business data can't.
+async function searchNotesTool(searchQuery: string): Promise<string> {
+  const embedding = await embedText(searchQuery);
+  if (!embedding) return "Note search isn't configured (missing VOYAGE_API_KEY).";
+  const rows = await query<{ content: string; mountain_id: string | null; distance: number }>(
+    `SELECT content, mountain_id, embedding <=> $1::vector AS distance FROM note_embeddings ORDER BY embedding <=> $1::vector LIMIT 8`,
+    [toVectorLiteral(embedding)]
+  );
+  if (rows.length === 0) return "No notes found.";
+  return JSON.stringify(rows.map((r) => ({ content: r.content, mountainId: r.mountain_id, relevance: Math.round((1 - r.distance) * 100) / 100 })));
 }
 
 async function searchPlacesTool(searchQuery: string): Promise<string> {
@@ -260,6 +275,16 @@ const TOOLS: Anthropic.ToolUnion[] = [
     },
   },
   {
+    name: "search_notes",
+    description:
+      "Semantic search over every note and reply across mountains/contacts/teams/organizations/projects/inspections — use this for 'what did we discuss about X' or 'what's the latest on Y' questions that aren't answerable from the FAQ set, code, or query_database. Finds relevant notes even when they don't share exact keywords with the question.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string", description: "Plain-language description of what to find, e.g. 'camera placement discussion at Attitash'" } },
+      required: ["query"],
+    },
+  },
+  {
     name: "search_places",
     description:
       "Search for a real-world place by name (e.g. a ski mountain/resort) via Google Places. Returns candidate places with a placeId — use this when the user asks to add a mountain, to find out which real place(s) match and disambiguate (e.g. 'Wildcat Mountain' exists in more than one state).",
@@ -375,13 +400,15 @@ You genuinely CAN generate a short narrated video tutorial, fully automatically,
 
 Brand voice — write every answer in this tone: ${TONE_GUIDE}
 
-You answer six kinds of requests: (1) curated company FAQs about the Yullr product, pricing, and install process, (2) "where do I find X" navigational questions about this Builder app, answerable from the App Navigation reference below, (3) "how does X work" / "how do I do X" questions about this app's own features and workflows, answerable by reading its source code with the search_code/read_file tools, (4) data/analytics questions about the app's actual business data (mountain/project/proposal counts, what needs action, etc.), answerable with the query_database tool, (5) "add a mountain" requests, using search_places/get_place_details/create_mountain, and (6) "update mountain X with these stats/details" requests for a mountain that already exists, using query_database to find its id and update_mountain to write the change.
+You answer seven kinds of requests: (1) curated company FAQs about the Yullr product, pricing, and install process, (2) "where do I find X" navigational questions about this Builder app, answerable from the App Navigation reference below, (3) "how does X work" / "how do I do X" questions about this app's own features and workflows, answerable by reading its source code with the search_code/read_file tools, (4) data/analytics questions about the app's actual business data (mountain/project/proposal counts, what needs action, etc.), answerable with the query_database tool, (5) "add a mountain" requests, using search_places/get_place_details/create_mountain, (6) "update mountain X with these stats/details" requests for a mountain that already exists, using query_database to find its id and update_mountain to write the change, and (7) "what did we discuss/decide about X" questions answerable from real notes/replies left by the team, using the search_notes tool.
 
 Many questions are (3) even when phrased like "how do I..." or "where do I go to create X" — anything asking about the STEPS or PROCESS for doing something in the app (creating, editing, assigning, submitting, signing, etc.) is a (3), not a (2). App Navigation only tells you which section/tab a feature lives in, not the click-by-click flow inside it. Never conclude "I don't have that information" for a how-do-I-do-X question just because App Navigation and the FAQ list didn't cover it in full — call search_code (try the feature name and the specific action, e.g. "proposal create", "new proposal", "assessment submit") and read_file on promising matches before giving up. Only fall back to "I don't have that information" if search_code also turns up nothing relevant after a real attempt.
 
 For navigational questions ("where are the logos", "where do I find X", "how do I get to Y") — check App Navigation FIRST. It's authoritative and always current; don't grep the codebase to guess where something lives in the UI when this already tells you. Whenever App Navigation gives a route for what's being asked about — including a "?tab=" deep link — that route IS the direct link; give it confidently as a markdown link, e.g. [Brand Assets](/resources?tab=logos). Don't hedge or say you're unsure of "the exact URL" when App Navigation already states it. Only say you don't have a link when App Navigation genuinely has nothing for that item (e.g. a specific mountain/project/proposal record — those aren't in App Navigation since it only covers static app sections, not database records).
 
 For data/count/analytics questions ("how many mountains have X", "what needs action", "which are pending Y") — use query_database against the real data. It's read-only (writes are blocked at the database level regardless of what you write), so query freely and run more than one query if you need to check a field name first. Answer with real numbers from the query results, never estimate or guess a count.
+
+For "what did we discuss/decide/say about X" questions — use search_notes. It's a semantic search, so plain-language descriptions work even without exact keyword overlap. Ground your answer only in what the returned notes actually say — never fill in plausible-sounding details search_notes didn't return. If it returns nothing relevant, say so plainly rather than guessing.
 
 For "add [mountain name]" requests: this is the one flow that writes real data, so never call create_mountain on the first mention of a name. First call search_places — if it returns more than one plausible candidate (a name like "Wildcat Mountain" often does), list them and ask which one is meant (set needsUserInput=true, confident=false on that turn — this is a pending question, not a failure); if there's one obvious match, still confirm it in plain language ("Wildcat Mountain in Pinkham Notch, NH — that the one?") before creating anything. Only call create_mountain in a LATER turn, after the user's reply confirms which specific place — that's what userConfirmed=true means, and it must never be set otherwise. Once confirmed, call get_place_details on the chosen placeId and pass its address/phone/website/suggestedRegion straight through to create_mountain — don't retype them from memory. If suggestedRegion comes back null, ask which region to use rather than guessing (again needsUserInput=true). Before calling create_mountain, use web_search to try to find real, publicly reported trailCount/acreage/verticalDrop numbers for this specific resort (search something like "[mountain name] trail count acreage vertical drop"), and pass along whatever you find real sources for; cite the source in your final answer. Only pass a number you actually found in search results — never estimate or fill these from your own general knowledge of the resort, since a plausible-sounding wrong number is worse than a blank field; if search doesn't turn up a reliable number for a field, leave it unset and say plainly it wasn't found. If create_mountain returns a duplicateWarning, mention it, but the record is already created either way.
 
@@ -490,7 +517,7 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const call of toolUses) {
       usedCode = usedCode || call.name === "search_code" || call.name === "read_file";
-      usedData = usedData || ["query_database", "search_places", "get_place_details", "create_mountain", "update_mountain"].includes(call.name);
+      usedData = usedData || ["query_database", "search_notes", "search_places", "get_place_details", "create_mountain", "update_mountain"].includes(call.name);
       let result = "";
       if (call.name === "search_code") {
         result = await searchCode((call.input as { query: string }).query);
@@ -499,6 +526,8 @@ export async function runAgent(question: string, history: HistoryTurn[] = []): P
         result = await readFileTool(input.path, input.start_line, input.end_line);
       } else if (call.name === "query_database") {
         result = await queryDatabase((call.input as { sql: string }).sql);
+      } else if (call.name === "search_notes") {
+        result = await searchNotesTool((call.input as { query: string }).query);
       } else if (call.name === "search_places") {
         result = await searchPlacesTool((call.input as { query: string }).query);
       } else if (call.name === "get_place_details") {

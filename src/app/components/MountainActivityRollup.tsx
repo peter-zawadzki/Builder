@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Lock, ListTodo, Archive } from 'lucide-react';
+import { Check, Lock, ListTodo, Archive, Pencil } from 'lucide-react';
 import { useData, getMountainRollupActivities, canCompleteActivity } from '../context/DataContext';
 import type { ContactActivity, MountainActivityEntry } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
 import { useIsSuperAdmin } from '../hooks/useRole';
+import { ReplyThread } from './ReplyThread';
+import type { NoteRef } from '../api/client';
 
 export const ORIGIN_LABEL: Record<MountainActivityEntry['origin'], string> = {
   general: 'General',
@@ -183,18 +185,54 @@ function ActionRow({ entry, me, onToggle, highlighted }: { entry: MountainActivi
 // into the main notes feed instead of living in their own section. Archiving
 // writes back to wherever the note actually lives (its origin entity), since
 // it's only ever created there.
-export function RollupNoteRow({ entry, canArchive, onArchive }: { entry: MountainActivityEntry; canArchive?: boolean; onArchive?: () => void }) {
+export function RollupNoteRow({ entry, canArchive, onArchive, onEdit, noteRef }: { entry: MountainActivityEntry; canArchive?: boolean; onArchive?: () => void; onEdit?: (text: string) => void; noteRef?: NoteRef }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(entry.text);
+  if (isEditing) {
+    return (
+      <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2 space-y-2">
+        <textarea
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          rows={3}
+          className="w-full bg-white rounded-[8px] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none resize-none"
+          autoFocus
+        />
+        <div className="flex gap-2">
+          <button onClick={() => { setDraft(entry.text); setIsEditing(false); }} className="px-3 py-1.5 rounded-[6px] bg-white text-[#6a7282] text-[12px] font-['Inter:Medium',sans-serif]">Cancel</button>
+          <button
+            onClick={() => { if (draft.trim()) { onEdit?.(draft.trim()); setIsEditing(false); } }}
+            disabled={!draft.trim()}
+            className="px-3 py-1.5 rounded-[6px] bg-[#1D2930] text-white text-[12px] font-['Inter:Medium',sans-serif] disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2 flex items-start gap-3">
       <div className="flex-1 min-w-0">
         <div className="text-[13px] text-[#0a0a0a]">{entry.text}</div>
         <MetaLine entry={entry} />
+        {noteRef && <ReplyThread noteRef={noteRef} />}
       </div>
+      {onEdit && (
+        <button
+          onClick={() => canArchive && setIsEditing(true)}
+          disabled={!canArchive}
+          title={canArchive ? 'Edit' : 'Only the creator can edit this'}
+          className="mt-0.5 shrink-0 p-1 rounded-[6px] active:bg-[#eef3fb] disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          {canArchive ? <Pencil size={13} className="text-[#307fe2]" /> : <Lock size={11} className="text-[#c0c4cc]" />}
+        </button>
+      )}
       {onArchive && (
         <button
           onClick={() => canArchive && onArchive()}
           disabled={!canArchive}
-          title={canArchive ? 'Archive' : 'Only the creator or assignee can archive this'}
+          title={canArchive ? 'Archive' : 'Only the creator can archive this'}
           className="mt-0.5 shrink-0 p-1 rounded-[6px] active:bg-[#ffe0da] disabled:opacity-30 disabled:cursor-not-allowed"
         >
           {canArchive ? <Archive size={13} className="text-[#ff5c39]" /> : <Lock size={11} className="text-[#c0c4cc]" />}
