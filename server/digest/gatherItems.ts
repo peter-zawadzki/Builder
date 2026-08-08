@@ -1,5 +1,5 @@
-// Pulls everything the daily digest needs in one pass — all projects,
-// mountain-level notes, proposals, mountains, and contacts — and groups it
+// Pulls everything the daily digest needs in one pass — all mountains,
+// projects, mountain-level notes, proposals, and contacts — and groups it
 // by the assignee/owner's `contacts` id. run.ts then resolves each `users`
 // row to its matching contact (by email) and looks up its bucket here,
 // rather than issuing a separate query per staff member.
@@ -7,7 +7,7 @@ import { query } from "../db";
 import { isProjectStale, isProposalStale } from "./staleDetection";
 
 export interface DigestActionItem {
-  kind: "action" | "note";
+  kind: "action" | "note" | "project";
   mountainId: string | null;
   mountainName: string;
   text: string;
@@ -24,7 +24,7 @@ export interface DigestStaleItem {
 
 export interface UserDigestItems {
   outstandingActions: DigestActionItem[];
-  newNotes: DigestActionItem[];
+  newItems: DigestActionItem[]; // new notes assigned + new projects you now own
   staleItems: DigestStaleItem[];
 }
 
@@ -34,7 +34,31 @@ export interface DigestData {
 }
 
 function emptyBucket(): UserDigestItems {
-  return { outstandingActions: [], newNotes: [], staleItems: [] };
+  return { outstandingActions: [], newItems: [], staleItems: [] };
+}
+
+// Mountains and projects both carry an embedded `activities: ContactActivity[]`
+// list (notes/action items assignable to a YULLR-org contact) — same shape,
+// same filter logic, just a different parent record for attribution.
+function scanActivities(
+  activities: any[] | undefined,
+  mountainId: string | null,
+  mountainName: string,
+  sinceIso: string,
+  bucket: (contactId: string) => UserDigestItems
+) {
+  for (const activity of activities ?? []) {
+    if (activity.archived || !activity.assigneeContactId) continue;
+    if (activity.type === "action" && !activity.completed) {
+      bucket(activity.assigneeContactId).outstandingActions.push({
+        kind: "action", mountainId, mountainName, text: activity.text, createdAt: activity.createdAt,
+      });
+    } else if (activity.type === "note" && activity.createdAt >= sinceIso) {
+      bucket(activity.assigneeContactId).newItems.push({
+        kind: "note", mountainId, mountainName, text: activity.text, createdAt: activity.createdAt,
+      });
+    }
+  }
 }
 
 export async function loadDigestData(sinceIso: string): Promise<DigestData> {
@@ -59,22 +83,21 @@ export async function loadDigestData(sinceIso: string): Promise<DigestData> {
     return byContact.get(contactId)!;
   }
 
+  for (const row of mountains) {
+    scanActivities(row.data.activities, row.id, row.data.name ?? "Unknown mountain", sinceIso, bucket);
+  }
+
   for (const row of projects) {
     const project = row.data;
     const mountainId: string | null = project.mountainId ?? null;
     const mountainName = mountainId ? mountainNameById.get(mountainId) ?? "Unknown mountain" : "Team project";
 
-    for (const activity of project.activities ?? []) {
-      if (activity.archived || !activity.assigneeContactId) continue;
-      if (activity.type === "action" && !activity.completed) {
-        bucket(activity.assigneeContactId).outstandingActions.push({
-          kind: "action", mountainId, mountainName, text: activity.text, createdAt: activity.createdAt,
-        });
-      } else if (activity.type === "note" && activity.createdAt >= sinceIso) {
-        bucket(activity.assigneeContactId).newNotes.push({
-          kind: "note", mountainId, mountainName, text: activity.text, createdAt: activity.createdAt,
-        });
-      }
+    scanActivities(project.activities, mountainId, mountainName, sinceIso, bucket);
+
+    if (project.ownerContactId && project.createdAt >= sinceIso) {
+      bucket(project.ownerContactId).newItems.push({
+        kind: "project", mountainId, mountainName, text: `New project: "${project.name}"`, createdAt: project.createdAt,
+      });
     }
 
     if (project.ownerContactId && isProjectStale(project)) {
@@ -88,7 +111,7 @@ export async function loadDigestData(sinceIso: string): Promise<DigestData> {
     const note = row.data;
     if (note.archived || !note.assigneeContactId || note.createdAt < sinceIso) continue;
     const mountainName = mountainNameById.get(note.mountainId) ?? "Unknown mountain";
-    bucket(note.assigneeContactId).newNotes.push({
+    bucket(note.assigneeContactId).newItems.push({
       kind: "note", mountainId: note.mountainId ?? null, mountainName, text: note.text, createdAt: note.createdAt,
     });
   }

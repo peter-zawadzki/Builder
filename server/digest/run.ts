@@ -76,10 +76,10 @@ async function main() {
     const items = getUserDigestItems(data, user.email);
     const counts = {
       actions: items.outstandingActions.length,
-      notes: items.newNotes.length,
+      newItems: items.newItems.length,
       stale: items.staleItems.length,
     };
-    const hasNothing = !companySummary && counts.actions === 0 && counts.notes === 0 && counts.stale === 0;
+    const hasNothing = !companySummary && counts.actions === 0 && counts.newItems === 0 && counts.stale === 0;
     if (hasNothing) {
       await recordRun(runDate, user.id, "skipped_empty", counts);
       skipped++;

@@ -62,25 +62,30 @@ export function renderDigestEmail(opts: {
   const { name, companySummary, items, appBaseUrl } = opts;
   const firstName = name.split(" ")[0] || name;
 
+  // Outstanding (incomplete) action items lead the list — the ones most
+  // likely to need attention — followed by anything newly assigned (notes,
+  // or a project you now own).
+  const actionItemRows = [
+    ...items.outstandingActions.map((i) => renderActionRow(i, appBaseUrl)),
+    ...items.newItems.map((i) => renderActionRow(i, appBaseUrl)),
+  ];
+
   const sections = [
-    section("Your outstanding action items", items.outstandingActions.map((i) => renderActionRow(i, appBaseUrl))),
-    section("New notes assigned to you", items.newNotes.map((i) => renderActionRow(i, appBaseUrl))),
+    section("Your Action Items", actionItemRows),
     section("Stale — no movement in 5+ business days", items.staleItems.map((i) => renderStaleRow(i, appBaseUrl))),
   ].join("");
 
-  const nothingPersonal =
-    items.outstandingActions.length === 0 && items.newNotes.length === 0 && items.staleItems.length === 0;
+  const nothingPersonal = actionItemRows.length === 0 && items.staleItems.length === 0;
 
   const html = `
     <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width:600px; margin:0 auto;">
-      <h1 style="color:${COLOR.darkText}; font-size:20px; margin:0 0 4px;">Good morning, ${escapeHtml(firstName)}</h1>
-      <p style="color:${COLOR.muted}; font-size:12px; margin:0 0 20px;">Your daily Builder digest</p>
+      <h1 style="color:${COLOR.darkText}; font-size:20px; margin:0 0 20px;">Good morning, ${escapeHtml(firstName)}</h1>
 
       ${companySummary ? `
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
           <tr>
             <td style="border-top:2px solid ${COLOR.orange}; padding-top:12px;">
-              <p style="margin:0 0 8px; color:${COLOR.darkText}; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;">What's happening at YULLR</p>
+              <p style="margin:0 0 8px; color:${COLOR.darkText}; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;">What's happening in Builder</p>
               ${companySummary.split(/\n\s*\n/).map((para) => `<p style="color:${COLOR.bodyText}; font-size:13px; line-height:1.6; margin:0 0 10px;">${escapeHtml(para.trim())}</p>`).join("")}
             </td>
           </tr>
