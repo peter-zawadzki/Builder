@@ -27,14 +27,15 @@ interface NoteCardProps {
   note: MountainNote;
   onUpdate: (id: string, updates: Partial<MountainNote>) => void;
   forceExpanded?: boolean;
+  highlighted?: boolean;
 }
 
-function NoteCard({ note, onUpdate, forceExpanded }: NoteCardProps) {
+function NoteCard({ note, onUpdate, forceExpanded, highlighted }: NoteCardProps) {
   const me = useMyContact();
   const isSuperAdmin = useIsSuperAdmin();
   const canArchive = canCompleteActivity(note, me, isSuperAdmin);
   const archiveNote = () => canArchive && onUpdate(note.id, { archived: true });
-  const [isExpanded, setIsExpanded] = useState(forceExpanded || false);
+  const [isExpanded, setIsExpanded] = useState(forceExpanded || highlighted || false);
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingTo, setIsAddingTo] = useState(false);
   const [draft, setDraft] = useState(note.text);
@@ -46,10 +47,23 @@ function NoteCard({ note, onUpdate, forceExpanded }: NoteCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const additionTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [showHighlight, setShowHighlight] = useState(!!highlighted);
 
   useEffect(() => {
     if (forceExpanded) setIsExpanded(true);
   }, [forceExpanded]);
+
+  useEffect(() => {
+    if (!highlighted) return;
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timeout = setTimeout(() => setShowHighlight(false), 2500);
+    return () => clearTimeout(timeout);
+    // Only meant to fire once, when this card first mounts already highlighted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const highlightClass = showHighlight ? 'ring-2 ring-[#307fe2]' : '';
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -292,7 +306,7 @@ function NoteCard({ note, onUpdate, forceExpanded }: NoteCardProps) {
   // ── Expanded view ──────────────────────────────────────────────────────────
   if (isExpanded) {
     return (
-      <div className="bg-white border border-[rgba(0,0,0,0.06)] rounded-[10px]">
+      <div ref={cardRef} className={`bg-white border border-[rgba(0,0,0,0.06)] rounded-[10px] transition-colors duration-500 ${highlightClass}`}>
         {/* Collapsed-style header — tap to collapse */}
         <div
           role="button"
@@ -465,9 +479,10 @@ function NoteCard({ note, onUpdate, forceExpanded }: NoteCardProps) {
 interface MountainNotesProps {
   mountainId: string;
   onExpandClick?: () => void;
+  highlightNoteId?: string;
 }
 
-export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps) {
+export function MountainNotes({ mountainId, onExpandClick, highlightNoteId }: MountainNotesProps) {
   const location = useLocation();
   const { user } = useUser();
   const me = useMyContact();
@@ -658,6 +673,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
                     note={note}
                     onUpdate={handleUpdate}
                     forceExpanded={highlightedTopic === note.topic}
+                    highlighted={note.id === highlightNoteId}
                   />
                 ))}
               </div>
@@ -674,7 +690,7 @@ export function MountainNotes({ mountainId, onExpandClick }: MountainNotesProps)
                   </h3>
                 )}
                 {generalFeed.map(item => item.kind === 'own'
-                  ? <NoteCard key={item.note.id} note={item.note} onUpdate={handleUpdate} />
+                  ? <NoteCard key={item.note.id} note={item.note} onUpdate={handleUpdate} highlighted={item.note.id === highlightNoteId} />
                   : <RollupNoteRow
                       key={item.entry.id}
                       entry={item.entry}

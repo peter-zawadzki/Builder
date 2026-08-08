@@ -20,19 +20,45 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
-function mountainLink(appBaseUrl: string, mountainId: string | null, label: string): string {
-  if (!mountainId) return escapeHtml(label);
-  return `<a href="${appBaseUrl}/mountains/${mountainId}" style="color:${COLOR.blue}; text-decoration:none; font-weight:600;">${escapeHtml(label)}</a>`;
+function linkTag(href: string | null, label: string): string {
+  if (!href) return escapeHtml(label);
+  return `<a href="${href}" style="color:${COLOR.blue}; text-decoration:none; font-weight:600;">${escapeHtml(label)}</a>`;
+}
+
+// The one place that knows where each item type actually lives in the app
+// (see server/digest/gatherItems.ts and MountainDetail.tsx for the receiving
+// end of these query params):
+//  - action items → always the Status pane's rollup (MountainActivityRollup
+//    surfaces both mountain- and project-origin actions there), scrolled to
+//    and highlighted — even when the action lives on a project.
+//  - a note embedded on a project → that project has no per-item highlight,
+//    so just open the project itself.
+//  - a note from the separate mountainId-scoped `notes` collection → the
+//    Notes pane, highlighted.
+//  - a new/stale project → open that project directly.
+function actionItemHref(appBaseUrl: string, item: DigestActionItem): string | null {
+  if (!item.mountainId) return null; // team project — no mountain page to land on
+  const base = `${appBaseUrl}/mountains/${item.mountainId}`;
+  if (item.kind === "action") return `${base}?highlightActivity=${item.itemId}`;
+  if (item.kind === "project") return `${base}?openProject=${item.projectId}`;
+  // kind === "note"
+  return item.projectId ? `${base}?openProject=${item.projectId}` : `${base}?highlightNote=${item.itemId}`;
+}
+
+function staleItemHref(appBaseUrl: string, item: DigestStaleItem): string | null {
+  if (!item.mountainId) return null;
+  const base = `${appBaseUrl}/mountains/${item.mountainId}`;
+  return item.kind === "project" ? `${base}?openProject=${item.projectId}` : base;
 }
 
 function renderActionRow(item: DigestActionItem, appBaseUrl: string): string {
-  return `<li style="margin-bottom:8px;">${mountainLink(appBaseUrl, item.mountainId, item.mountainName)} — ${escapeHtml(item.text)}</li>`;
+  return `<li style="margin-bottom:8px;">${linkTag(actionItemHref(appBaseUrl, item), item.mountainName)} — ${escapeHtml(item.text)}</li>`;
 }
 
 function renderStaleRow(item: DigestStaleItem, appBaseUrl: string): string {
   const days = Math.floor((Date.now() - new Date(item.sinceDate).getTime()) / (1000 * 60 * 60 * 24));
   const kindLabel = item.kind === "project" ? "Project" : "Proposal";
-  return `<li style="margin-bottom:8px;">${mountainLink(appBaseUrl, item.mountainId, item.mountainName)} — ${kindLabel} "${escapeHtml(item.name)}" hasn't moved in about ${days} days</li>`;
+  return `<li style="margin-bottom:8px;">${linkTag(staleItemHref(appBaseUrl, item), item.mountainName)} — ${kindLabel} "${escapeHtml(item.name)}" hasn't moved in about ${days} days</li>`;
 }
 
 // Each section is its own card — a colored left border + light background

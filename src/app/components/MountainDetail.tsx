@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import * as locMediaDB from '../utils/locationMediaDB';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useData, MOUNTAIN_PIPELINE_STAGES, getYullrMembers, buildActivitySummaries, getMountainLastActionAt, daysSince } from '../context/DataContext';
@@ -39,16 +39,23 @@ const ASSET_TYPE_COLORS: Record<string, string> = {
 const ASSET_ICONS = { Camera, 'Network Gear': Wifi, Miscellaneous: Box, Server };
 
 // A pane that shows a capped preview and opens the full content in a modal on
-// click, so the mountain view doesn't grow endlessly.
+// click, so the mountain view doesn't grow endlessly. `open`/`onOpenChange`
+// are optional — omit both to keep the pane's own internal state (every
+// existing call site), or pass both to drive it externally (used to
+// auto-open a pane when a digest email's deep link lands on this page).
 function ExpandablePane({
-  title, icon, headerRight, children,
+  title, icon, headerRight, children, open: controlledOpen, onOpenChange,
 }: {
   title: string;
   icon: React.ReactNode;
   headerRight?: React.ReactNode;
   children: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   return (
     <>
       <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 flex flex-col h-full">
@@ -86,8 +93,18 @@ function ExpandablePane({
 // Documents). Caps the inline card height and reveals the full content in a
 // modal. Children is a render function so the wrapped content can put the
 // expand trigger to the left of its own title, consistent with ExpandablePane.
-function ExpandableSection({ children }: { children: (openModal: () => void) => React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+// `open`/`onOpenChange` are optional, same controlled/uncontrolled hybrid as
+// ExpandablePane above — omit both for normal internal-state behavior.
+function ExpandableSection({
+  children, open: controlledOpen, onOpenChange,
+}: {
+  children: (openModal: () => void) => React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const openModal = () => setOpen(true);
   return (
     <div className="h-full flex flex-col">
@@ -116,6 +133,29 @@ function ExpandableSection({ children }: { children: (openModal: () => void) => 
 export function MountainDetail() {
   const { mountainId } = useParams();
   const navigate = useNavigate();
+  // Digest-email deep links (server/digest/render.ts): ?highlightActivity=
+  // opens Status + scrolls to that action item, ?highlightNote= opens Notes
+  // + scrolls to that note, ?openProject= opens that project's own card.
+  // Captured into state once (lazy initializers read the URL only on first
+  // render) rather than read fresh from searchParams every render, since the
+  // URL is cleared right after — a page refresh shouldn't re-open the pane.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightActivityId] = useState(() => searchParams.get('highlightActivity'));
+  const [highlightNoteId] = useState(() => searchParams.get('highlightNote'));
+  const [initialProjectId] = useState(() => searchParams.get('openProject'));
+  const [statusPaneOpen, setStatusPaneOpen] = useState(!!highlightActivityId);
+  const [notesPaneOpen, setNotesPaneOpen] = useState(!!highlightNoteId);
+  useEffect(() => {
+    if (highlightActivityId || highlightNoteId || initialProjectId) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('highlightActivity');
+      next.delete('highlightNote');
+      next.delete('openProject');
+      setSearchParams(next, { replace: true });
+    }
+    // Only ever meant to run once, against whatever the URL was on load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const {
     getMountainById,
     getTrailsByMountainId,
@@ -425,6 +465,8 @@ export function MountainDetail() {
           <ExpandablePane
             title="Status"
             icon={<Info size={16} className="text-[#6a7282]" />}
+            open={statusPaneOpen}
+            onOpenChange={setStatusPaneOpen}
           >
             <div className="space-y-2.5">
               <div>
@@ -437,7 +479,7 @@ export function MountainDetail() {
                     <Plus size={14} /> New
                   </button>
                 </div>
-                <MountainActivityRollup mountainId={mountainId!} />
+                <MountainActivityRollup mountainId={mountainId!} highlightId={highlightActivityId ?? undefined} />
               </div>
             </div>
 
@@ -533,7 +575,7 @@ export function MountainDetail() {
         </div>
 
         {/* Projects — the unit of work; one progress bar per project */}
-        <ProjectsPane mountainId={mountainId!} />
+        <ProjectsPane mountainId={mountainId!} initialEditId={initialProjectId ?? undefined} />
 
         {/* Proposals — one per project */}
         <ProposalsPane mountainId={mountainId!} />
@@ -726,10 +768,10 @@ export function MountainDetail() {
           </ExpandableSection>
 
           {/* ── Notes Pane ── */}
-          <ExpandableSection>
+          <ExpandableSection open={notesPaneOpen} onOpenChange={setNotesPaneOpen}>
             {(openModal) => (
             <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4 h-full flex flex-col">
-              <MountainNotes mountainId={mountainId!} onExpandClick={openModal} />
+              <MountainNotes mountainId={mountainId!} onExpandClick={openModal} highlightNoteId={highlightNoteId ?? undefined} />
             </div>
             )}
           </ExpandableSection>

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Check, Lock, ListTodo, Archive } from 'lucide-react';
 import { useData, getMountainRollupActivities, canCompleteActivity } from '../context/DataContext';
 import type { ContactActivity, MountainActivityEntry } from '../context/DataContext';
@@ -82,7 +83,12 @@ export function useMountainRollupUpdater(mountainId: string) {
 // directly on it, on an associated contact/team/project/inspection, or
 // assigned to a person/team associated with it. Items are only ever created
 // at their source; this view exists to see and complete them.
-export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
+// `highlightId` comes from a digest email's ?highlightActivity= deep link
+// (MountainDetail.tsx) — scrolls to and briefly highlights that one action
+// item. Outstanding items are always in the always-visible `open` list
+// (never `done`), so this never needs to auto-expand the completed
+// <details> below.
+export function MountainActivityRollup({ mountainId, highlightId }: { mountainId: string; highlightId?: string }) {
   const { mountains, contacts, teams, organizations, projects, locations, inspections } = useData();
   const me = useMyContact();
 
@@ -107,13 +113,13 @@ export function MountainActivityRollup({ mountainId }: { mountainId: string }) {
           {open.length === 0 ? (
             <div className="text-[12px] text-[#8992a0]">No open actions.</div>
           ) : (
-            open.map(a => <ActionRow key={a.id} entry={a} me={me} onToggle={() => toggle(a)} />)
+            open.map(a => <ActionRow key={a.id} entry={a} me={me} onToggle={() => toggle(a)} highlighted={a.id === highlightId} />)
           )}
           {done.length > 0 && (
-            <details className="mt-1">
+            <details className="mt-1" open={done.some(a => a.id === highlightId)}>
               <summary className="text-[11px] text-[#8992a0] cursor-pointer select-none">Completed ({done.length})</summary>
               <div className="space-y-2 mt-1.5">
-                {done.map(a => <ActionRow key={a.id} entry={a} me={me} onToggle={() => toggle(a)} />)}
+                {done.map(a => <ActionRow key={a.id} entry={a} me={me} onToggle={() => toggle(a)} highlighted={a.id === highlightId} />)}
               </div>
             </details>
           )}
@@ -139,11 +145,21 @@ export function MetaLine({ entry }: { entry: MountainActivityEntry }) {
   );
 }
 
-function ActionRow({ entry, me, onToggle }: { entry: MountainActivityEntry; me: ReturnType<typeof useMyContact>; onToggle: () => void }) {
+function ActionRow({ entry, me, onToggle, highlighted }: { entry: MountainActivityEntry; me: ReturnType<typeof useMyContact>; onToggle: () => void; highlighted?: boolean }) {
   const isSuperAdmin = useIsSuperAdmin();
   const canComplete = canCompleteActivity(entry, me, isSuperAdmin);
+  const ref = useRef<HTMLDivElement>(null);
+  const [showHighlight, setShowHighlight] = useState(!!highlighted);
+  useEffect(() => {
+    if (!highlighted) return;
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timeout = setTimeout(() => setShowHighlight(false), 2500);
+    return () => clearTimeout(timeout);
+    // Only meant to fire once, when this row first mounts already highlighted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
-    <div className="bg-[#f9fafb] rounded-[8px] px-3 py-2 flex items-start gap-3">
+    <div ref={ref} className={`bg-[#f9fafb] rounded-[8px] px-3 py-2 flex items-start gap-3 transition-colors duration-500 ${showHighlight ? 'ring-2 ring-[#307fe2] bg-[#eef3fb]' : ''}`}>
       <div className="flex-1 min-w-0">
         <div className={`text-[13px] ${entry.completed ? 'text-[#8992a0] line-through' : 'text-[#0a0a0a]'}`}>{entry.text}</div>
         <MetaLine entry={entry} />

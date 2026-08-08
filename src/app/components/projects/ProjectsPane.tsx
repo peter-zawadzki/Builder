@@ -171,14 +171,16 @@ export function StageChecklist({
 
 // ─── Pane ────────────────────────────────────────────────────────────────────
 
-export function ProjectsPane({ mountainId, teamId }: { mountainId?: string; teamId?: string }) {
+export function ProjectsPane({ mountainId, teamId, initialEditId }: { mountainId?: string; teamId?: string; initialEditId?: string }) {
   const { getProjectsByTeamId, projects: allProjectsData, teams } = useData();
   // A mountain's Projects list includes its own directly-owned projects plus
   // any project created under a Team that's linked to this mountain.
   const allProjects = mountainId ? getMountainProjects(mountainId, { projects: allProjectsData, teams }) : getProjectsByTeamId(teamId!);
   const availableTypes = mountainId ? MOUNTAIN_PROJECT_TYPES : TEAM_PROJECT_TYPES;
   const [showForm, setShowForm] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  // Seeded from a digest email's ?openProject= deep link (MountainDetail.tsx)
+  // so that project's own card opens immediately on load.
+  const [editId, setEditId] = useState<string | null>(initialEditId ?? null);
   const [showArchived, setShowArchived] = useState(false);
 
   const projects = allProjects.filter(p => showArchived ? p.archived : !p.archived);
