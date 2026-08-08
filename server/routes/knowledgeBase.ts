@@ -21,28 +21,42 @@ function slugify(question: string): string {
 }
 
 knowledgeBase.get("/gaps", requireAdmin, async (c) => {
-  const rows = await query<{ id: number; question: string; path_tried: string; created_at: string }>(
-    `SELECT id, question, path_tried, created_at FROM faq_unanswered_log WHERE dismissed = false ORDER BY created_at DESC LIMIT 500`
+  const rows = await query<{ id: number; question: string; path_tried: string; created_at: string; user_name: string | null; user_email: string | null }>(
+    `SELECT l.id, l.question, l.path_tried, l.created_at, u.name AS user_name, u.email AS user_email
+     FROM faq_unanswered_log l LEFT JOIN users u ON u.id = l.user_id
+     WHERE l.dismissed = false ORDER BY l.created_at DESC LIMIT 500`
   );
 
   // Group similar phrasings of the same underlying question together —
   // greedy clustering by token overlap, same idea as the duplicate-report
   // check, just grouping a whole list instead of matching one new item.
-  const groups: { ids: number[]; question: string; count: number; pathTried: string; latestAt: string; tokens: Set<string> }[] = [];
+  // Different people can hit the same gap, so each group tracks every
+  // asker (deduped by email) rather than just the first/last one.
+  const groups: {
+    ids: number[];
+    question: string;
+    count: number;
+    pathTried: string;
+    latestAt: string;
+    tokens: Set<string>;
+    askers: { name: string | null; email: string | null }[];
+  }[] = [];
   for (const row of rows) {
     const tokens = tokenSet(row.question);
     const match = groups.find((g) => overlapScore(tokens, g.tokens) >= GROUP_SIMILARITY_THRESHOLD || overlapScore(g.tokens, tokens) >= GROUP_SIMILARITY_THRESHOLD);
+    const asker = { name: row.user_name, email: row.user_email };
     if (match) {
       match.ids.push(row.id);
       match.count++;
+      if (!match.askers.some((a) => a.email === asker.email)) match.askers.push(asker);
     } else {
-      groups.push({ ids: [row.id], question: row.question, count: 1, pathTried: row.path_tried, latestAt: row.created_at, tokens });
+      groups.push({ ids: [row.id], question: row.question, count: 1, pathTried: row.path_tried, latestAt: row.created_at, tokens, askers: [asker] });
     }
   }
   groups.sort((a, b) => b.count - a.count);
 
   return c.json({
-    gaps: groups.map((g) => ({ ids: g.ids, question: g.question, count: g.count, pathTried: g.pathTried, latestAt: g.latestAt })),
+    gaps: groups.map((g) => ({ ids: g.ids, question: g.question, count: g.count, pathTried: g.pathTried, latestAt: g.latestAt, askers: g.askers })),
   });
 });
 
@@ -58,13 +72,21 @@ knowledgeBase.get("/candidates", requireAdmin, async (c) => {
   // cached (faqAgent.ts only caches confident, non-follow-up, non-data
   // answers) — today these vanish the moment they're sent, even though
   // they're real, good answers worth turning into permanent knowledge.
-  const rows = await query<{ id: number; question: string; answer: string; sources: any; created_at: string }>(
-    `SELECT id, question, answer, sources, created_at FROM odin_interactions
-     WHERE agent='faq' AND confident = true AND cache_hit = false AND (used_code = true OR used_data = true)
-     ORDER BY created_at DESC LIMIT 100`
+  const rows = await query<{ id: number; question: string; answer: string; sources: any; created_at: string; user_name: string | null; user_email: string | null }>(
+    `SELECT i.id, i.question, i.answer, i.sources, i.created_at, u.name AS user_name, u.email AS user_email
+     FROM odin_interactions i LEFT JOIN users u ON u.id = i.user_id
+     WHERE i.agent='faq' AND i.confident = true AND i.cache_hit = false AND (i.used_code = true OR i.used_data = true)
+     ORDER BY i.created_at DESC LIMIT 100`
   );
   return c.json({
-    candidates: rows.map((r) => ({ id: r.id, question: r.question, answer: r.answer, sources: r.sources, createdAt: r.created_at })),
+    candidates: rows.map((r) => ({
+      id: r.id,
+      question: r.question,
+      answer: r.answer,
+      sources: r.sources,
+      createdAt: r.created_at,
+      askedBy: r.user_name || r.user_email,
+    })),
   });
 });
 

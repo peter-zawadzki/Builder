@@ -274,6 +274,7 @@ export interface KnowledgeGap {
   count: number;
   pathTried: string;
   latestAt: string;
+  askers: { name: string | null; email: string | null }[];
 }
 
 export interface KnowledgeCandidate {
@@ -282,6 +283,7 @@ export interface KnowledgeCandidate {
   answer: string;
   sources: FaqSource[] | null;
   createdAt: string;
+  askedBy: string | null;
 }
 
 export interface KnowledgeBaseStats {

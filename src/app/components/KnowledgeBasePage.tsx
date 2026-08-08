@@ -86,7 +86,8 @@ export function KnowledgeBasePage() {
         <ArrowLeft size={15} /> Back
       </button>
       <h1 className="text-[18px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] mb-1">Knowledge base</h1>
-      <p className="text-[#6a7282] text-[13px] mb-4">Turn real ODIN questions into curated FAQ entries — both ODIN and the FAQ tab read from the same list the moment you promote one.</p>
+      <p className="text-[#6a7282] text-[13px] mb-1">Turn real ODIN questions into curated FAQ entries — both ODIN and the FAQ tab read from the same list the moment you promote one.</p>
+      <p className="text-[#6a7282] text-[12px] mb-4"><strong>Promote</strong> writes it into the permanent FAQ (visible in the FAQ tab and used by ODIN going forward). <strong>Dismiss</strong> just clears it from this list without creating an FAQ entry — use it when the question isn't worth a permanent answer.</p>
 
       <div className="flex gap-2 mb-4 border-b border-[rgba(0,0,0,0.08)]">
         {(['gaps', 'candidates', 'stats'] as Tab[]).map(t => (
@@ -111,6 +112,7 @@ export function KnowledgeBasePage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{g.question}</p>
                     <p className="text-[12px] text-[#6a7282] mt-0.5">Asked {g.count}x · path: {g.pathTried} · last {new Date(g.latestAt).toLocaleDateString()}</p>
+                    <p className="text-[12px] text-[#6a7282] mt-0.5">Asked by: {g.askers.map(a => a.name || a.email || 'Unknown').join(', ')}</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
@@ -142,6 +144,7 @@ export function KnowledgeBasePage() {
             {candidates.map(c => (
               <div key={c.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-4">
                 <p className="text-[14px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{c.question}</p>
+                <p className="text-[12px] text-[#6a7282] mt-0.5">Asked by: {c.askedBy || 'Unknown'} · {new Date(c.createdAt).toLocaleDateString()}</p>
                 <p className="text-[13px] text-[#374151] mt-1 line-clamp-3">{c.answer}</p>
                 <div className="flex justify-end mt-2">
                   <button
