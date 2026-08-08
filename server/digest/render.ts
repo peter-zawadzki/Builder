@@ -81,7 +81,7 @@ export function renderDigestEmail(opts: {
           <tr>
             <td style="border-top:2px solid ${COLOR.orange}; padding-top:12px;">
               <p style="margin:0 0 8px; color:${COLOR.darkText}; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;">What's happening at YULLR</p>
-              <p style="color:${COLOR.bodyText}; font-size:13px; line-height:1.6; margin:0;">${escapeHtml(companySummary)}</p>
+              ${companySummary.split(/\n\s*\n/).map((para) => `<p style="color:${COLOR.bodyText}; font-size:13px; line-height:1.6; margin:0 0 10px;">${escapeHtml(para.trim())}</p>`).join("")}
             </td>
           </tr>
         </table>` : ""}
