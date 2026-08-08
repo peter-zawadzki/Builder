@@ -250,6 +250,55 @@ file's filter graph changes again, re-verify against this box's actual
 ffmpeg (`node_modules/@ffmpeg-installer/linux-arm64/ffmpeg -h filter=...`),
 not just local dev's.
 
+## One-time setup for the daily digest email
+
+`server/digest/run.ts` sends every staff member a Mon-Fri morning email
+(outstanding action items, new assigned notes, stale projects/proposals, and
+a shared company-activity paragraph). There's no in-process scheduler in
+this app, so it's driven by a systemd timer — the same mechanism this box
+already uses for `certbot-renew.timer`/`logrotate.timer`.
+
+```ini
+# /etc/systemd/system/builder-digest.service
+[Unit]
+Description=Builder daily staff digest
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ec2-user/builder
+ExecStart=/usr/bin/npx tsx server/digest/run.ts
+EnvironmentFile=/home/ec2-user/builder/.env.local
+```
+
+```ini
+# /etc/systemd/system/builder-digest.timer
+[Unit]
+Description=Run the Builder daily digest Mon-Fri mornings
+
+[Timer]
+OnCalendar=Mon..Fri 07:30 America/New_York
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+`Persistent=true` means a run missed while the box was down still fires once
+it's back up, instead of silently skipping that day. Enable with:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now builder-digest.timer
+```
+
+Verify with `systemctl list-timers | grep builder-digest` and, after it
+fires, `journalctl -u builder-digest`. To test by hand without waiting for
+the schedule: `cd /home/ec2-user/builder && npx tsx server/digest/run.ts
+--dry-run` (prints the emails it would send without actually sending), or
+drop `--dry-run` to send for real. The job is idempotent per calendar day
+(`digest_runs` table, unique on `(run_date, user_id)`), so re-running it
+after a real send that day is safe — already-sent recipients are skipped.
+
 ## Known gaps / deliberately deferred
 
 1. **Git-based deploy.** Deploys are still manual `rsync` from a local

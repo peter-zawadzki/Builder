@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList, Mail, MailX } from 'lucide-react';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsAdminOrAbove } from '../hooks/useRole';
 import { useData, getMyNotifications } from '../context/DataContext';
@@ -9,7 +9,31 @@ import type { MyNotificationEntry } from '../context/DataContext';
 import { useMyContact } from '../hooks/useMyContact';
 import { useOdinVideoNotifications } from '../hooks/useOdinVideoNotifications';
 import { useFeedbackNotifications } from '../hooks/useFeedbackNotifications';
+import { useApi } from '../api/client';
 import { HelpModal } from './HelpModal';
+
+// Clerk's <UserButton.MenuItems> only accepts literal <UserButton.Action>/
+// <UserButton.Link> children — wrapping one in another component gets
+// silently ignored (logs a Clerk warning, renders nothing). So this state
+// lives in AppHeader itself and the toggle is rendered inline as a real
+// UserButton.Action, same as every other menu entry here.
+function useDigestPreference() {
+  const api = useApi();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api.me().then(r => setEnabled(r.user.dailyDigestEnabled)).catch(() => {});
+  }, [api]);
+
+  function toggle() {
+    if (enabled === null) return;
+    const next = !enabled;
+    setEnabled(next);
+    api.updateDigestPreference(next).catch(() => setEnabled(!next));
+  }
+
+  return { enabled, toggle };
+}
 
 // The one nav header shared across every page and sub-page. The icon for the
 // section you're on is highlighted orange. Projects live inside each mountain,
@@ -26,6 +50,7 @@ export function AppHeader() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const canManageTeam = useIsAdminOrAbove();
+  const digestPreference = useDigestPreference();
   const me = useMyContact();
   const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = useData();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -92,6 +117,13 @@ export function AppHeader() {
                 {canManageTeam && <UserButton.Action label="Contact tags" labelIcon={<Tag size={16} />} onClick={() => navigate('/contact-tags')} />}
                 {canManageTeam && <UserButton.Action label="Knowledge base" labelIcon={<BrainCircuit size={16} />} onClick={() => navigate('/admin/knowledge-base')} />}
                 {canManageTeam && <UserButton.Action label="Feedback requests" labelIcon={<ClipboardList size={16} />} onClick={() => navigate('/admin/feedback')} />}
+                {digestPreference.enabled !== null && (
+                  <UserButton.Action
+                    label={digestPreference.enabled ? 'Daily digest: On' : 'Daily digest: Off'}
+                    labelIcon={digestPreference.enabled ? <Mail size={16} /> : <MailX size={16} />}
+                    onClick={digestPreference.toggle}
+                  />
+                )}
               </UserButton.MenuItems>
             </UserButton>
           </div>

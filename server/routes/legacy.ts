@@ -219,14 +219,16 @@ legacy.put("/agreement-template", async (c) => {
 // Slack mirror — Builder is the record; Slack is a notification mirror. Peter
 // only wants to hear about: a new mountain, a new project, a proposal being
 // created or signed, and notes/tasks that are actually tagged (assigned) to
-// someone — not every stage checkbox, stall, or untagged note.
-const SLACK_MIRROR_TYPES = new Set([
+// someone — not every stage checkbox, stall, or untagged note. Exported so
+// server/digest/companySummary.ts uses the same "what's meaningful" taxonomy
+// instead of maintaining a second, potentially drifting allowlist.
+export const SLACK_MIRROR_TYPES = new Set([
   "mountain_added", "project_created", "proposal_created", "proposal_signed",
   "note_added", "action_added",
 ]);
 // note_added/action_added only mirror when the entry was assigned to someone
 // (`tagged`); an untagged note/task is too noisy to post.
-const TAGGED_ONLY_TYPES = new Set(["note_added", "action_added"]);
+export const TAGGED_ONLY_TYPES = new Set(["note_added", "action_added"]);
 // note_added/action_added summaries are built client-side with full
 // attribution (and an @mention when the assignee has a Slack ID on file),
 // so we don't also append "— actor" for those — it'd be redundant.

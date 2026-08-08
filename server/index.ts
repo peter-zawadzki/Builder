@@ -30,7 +30,7 @@ app.use(
   cors({
     origin: ["http://localhost:5173"],
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 );
 
@@ -65,9 +65,20 @@ app.use("/api/feedback-agent/*", requireAuth);
 app.use("/api/feedback/*", requireAuth);
 app.use("/api/knowledge-base/*", requireAuth);
 app.use("/api/me", requireAuth);
+app.use("/api/me/*", requireAuth);
 
 // Who am I — verifies the auth chain and returns the synced app user.
 app.get("/api/me", (c) => c.json({ user: c.get("user") }));
+
+// Opt in/out of the daily digest email (server/digest/run.ts) — self-service,
+// no admin gate, since this only ever affects the current user's own inbox.
+app.patch("/api/me/digest-preference", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json<{ enabled: boolean }>().catch(() => null);
+  if (!body || typeof body.enabled !== "boolean") return c.json({ error: "enabled (boolean) is required" }, 400);
+  await pool.query(`UPDATE users SET daily_digest_enabled = $1 WHERE id = $2`, [body.enabled, user.id]);
+  return c.json({ ok: true, enabled: body.enabled });
+});
 
 // Domain routes (all behind requireAuth).
 app.route("/api/mountains", mountains);

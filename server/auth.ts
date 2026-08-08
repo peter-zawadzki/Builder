@@ -18,13 +18,14 @@ export interface AppUser {
   name: string | null;
   role: UserRole;
   isSuperAdmin: boolean;
+  dailyDigestEnabled: boolean;
 }
 
 // Hono env: handlers can read the authenticated app user via c.get("user").
 export type HonoEnv = { Variables: { user: AppUser } };
 
 const SELECT_USER = `
-  SELECT id, clerk_user_id AS "clerkUserId", email, name, role, is_super_admin AS "isSuperAdmin"
+  SELECT id, clerk_user_id AS "clerkUserId", email, name, role, is_super_admin AS "isSuperAdmin", daily_digest_enabled AS "dailyDigestEnabled"
     FROM users WHERE clerk_user_id = $1`;
 
 // Verify the Clerk session token, then find-or-create the matching users row so
@@ -68,7 +69,7 @@ export const requireAuth: MiddlewareHandler<HonoEnv> = async (c, next) => {
          VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (clerk_user_id) DO UPDATE
          SET email = EXCLUDED.email, name = EXCLUDED.name
-       RETURNING id, clerk_user_id AS "clerkUserId", email, name, role, is_super_admin AS "isSuperAdmin"`,
+       RETURNING id, clerk_user_id AS "clerkUserId", email, name, role, is_super_admin AS "isSuperAdmin", daily_digest_enabled AS "dailyDigestEnabled"`,
       [sub, email, name, role, role === "super_admin"]
     );
   }

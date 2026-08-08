@@ -107,7 +107,9 @@ export function useApi() {
     }
 
     return {
-      me: () => request("/me"),
+      me: () => request<{ user: AppMeUser }>("/me"),
+      updateDigestPreference: (enabled: boolean) =>
+        request<{ ok: true; enabled: boolean }>("/me/digest-preference", { method: "PATCH", body: JSON.stringify({ enabled }) }),
       listMountains: () => request<{ mountains: MountainSummary[] }>("/mountains"),
       getMountain: (id: string) =>
         request<{ mountain: Mountain; project: any }>(`/mountains/${id}`),
@@ -191,6 +193,15 @@ export function useApi() {
       getKnowledgeBaseStats: () => request<KnowledgeBaseStats>("/knowledge-base/stats"),
     };
   }, [getToken]);
+}
+
+export interface AppMeUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: "user" | "admin" | "super_admin";
+  isSuperAdmin: boolean;
+  dailyDigestEnabled: boolean;
 }
 
 export interface FaqSource {
