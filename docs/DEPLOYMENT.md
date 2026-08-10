@@ -250,7 +250,7 @@ file's filter graph changes again, re-verify against this box's actual
 ffmpeg (`node_modules/@ffmpeg-installer/linux-arm64/ffmpeg -h filter=...`),
 not just local dev's.
 
-## One-time setup for the daily digest email
+## One-time setup for the daily digest email (already done, documented for reference)
 
 `server/digest/run.ts` sends every staff member a Mon-Fri morning email
 (outstanding action items, new assigned notes, stale projects/proposals, and
@@ -265,6 +265,7 @@ Description=Builder daily staff digest
 
 [Service]
 Type=oneshot
+User=ec2-user
 WorkingDirectory=/home/ec2-user/builder
 ExecStart=/usr/bin/npx tsx server/digest/run.ts
 EnvironmentFile=/home/ec2-user/builder/.env.local
@@ -276,7 +277,7 @@ EnvironmentFile=/home/ec2-user/builder/.env.local
 Description=Run the Builder daily digest Mon-Fri mornings
 
 [Timer]
-OnCalendar=Mon..Fri 07:30 America/New_York
+OnCalendar=Mon..Fri 09:15 America/New_York
 Persistent=true
 
 [Install]
@@ -284,12 +285,15 @@ WantedBy=timers.target
 ```
 
 `Persistent=true` means a run missed while the box was down still fires once
-it's back up, instead of silently skipping that day. Enable with:
+it's back up, instead of silently skipping that day. Enabled with:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now builder-digest.timer
 ```
+
+Live and confirmed firing on schedule since 2026-08-10 (first real automated
+run: 09:15 ET, `sent=3 skipped=6 failed=0`).
 
 Verify with `systemctl list-timers | grep builder-digest` and, after it
 fires, `journalctl -u builder-digest`. To test by hand without waiting for
