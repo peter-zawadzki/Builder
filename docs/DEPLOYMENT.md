@@ -215,6 +215,20 @@ ssh -i ~/.ssh/builder-prod.pem ec2-user@52.86.78.62 '
 `.env.local` directly — it has its own fallback to a local dev default,
 so it needs to be passed in explicitly like this.)
 
+**Last step of every real deploy** (anything a staff member would notice —
+new features, meaningful fixes; skip for pure docs/refactor/typo changes):
+log it so the daily digest's company summary (`server/digest/
+companySummary.ts`) can mention it. Production has no git history (`.git`
+is excluded from the rsync above), so this manual log is the only record
+of what shipped.
+
+```bash
+ssh -i ~/.ssh/builder-prod.pem ec2-user@52.86.78.62 '
+  cd /home/ec2-user/builder &&
+  npx tsx server/digest/logDeployment.ts "Short human-readable summary of what shipped."
+'
+```
+
 ## One-time setup for the video-tutorial feature (already done, documented for reference)
 
 The ODIN video pipeline (`server/odin/video/*`) needs a real Chromium browser
