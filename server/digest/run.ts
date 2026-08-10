@@ -79,13 +79,11 @@ async function main() {
       newItems: items.newItems.length,
       stale: items.staleItems.length,
     };
-    const hasNothing = !companySummary && counts.actions === 0 && counts.newItems === 0 && counts.stale === 0;
-    if (hasNothing) {
-      await recordRun(runDate, user.id, "skipped_empty", counts);
-      skipped++;
-      continue;
-    }
 
+    // Always send, at minimum, the generic company update since the last
+    // digest — even with zero personal items and no notable company
+    // activity, everyone still gets a real email (render.ts falls back to
+    // a "no major updates" line rather than an empty section).
     const { subject, html } = renderDigestEmail({
       name: user.name || user.email,
       companySummary,

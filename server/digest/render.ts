@@ -107,15 +107,16 @@ export function renderDigestEmail(opts: {
     <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width:600px; margin:0 auto;">
       <h1 style="color:${COLOR.darkText}; font-size:20px; margin:0 0 20px;">Good morning, ${escapeHtml(firstName)}</h1>
 
-      ${companySummary ? `
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-          <tr>
-            <td style="border-top:2px solid ${COLOR.orange}; padding-top:12px;">
-              <p style="margin:0 0 8px; color:${COLOR.darkText}; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;">What's happening in Builder</p>
-              ${companySummary.split(/\n\s*\n/).map((para) => `<p style="color:${COLOR.bodyText}; font-size:13px; line-height:1.6; margin:0 0 10px;">${escapeHtml(para.trim())}</p>`).join("")}
-            </td>
-          </tr>
-        </table>` : ""}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+        <tr>
+          <td style="border-top:2px solid ${COLOR.orange}; padding-top:12px;">
+            <p style="margin:0 0 8px; color:${COLOR.darkText}; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;">What's happening in Builder</p>
+            ${companySummary
+              ? companySummary.split(/\n\s*\n/).map((para) => `<p style="color:${COLOR.bodyText}; font-size:13px; line-height:1.6; margin:0 0 10px;">${escapeHtml(para.trim())}</p>`).join("")
+              : `<p style="color:${COLOR.bodyText}; font-size:13px; line-height:1.6; margin:0;">No major company-wide updates since your last digest.</p>`}
+          </td>
+        </tr>
+      </table>
 
       ${sections}
 
