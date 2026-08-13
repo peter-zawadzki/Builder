@@ -3,13 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
-  PlayCircle, ExternalLink, ChevronLeft, ChevronRight,
+  PlayCircle, ExternalLink, ChevronLeft, ChevronRight, Trash2,
   Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type OdinVideoListItem, type FaqEntry } from '../api/client';
 import { OdinVideoOffer } from './OdinVideoOffer';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { useIsSuperAdmin } from '../hooks/useRole';
 import { type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
@@ -577,6 +579,32 @@ function formatFileSize(sizeKB: number): string {
   return sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
 }
 
+// Small YouTube-style preview: a real muted <video> seeked a few seconds in
+// (rather than a static play-icon tile) so the grid shows an actual frame
+// from each clip. Landing on frame 0 would show the same title-card/black
+// frame for nearly every video — 6s in is far more likely to be distinct,
+// representative footage; for anything shorter than that, halfway in.
+const PREVIEW_SEEK_SECONDS = 6;
+
+function VideoPreviewThumb({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      muted
+      playsInline
+      preload="metadata"
+      onLoadedMetadata={() => {
+        const v = videoRef.current;
+        if (!v) return;
+        v.currentTime = v.duration && v.duration < PREVIEW_SEEK_SECONDS ? v.duration / 2 : PREVIEW_SEEK_SECONDS;
+      }}
+      className="w-full h-full object-cover pointer-events-none"
+    />
+  );
+}
+
 // Every video ODIN has generated (server/odin/video/pipeline.ts), browsable
 // in one place instead of only being reachable via a chat offer or a
 // notification click. Cache-hit videos regenerate rarely, so this list is
@@ -584,11 +612,29 @@ function formatFileSize(sizeKB: number): string {
 function TrainingMaterialsSection() {
   const api = useApi();
   const navigate = useNavigate();
+  const isSuperAdmin = useIsSuperAdmin();
   const [videos, setVideos] = useState<OdinVideoListItem[] | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OdinVideoListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     api.listOdinVideos().then(r => setVideos(r.videos)).catch(() => setVideos([]));
   }, [api]);
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.deleteOdinVideo(deleteTarget.id);
+      setVideos(vs => (vs ?? []).filter(v => v.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      toast.success(`Deleted "${deleteTarget.label}"`);
+    } catch {
+      toast.error("Couldn't delete this video — please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (videos === null) {
     return (
@@ -603,25 +649,60 @@ function TrainingMaterialsSection() {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-      {videos.map(v => (
-        <button
-          key={v.id}
-          onClick={() => navigate(`/odin-videos/${v.id}`)}
-          className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col text-left active:opacity-80"
-        >
-          <div className="h-28 bg-[#f9fafb] flex items-center justify-center">
-            <PlayCircle size={32} className="text-[#307fe2]" />
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {videos.map(v => (
+          <div
+            key={v.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate(`/odin-videos/${v.id}`)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate(`/odin-videos/${v.id}`); }}
+            className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col text-left cursor-pointer active:opacity-80"
+          >
+            <div className="h-28 bg-[#f9fafb] relative overflow-hidden">
+              {v.videoUrl ? (
+                <>
+                  <VideoPreviewThumb src={v.videoUrl} />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                    <PlayCircle size={30} className="text-white drop-shadow" fill="rgba(0,0,0,0.35)" />
+                  </div>
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <PlayCircle size={32} className="text-[#307fe2]" />
+                </div>
+              )}
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setDeleteTarget(v); }}
+                  className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 active:opacity-70"
+                  aria-label={`Delete ${v.label}`}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+            <div className="p-3">
+              <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{v.label}</p>
+              <p className="text-[11px] text-[#8992a0]">
+                Level {v.detailLevel}{v.durationMs ? ` · ${Math.round(v.durationMs / 1000)}s` : ''}
+              </p>
+            </div>
           </div>
-          <div className="p-3">
-            <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{v.label}</p>
-            <p className="text-[11px] text-[#8992a0]">
-              Level {v.detailLevel}{v.durationMs ? ` · ${Math.round(v.durationMs / 1000)}s` : ''}
-            </p>
-          </div>
-        </button>
-      ))}
-    </div>
+        ))}
+      </div>
+      {deleteTarget && (
+        <DeleteConfirmModal
+          title={`Delete "${deleteTarget.label}"?`}
+          description="This permanently removes the video file and its listing here. Staff can ask ODIN to regenerate it later if needed."
+          isDeleting={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </>
   );
 }
 

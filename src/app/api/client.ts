@@ -155,6 +155,7 @@ export function useApi() {
       requestOdinVideo: (flowKey: string, detailLevel: number) =>
         request<{ id: string; status: string }>("/odin-video/request", { method: "POST", body: JSON.stringify({ flowKey, detailLevel }) }),
       getOdinVideo: (id: string) => request<OdinVideoResult>(`/odin-video/${id}`),
+      deleteOdinVideo: (id: string) => request<{ ok: true }>(`/odin-video/${id}`, { method: "DELETE" }),
       listOdinNotifications: () => request<{ notifications: OdinNotification[] }>("/odin-video/notifications"),
       markOdinNotificationRead: (id: string) => request<{ ok: true }>(`/odin-video/notifications/${id}/read`, { method: "POST" }),
 
@@ -316,6 +317,7 @@ export interface OdinVideoListItem {
   detailLevel: number;
   durationMs: number | null;
   createdAt: string;
+  videoUrl: string | null;
 }
 
 // Knowledge base (admin)

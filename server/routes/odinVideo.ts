@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import type { HonoEnv } from "../auth";
+import { requireSuperAdmin, type HonoEnv } from "../auth";
 import { query, queryOne } from "../db";
-import { getSignedGetUrl } from "../s3";
+import { getSignedGetUrl, deleteObject } from "../s3";
 import { ODIN_VIDEO_FLOWS } from "../data/odinVideoFlows";
 import { hashFlowSource } from "../odin/video/manifestGenerator";
 import { SCRIPT_VERSION } from "../odin/video/narration";
@@ -45,19 +45,25 @@ odinVideo.post("/request", async (c) => {
 // "/notifications" against the "/:id" pattern first (id="notifications"),
 // which then fails as an invalid UUID at the database.
 odinVideo.get("/", async (c) => {
-  const rows = await query<{ id: string; flow_key: string; detail_level: number; duration_ms: number | null; created_at: string }>(
-    `SELECT id, flow_key, detail_level, duration_ms, created_at FROM odin_videos WHERE status='ready' ORDER BY created_at DESC`
+  const rows = await query<{ id: string; flow_key: string; detail_level: number; duration_ms: number | null; created_at: string; s3_key: string | null }>(
+    `SELECT id, flow_key, detail_level, duration_ms, created_at, s3_key FROM odin_videos WHERE status='ready' ORDER BY created_at DESC`
   );
-  return c.json({
-    videos: rows.map((r) => ({
+  // getSignedGetUrl only signs a URL locally (no network round-trip), so
+  // doing this per row for the whole list is cheap — needed so the Training
+  // Materials grid can show a real video-frame preview per card, not just a
+  // generic play-button placeholder.
+  const videos = await Promise.all(
+    rows.map(async (r) => ({
       id: r.id,
       flowKey: r.flow_key,
       label: ODIN_VIDEO_FLOWS[r.flow_key]?.label ?? r.flow_key,
       detailLevel: r.detail_level,
       durationMs: r.duration_ms,
       createdAt: r.created_at,
-    })),
-  });
+      videoUrl: r.s3_key ? await getSignedGetUrl(r.s3_key) : null,
+    }))
+  );
+  return c.json({ videos });
 });
 
 odinVideo.get("/notifications", async (c) => {
@@ -100,4 +106,16 @@ odinVideo.get("/:id", async (c) => {
     durationMs: row.duration_ms,
     error: row.error,
   });
+});
+
+// Super-admin only — these are auto-generated training assets, not user
+// records, but still worth gating rather than letting anyone with a login
+// wipe the library.
+odinVideo.delete("/:id", requireSuperAdmin, async (c) => {
+  const id = c.req.param("id");
+  const row = await queryOne<{ s3_key: string | null }>(`SELECT s3_key FROM odin_videos WHERE id=$1`, [id]);
+  if (!row) return c.json({ error: "Not found" }, 404);
+  if (row.s3_key) await deleteObject(row.s3_key);
+  await query(`DELETE FROM odin_videos WHERE id=$1`, [id]);
+  return c.json({ ok: true });
 });
