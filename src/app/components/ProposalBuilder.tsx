@@ -13,6 +13,10 @@ import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
+import { buildCoverageCone, encodePolyline } from '../utils/geo';
+import { DEVICE_TYPE_CONFIG, DEFAULT_CAMERA_PROPS, WARNING_480V_COLOR, type CameraProperties, type DeviceType } from '../utils/deviceTypes';
+import { MapIconLegend } from './MapIconLegend';
+import { TransformerBadge, TransformerFootnote } from './TransformerNotice';
 
 const API_BASE = '/api/documents';
 
@@ -54,6 +58,7 @@ interface TrailRow {
   unitPrice: string;
   includeMap?: boolean;  // add a site-assessment map viewport of this trail as a proposal addendum page
   mapImageUrl?: string;  // resolved Static Images URL for includeMap, stored so it survives save/reload and renders on the public signing page (which has no access to live location coordinates)
+  has480vWarning?: boolean; // resolved alongside mapImageUrl — whether this trail has a 480V Power Source/camera, for TransformerBadge/Footnote on the signing page (which has no access to live location data either)
 }
 
 interface ReqRow {
@@ -264,25 +269,124 @@ export function ProposalBuilder() {
       .map(l => l.coordinates!)
       .filter(c => isFinite(c.latitude) && isFinite(c.longitude));
 
+  // Whether a trail has a 480V Power Source (or a camera whose own power is
+  // 480V) — drives the TransformerBadge on that trail's addendum map.
+  const trailHas480vWarning = (trailId: string): boolean =>
+    allLocations.some(l =>
+      l.trailId === trailId && (
+        (l.deviceType === 'power' && (l.deviceProperties as any)?.voltage === '480V') ||
+        (l.deviceType === 'camera' && (l.deviceProperties as any)?.powerVoltage === '480V')
+      )
+    );
+
+  // Marker image for a location, matching the exact icon + color used by
+  // the site assessment map's own markers (see deviceTypes.tsx). Mapbox's
+  // Static Images API can't render a Lucide icon directly — these are
+  // pre-rendered PNGs (scripts/generateMapIcons.ts) hosted as static assets,
+  // fetched by Mapbox's renderer at request time via `url-` overlays. That
+  // fetch only succeeds once this app is deployed publicly — Mapbox's
+  // servers can't reach a localhost/private-network dev origin.
+  const mapIconUrl = (loc: (typeof allLocations)[number]): string => {
+    const base = `${window.location.origin}/map-icons`;
+    const deviceType = (loc.deviceType || 'misc') as DeviceType;
+    if (deviceType === 'camera') {
+      const color = (((loc.deviceProperties as any)?.color as string) || DEFAULT_CAMERA_PROPS.color).replace('#', '').toLowerCase();
+      return `${base}/camera-${color}.png`;
+    }
+    if (deviceType === 'power') {
+      return (loc.deviceProperties as any)?.voltage === '480V' ? `${base}/warning-480v.png` : `${base}/power.png`;
+    }
+    if (deviceType === 'startfinish') {
+      return loc.locationType === 'Finish' ? `${base}/finish.png` : `${base}/start.png`;
+    }
+    return `${base}/${deviceType}.png`; // server / network / building / misc
+  };
+
+  // Mapbox 404s the *entire* static image request if even one `url-` marker
+  // can't be fetched — so custom icons (mapIconUrl) only work once this app
+  // is reachable from the public internet. Everywhere else (localhost, a
+  // LAN IP), fall back to a plain colored/lettered pin so the map still
+  // renders while developing, instead of breaking the whole preview.
+  const iconsHostedPublicly = () => {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return false;
+    if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(host)) return false;
+    return true;
+  };
+
+  // Mapbox Static Images API overlay for a trail's site-assessment
+  // locations: one marker per location (icon + color matching the site
+  // assessment map, via mapIconUrl above) plus, for cameras, a coverage-cone
+  // path computed from heading/horizontalFov/rangeMeters — same geometry as
+  // MountainMapView's live coverage layer (see utils/geo.buildCoverageCone).
+  // Cone geometry uses the compact `path` overlay syntax with an encoded
+  // polyline (not a GeoJSON overlay) since raw GeoJSON coordinates for
+  // several cameras' cones easily exceed the Static Images API's URL length
+  // limit; encoded polylines run roughly 5x shorter for the same geometry.
+  const trailMapOverlay = (trailId: string): string | null => {
+    const locs = allLocations.filter(l => l.trailId === trailId && l.coordinates && isFinite(l.coordinates.latitude) && isFinite(l.coordinates.longitude));
+    if (locs.length === 0) return null;
+    const useCustomIcons = iconsHostedPublicly();
+    const pins: string[] = [];
+    const paths: string[] = [];
+    // `label` is only used in the localhost fallback (single alnum char);
+    // ignored once useCustomIcons is true, since the real icon image already
+    // makes the device type visually obvious.
+    const pinFor = (coord: string, label: string, color: string, iconUrl: string) =>
+      useCustomIcons
+        ? `url-${encodeURIComponent(iconUrl)}(${coord})`
+        : `pin-s${label ? `-${label}` : ''}+${color.replace('#', '')}(${coord})`;
+    for (const loc of locs) {
+      const { latitude, longitude } = loc.coordinates!;
+      const coord = `${longitude.toFixed(5)},${latitude.toFixed(5)}`;
+      const deviceType = (loc.deviceType || 'misc') as DeviceType;
+      const is480vPower = deviceType === 'power' && (loc.deviceProperties as any)?.voltage === '480V';
+      const baseColor = deviceType === 'camera'
+        ? ((loc.deviceProperties as any)?.color || DEFAULT_CAMERA_PROPS.color)
+        : is480vPower ? WARNING_480V_COLOR : (DEVICE_TYPE_CONFIG[deviceType] || DEVICE_TYPE_CONFIG.misc).color;
+      // A distinct "w" label (not "p") makes the 480V fallback pin visibly
+      // different from a normal Power Source pin, not just a color change —
+      // the localhost fallback can't show the real exclamation-triangle icon.
+      const label = is480vPower ? 'w' : deviceType !== 'startfinish' ? deviceType[0] : '';
+      pins.push(pinFor(coord, label, baseColor, mapIconUrl(loc)));
+      if (deviceType === 'camera') {
+        const props = (loc.deviceProperties || {}) as Partial<CameraProperties>;
+        const color = (props.color || DEFAULT_CAMERA_PROPS.color).replace('#', '');
+        // Fewer steps than the live map's cone (24) keeps the encoded
+        // path short — still visually smooth at addendum-image scale.
+        const cone = buildCoverageCone(
+          latitude, longitude,
+          props.heading ?? DEFAULT_CAMERA_PROPS.heading,
+          props.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov,
+          props.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters,
+          10,
+        );
+        const encoded = encodeURIComponent(encodePolyline(cone));
+        paths.push(`path-1+${color}-0.7+${color}-0.3(${encoded})`);
+        // A camera whose own power is 480V gets an additional warning
+        // marker at the same spot — same convention as standalone Power
+        // Source locations above.
+        if (props.powerVoltage === '480V') {
+          const warningIconUrl = `${window.location.origin}/map-icons/warning-480v.png`;
+          pins.push(pinFor(coord, 'w', WARNING_480V_COLOR, warningIconUrl));
+        }
+      }
+    }
+    return [...paths, ...pins].join(',');
+  };
+
   // Mapbox Static Images API URL framing a viewport that fits every
-  // coordinate for the trail, with pins marking each location.
+  // location marker and camera coverage cone for the trail. Satellite
+  // imagery (not the streets/outdoors style) so cameras/equipment can be
+  // matched against real terrain features.
   const trailMapUrl = (trailId: string): string | null => {
-    const coords = trailMapCoords(trailId);
-    if (coords.length === 0) return null;
+    const overlay = trailMapOverlay(trailId);
+    if (!overlay) return null;
     const token = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
     if (!token) return null;
-    const lats = coords.map(c => c.latitude);
-    const lngs = coords.map(c => c.longitude);
-    const pins = coords
-      .slice(0, 100) // Static Images API caps overlays around this count
-      .map(c => `pin-s+ff5c39(${c.longitude.toFixed(6)},${c.latitude.toFixed(6)})`)
-      .join(',');
-    if (coords.length === 1) {
-      // A single point has no bbox to fit — center on it at a reasonable zoom.
-      return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${pins}/${lngs[0]},${lats[0]},15,0/860x480@2x?access_token=${token}`;
-    }
-    const bbox = [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)].join(',');
-    return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${pins}/${bbox}/860x480@2x?padding=40&access_token=${token}`;
+    // `auto` (not a manually computed bbox) is required for `padding` to be
+    // accepted — Mapbox fits the viewport to every overlay feature itself.
+    return `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/${overlay}/auto/860x480@2x?padding=40&access_token=${token}`;
   };
 
   // Seed trails from DB Trail records (falling back to a blank row)
@@ -1066,17 +1170,34 @@ export function ProposalBuilder() {
           </div>
 
           {/* Map Addendum — one page per trail marked "Include a map" */}
-          {form.trails.filter(t => t.trailId && t.includeMap).map(t => {
-            const mapUrl = t.mapImageUrl || trailMapUrl(t.trailId!);
-            if (!mapUrl) return null;
+          {(() => {
+            const mapTrails = form.trails.filter(t => t.trailId && t.includeMap);
+            // Computed live as a fallback for trails whose map was included
+            // before has480vWarning existed — normally read straight from
+            // the persisted field (see the "Include a map" checkbox).
+            const has480v = (t: TrailRow) => t.has480vWarning ?? (t.trailId ? trailHas480vWarning(t.trailId) : false);
             return (
-              <div key={t.id} data-pdf-section style={{ marginTop: 40, paddingTop: 24, borderTop: '2px solid #FF5C39' }}>
-                <h2 style={{ fontSize: 15, color: '#1a1a1a', marginBottom: 4 }}>Addendum: Site Map — {t.name}</h2>
-                <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Capture Point locations from the mountain's site assessment.</p>
-                <img src={mapUrl} alt={`Map of ${t.name}`} style={{ width: '100%', borderRadius: 6, border: '1px solid #eee' }} />
-              </div>
+              <>
+                {mapTrails.map(t => {
+                  const mapUrl = t.mapImageUrl || trailMapUrl(t.trailId!);
+                  if (!mapUrl) return null;
+                  return (
+                    <div key={t.id} data-pdf-section style={{ marginTop: 40, paddingTop: 24, borderTop: '2px solid #FF5C39' }}>
+                      <h2 style={{ fontSize: 15, color: '#1a1a1a', marginBottom: 4 }}>Addendum: Site Map — {t.name}</h2>
+                      <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Capture Point locations from the mountain's site assessment.</p>
+                      <div style={{ position: 'relative' }}>
+                        <img src={mapUrl} alt={`Map of ${t.name}`} style={{ width: '100%', borderRadius: 6, border: '1px solid #eee' }} />
+                        {has480v(t) && <TransformerBadge />}
+                      </div>
+                      <MapIconLegend />
+                    </div>
+                  );
+                })}
+                {/* One footnote total, even if several trails each show their own badge above. */}
+                {mapTrails.some(has480v) && <TransformerFootnote />}
+              </>
             );
-          })}
+          })()}
         </div>
     );
   }
@@ -1363,6 +1484,7 @@ export function ProposalBuilder() {
                         onChange={e => setTrailFields(t.id, {
                           includeMap: e.target.checked,
                           mapImageUrl: e.target.checked ? (trailMapUrl(t.trailId!) || undefined) : undefined,
+                          has480vWarning: e.target.checked ? trailHas480vWarning(t.trailId!) : undefined,
                         })}
                       />
                       Include a map of this trail as a proposal addendum

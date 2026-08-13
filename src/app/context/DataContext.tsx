@@ -1129,14 +1129,14 @@ Skiers and riders at {{mountainName}} can purchase YULLR subscriptions to receiv
 !!plan Season Pass | $200 | All YULLR Mountains · Full Season | Unlimited footage access across all YULLR-enabled mountains for the full season.
 
 !!box-orange Bulk Purchase Program
-- A 75% discount applies to all season pass bulk purchases of 25 or more in Year 1
-- A 50% discount applies to all season pass bulk purchases of 25 or more in all following years
+- A 75% discount applies to all season pass bulk purchases of 25 or more in year 1.
+- A 50% discount applies to all season pass bulk purchases of 25 or more in year 2 and beyond.
 - Bulk passes may be resold up to the published retail rate.
 - Bulk passes are non-refundable and valid for the current season only.
-- Additional bulk pass purchases after the initial order must be made in increments of 25.
+- Additional bulk pass purchases after the initial order may be added at any time.
 
 !!box-green Revenue Share — YULLR.COM Sales
-{{mountainName}} will receive a **15% profit share** on all pass purchases completed through YULLR.COM that are attributable to {{mountainName}}. This includes all sales tracked through referral links, promo codes, QR codes, on-mountain signage, and any other trackable attribution method. Revenue share payments will be calculated per season and remitted within **30 days** of the end of the season, accompanied by a detailed sales report.
+{{mountainName}} will receive a **15% revenue share** on all pass purchases completed through YULLR.COM that are attributable to {{mountainName}}. This includes all sales tracked through referral links, promo codes, QR codes, on-mountain signage, and any other trackable attribution method. Revenue share payments will be calculated per season and remitted within **30 days** of the end of the season, accompanied by a detailed sales report.
 
 ## 6. Final Quote
 

@@ -55,3 +55,35 @@ export function buildCoverageCone(lat: number, lng: number, headingDeg: number, 
 }
 
 export const METERS_PER_FOOT = 0.3048;
+
+// Google/Mapbox encoded-polyline algorithm (precision 5) — encodes [lng, lat]
+// pairs into the compact string Mapbox Static Images API `path` overlays
+// expect. Used instead of a raw GeoJSON overlay so a trail with several
+// camera coverage cones stays well under the Static Images API's URL length
+// limit (a GeoJSON overlay runs ~5x longer for the same geometry).
+export function encodePolyline(points: [number, number][], precision = 5): string {
+  const factor = 10 ** precision;
+  let output = '';
+  let prevLat = 0;
+  let prevLng = 0;
+  for (const [lng, lat] of points) {
+    const lat5 = Math.round(lat * factor);
+    const lng5 = Math.round(lng * factor);
+    output += encodeSignedNumber(lat5 - prevLat) + encodeSignedNumber(lng5 - prevLng);
+    prevLat = lat5;
+    prevLng = lng5;
+  }
+  return output;
+}
+
+function encodeSignedNumber(num: number): string {
+  let sgnNum = num << 1;
+  if (num < 0) sgnNum = ~sgnNum;
+  let out = '';
+  while (sgnNum >= 0x20) {
+    out += String.fromCharCode((0x20 | (sgnNum & 0x1f)) + 63);
+    sgnNum >>= 5;
+  }
+  out += String.fromCharCode(sgnNum + 63);
+  return out;
+}

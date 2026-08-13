@@ -56,6 +56,29 @@ export const DEVICE_TYPE_CONFIG: Record<DeviceType, { label: string; color: stri
 export const DEVICE_TYPES: DeviceType[] = ['camera', 'server', 'network', 'power', 'building', 'misc', 'startfinish'];
 export const START_FINISH_COLORS: Record<'Start' | 'Finish', string> = { Start: '#22c55e', Finish: '#ef4444' };
 
+// A 480V Power Source (or a camera whose own power is 480V) gets this
+// warning marker instead of/alongside its normal icon on the proposal
+// addendum map (see ProposalBuilder's mapIconUrl) — a plain power icon
+// doesn't convey that a step-down transformer is required. Called out via
+// its own on-map badge + a one-time footnote (see TransformerNotice.tsx),
+// not folded into the general device-icon key below.
+export const WARNING_480V_COLOR = '#facc15';
+export const WARNING_480V_BADGE_TEXT = '480V to 120V transformer to be supplied by the customer ***';
+
+// Reference key rendered under the proposal addendum map (ProposalBuilder
+// and the public SigningPage) — every non-power-warning icon that can
+// appear on that map, so a reader can tell them apart without guessing.
+export const MAP_ICON_LEGEND: { Icon: typeof Server; color: string; iconColor: string; label: string }[] = [
+  { Icon: CameraIcon, color: DEVICE_TYPE_CONFIG.camera.color, iconColor: 'white', label: 'Camera' },
+  { Icon: Server, color: DEVICE_TYPE_CONFIG.server.color, iconColor: 'white', label: 'Server' },
+  { Icon: Wifi, color: DEVICE_TYPE_CONFIG.network.color, iconColor: 'white', label: 'Network Device' },
+  { Icon: Zap, color: DEVICE_TYPE_CONFIG.power.color, iconColor: 'white', label: 'Power Source' },
+  { Icon: Building2, color: DEVICE_TYPE_CONFIG.building.color, iconColor: 'white', label: 'Building' },
+  { Icon: MapPin, color: DEVICE_TYPE_CONFIG.misc.color, iconColor: 'white', label: 'Miscellaneous' },
+  { Icon: Flag, color: START_FINISH_COLORS.Start, iconColor: 'white', label: 'Start' },
+  { Icon: Flag, color: START_FINISH_COLORS.Finish, iconColor: 'white', label: 'Finish' },
+];
+
 export function createDeviceMarkerElement(type: DeviceType, isSelected: boolean, colorOverride?: string) {
   const config = DEVICE_TYPE_CONFIG[type] || DEVICE_TYPE_CONFIG.misc;
   const el = document.createElement('div');

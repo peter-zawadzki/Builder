@@ -3,6 +3,8 @@ import { useParams } from 'react-router';
 import { CheckCircle, AlertCircle, PenLine, Printer } from 'lucide-react';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import { OnboardingModal } from './SigningOnboardingModal';
+import { MapIconLegend } from './MapIconLegend';
+import { TransformerBadge, TransformerFootnote } from './TransformerNotice';
 
 // Proposal send/view/sign, and now Customer Agreement auto-creation, run
 // through our own local server — public, token-authenticated, no Clerk
@@ -446,11 +448,11 @@ export function SigningPage() {
           <h3 style={{ color: '#FF5C39', fontSize: 12.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Bulk Purchase Program</h3>
           <ul style={{ listStyle: 'none', fontSize: 12.5, color: '#333', lineHeight: 2 }}>
             {[
-              'A 75% discount applies to all season pass bulk purchases of 25 or more in Year 1',
-              'A 50% discount applies to all season pass bulk purchases of 25 or more in all following years',
+              'A 75% discount applies to all season pass bulk purchases of 25 or more in year 1.',
+              'A 50% discount applies to all season pass bulk purchases of 25 or more in year 2 and beyond.',
               'Bulk passes may be resold up to the published retail rate.',
               'Bulk passes are non-refundable and valid for the current season only.',
-              'Additional bulk pass purchases after the initial order must be made in increments of 25.',
+              'Additional bulk pass purchases after the initial order may be added at any time.',
             ].map((item, i) => (
               <li key={i} style={{ paddingLeft: 14, position: 'relative' }}>
                 <span style={{ color: '#FF5C39', fontWeight: 700, position: 'absolute', left: 0 }}>-</span>{item}
@@ -461,7 +463,7 @@ export function SigningPage() {
         <div style={{ background: '#f0fdf4', border: '2px solid #22c55e', borderRadius: 8, padding: '14px 18px', marginTop: 12 }}>
           <h3 style={{ color: '#15803d', fontSize: 12.5, fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Revenue Share — YULLR.COM Sales</h3>
           <p style={{ color: '#166534', fontSize: 12.5, lineHeight: 1.8 }}>
-            {p.mountainName} will receive a <strong>15% profit share</strong> on all pass purchases completed through YULLR.COM that are attributable to {p.mountainName}. This includes all sales tracked through referral links, promo codes, QR codes, on-mountain signage, and any other trackable attribution method. Revenue share payments will be calculated per season and remitted within <strong>30 days</strong> of the end of the season, accompanied by a detailed sales report.
+            {p.mountainName} will receive a <strong>15% revenue share</strong> on all pass purchases completed through YULLR.COM that are attributable to {p.mountainName}. This includes all sales tracked through referral links, promo codes, QR codes, on-mountain signage, and any other trackable attribution method. Revenue share payments will be calculated per season and remitted within <strong>30 days</strong> of the end of the season, accompanied by a detailed sales report.
           </p>
         </div>
 
@@ -558,13 +560,26 @@ export function SigningPage() {
         </ol>
 
         {/* Map Addendum — one page per trail marked "Include a map" in the proposal builder */}
-        {(p.trails || []).filter((t: any) => t.includeMap && t.mapImageUrl).map((t: any) => (
-          <div key={t.id} style={{ marginTop: 40, paddingTop: 24, borderTop: '2px solid #FF5C39' }}>
-            <h2 style={{ fontSize: 15, color: '#1a1a1a', marginBottom: 4 }}>Addendum: Site Map — {t.name}</h2>
-            <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Capture Point locations from the mountain's site assessment.</p>
-            <img src={t.mapImageUrl} alt={`Map of ${t.name}`} style={{ width: '100%', borderRadius: 6, border: '1px solid #eee' }} />
-          </div>
-        ))}
+        {(() => {
+          const mapTrails = (p.trails || []).filter((t: any) => t.includeMap && t.mapImageUrl);
+          return (
+            <>
+              {mapTrails.map((t: any) => (
+                <div key={t.id} style={{ marginTop: 40, paddingTop: 24, borderTop: '2px solid #FF5C39' }}>
+                  <h2 style={{ fontSize: 15, color: '#1a1a1a', marginBottom: 4 }}>Addendum: Site Map — {t.name}</h2>
+                  <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Capture Point locations from the mountain's site assessment.</p>
+                  <div style={{ position: 'relative' }}>
+                    <img src={t.mapImageUrl} alt={`Map of ${t.name}`} style={{ width: '100%', borderRadius: 6, border: '1px solid #eee' }} />
+                    {t.has480vWarning && <TransformerBadge />}
+                  </div>
+                  <MapIconLegend />
+                </div>
+              ))}
+              {/* One footnote total, even if several trails each show their own badge above. */}
+              {mapTrails.some((t: any) => t.has480vWarning) && <TransformerFootnote />}
+            </>
+          );
+        })()}
 
         {/* ── Signatures ── */}
         <div style={{ marginTop: 48 }}>
