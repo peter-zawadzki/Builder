@@ -89,8 +89,11 @@ export function FeedbackAssistant() {
       }
       setSubmissionId(result.id ?? null);
       setPhase('done');
-    } catch {
-      setErrorText("Something went wrong submitting this — please try again.");
+    } catch (err) {
+      // Surface the server's actual reason (e.g. a specific missing field)
+      // instead of a generic message — that detail is what makes the error
+      // actionable instead of a dead end requiring a support ticket.
+      setErrorText(err instanceof Error && err.message ? err.message : "Something went wrong submitting this — please try again.");
       setPhase('error');
     }
   }

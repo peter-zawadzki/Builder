@@ -116,7 +116,30 @@ export async function runIntakeTurn(question: string, history: HistoryTurn[]): P
 
   const toolUse = response.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") throw new Error("Model did not return a turn");
-  return toolUse.input as IntakeTurnResult;
+  return enforceFinalizeReadiness(toolUse.input as IntakeTurnResult);
+}
+
+// The model occasionally decides readyToFinalize=true (and says so) without
+// actually having asked about every required field for that type — e.g.
+// skipping "constraints" on a feature request. Left alone, that guarantees a
+// 400 from POST /feedback/finalize's own validateSummary() once the user
+// clicks Submit, with no way for them to know why. Re-checking the exact
+// same REQUIRED_FIELDS list here means the "ready to submit" state shown to
+// the user is never a lie — either it's genuinely complete, or we ask for
+// what's missing instead of a guaranteed dead-end submit.
+function enforceFinalizeReadiness(result: IntakeTurnResult): IntakeTurnResult {
+  if (!result.readyToFinalize) return result;
+  const type = result.collectedSummary?.type;
+  const fields = result.collectedSummary?.fields ?? {};
+  const required = type ? REQUIRED_FIELDS[type] : [];
+  const missing = required.filter((f) => !fields[f]?.trim());
+  if (missing.length === 0) return result;
+  return {
+    ...result,
+    readyToFinalize: false,
+    stage: "gathering_details",
+    message: `Just a couple more things before I submit this — I still need: ${missing.join(", ")}.`,
+  };
 }
 
 feedbackAgent.post("/turn", async (c) => {
