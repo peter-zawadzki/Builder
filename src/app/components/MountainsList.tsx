@@ -195,7 +195,7 @@ export function MountainsList() {
     }
 
     // Always alphabetical A–Z.
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     return filtered;
   }, [mountains, search, projects, contacts, showArchived]);

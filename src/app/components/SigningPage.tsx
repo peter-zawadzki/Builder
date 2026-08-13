@@ -394,6 +394,7 @@ export function SigningPage() {
           <li>All installations will be scheduled and coordinated with designated on mountain contact.</li>
           <li>Each Capture Point will be mounted, aligned, and tested on-site before sign-off.</li>
           <li>YULLR will provide full system commissioning and staff orientation prior to the start of the season.</li>
+          <li>For installation locations requiring work more than 20 feet above ground level, the Customer shall provide appropriate access equipment, qualified personnel, and reasonable access to on-mountain resources and staff necessary to safely complete the installation.</li>
           {installNotesArr.map((n: string, i: number) => <li key={i}>{n}</li>)}
         </ul>
 
@@ -445,7 +446,8 @@ export function SigningPage() {
           <h3 style={{ color: '#FF5C39', fontSize: 12.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Bulk Purchase Program</h3>
           <ul style={{ listStyle: 'none', fontSize: 12.5, color: '#333', lineHeight: 2 }}>
             {[
-              'A 50% discount applies to all bulk purchases of 25 or more passes of any type.',
+              'A 75% discount applies to all season pass bulk purchases of 25 or more in Year 1',
+              'A 50% discount applies to all season pass bulk purchases of 25 or more in all following years',
               'Bulk passes may be resold up to the published retail rate.',
               'Bulk passes are non-refundable and valid for the current season only.',
               'Additional bulk pass purchases after the initial order must be made in increments of 25.',
@@ -554,6 +556,15 @@ export function SigningPage() {
             </li>
           ))}
         </ol>
+
+        {/* Map Addendum — one page per trail marked "Include a map" in the proposal builder */}
+        {(p.trails || []).filter((t: any) => t.includeMap && t.mapImageUrl).map((t: any) => (
+          <div key={t.id} style={{ marginTop: 40, paddingTop: 24, borderTop: '2px solid #FF5C39' }}>
+            <h2 style={{ fontSize: 15, color: '#1a1a1a', marginBottom: 4 }}>Addendum: Site Map — {t.name}</h2>
+            <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Capture Point locations from the mountain's site assessment.</p>
+            <img src={t.mapImageUrl} alt={`Map of ${t.name}`} style={{ width: '100%', borderRadius: 6, border: '1px solid #eee' }} />
+          </div>
+        ))}
 
         {/* ── Signatures ── */}
         <div style={{ marginTop: 48 }}>

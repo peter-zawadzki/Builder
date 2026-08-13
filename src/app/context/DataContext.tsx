@@ -1110,6 +1110,7 @@ Installation will be carried out by a YULLR technician or approved installation 
 - All installations will be scheduled and coordinated with designated on mountain contact.
 - Each Capture Point will be mounted, aligned, and tested on-site before sign-off.
 - YULLR will provide full system commissioning and staff orientation prior to the start of the season.
+- For installation locations requiring work more than 20 feet above ground level, the Customer shall provide appropriate access equipment, qualified personnel, and reasonable access to on-mountain resources and staff necessary to safely complete the installation.
 
 {{splice:installNotesExtra}}
 
@@ -1128,7 +1129,8 @@ Skiers and riders at {{mountainName}} can purchase YULLR subscriptions to receiv
 !!plan Season Pass | $200 | All YULLR Mountains · Full Season | Unlimited footage access across all YULLR-enabled mountains for the full season.
 
 !!box-orange Bulk Purchase Program
-- A 50% discount applies to all bulk purchases of 25 or more passes of any type.
+- A 75% discount applies to all season pass bulk purchases of 25 or more in Year 1
+- A 50% discount applies to all season pass bulk purchases of 25 or more in all following years
 - Bulk passes may be resold up to the published retail rate.
 - Bulk passes are non-refundable and valid for the current season only.
 - Additional bulk pass purchases after the initial order must be made in increments of 25.

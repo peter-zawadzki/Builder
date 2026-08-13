@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import { useData, DEFAULT_PROPOSAL_TERMS, DEFAULT_PAYMENT_TERMS } from '../context/DataContext';
 import { renderTemplate } from '../utils/templateRenderer';
-import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive, Bell } from 'lucide-react';
+import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive, Bell, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAuthToken } from '../context/DataContext';
 import html2canvas from 'html2canvas';
@@ -16,6 +16,33 @@ import * as mountainDocsDB from '../utils/mountainDocumentsDB';
 
 const API_BASE = '/api/documents';
 
+const DEFAULT_TRAIL_NOTE = 'YULLR may reduce the number of cameras if full coverage can be maintained while optimizing the deployment.';
+
+const REQUIREMENT_PRESETS: { label: string; details: string }[] = [
+  { label: '120V Power Required', details: 'Provide a dedicated 120V AC power source at this location prior to installation.' },
+  { label: '120V Power (Existing)', details: 'Existing 120V AC power is available and shall be made accessible for YULLR equipment.' },
+  { label: '120V Power via 480V', details: 'Provide a dedicated 120V AC power source by stepping down existing 480V service using a minimum 0.5 kVA transformer installed in accordance with applicable electrical codes.' },
+  { label: '120V Power via 240V', details: 'Provide a dedicated 120V AC power source from the existing 240V service using an appropriately sized transformer or circuit.' },
+  { label: 'Internet Connection Required', details: 'Provide an active internet connection with an available Ethernet connection at this location.' },
+  { label: 'Network Drop Required', details: 'Provide a Cat6 Ethernet connection to this location prior to installation.' },
+  { label: 'Power & Internet Required', details: 'Provide both a dedicated 120V AC power source and an active Ethernet internet connection at this location prior to installation.' },
+  { label: 'Power & Wireless Backhaul', details: 'Customer shall provide dedicated 120V AC power. Network connectivity will be provided by a YULLR provided access point.' },
+  { label: 'Internet Only', details: 'Customer shall provide an active Ethernet internet connection. Power will be supplied by existing YULLR infrastructure.' },
+];
+
+const INSTALL_NOTES_EXAMPLES = [
+  'Installation will be performed by YULLR personnel or an authorized installation partner. Unless otherwise specified in this proposal, the following conditions apply:',
+  'A designated mountain representative shall be available throughout the installation to provide site access, answer operational questions, and coordinate any required mountain resources.',
+  'The Customer is responsible for providing 120V AC power and an internet connection at the designated server location prior to the installation date. Where approved, YULLR may utilize a customer-provided network or install a dedicated wireless backhaul solution.',
+  'The Customer is responsible for providing 120V AC power at all locations where a PoE switch is required. Where only 480V power is available, the Customer shall provide a properly installed step-down transformer with a minimum capacity of 0.5 kVA to supply 120V AC service.',
+  'The Customer shall provide access to any required on-mountain equipment necessary to safely complete the installation, including but not limited to chairlifts, utility vehicles (UTVs), snowcats, bucket trucks, or other approved access equipment as appropriate for the season and terrain.',
+  'For any installation requiring work 20 feet or more above ground level, the Customer shall provide safe access equipment and, where required by resort policy, qualified personnel to operate such equipment.',
+  'Installation areas should be reasonably accessible and free from hazards that would prevent safe installation.',
+  'Each Capture Point will be mounted, aligned, configured, and tested prior to project completion.',
+  'Final camera locations and quantities may be adjusted during installation to optimize coverage based on actual terrain, sightlines, vegetation, snowmaking infrastructure, and other field conditions.',
+  'Following installation, YULLR will commission the system, verify proper operation, and provide basic orientation and training for designated Customer personnel.',
+];
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TrailRow {
@@ -25,6 +52,8 @@ interface TrailRow {
   capturePoints: string;
   notes: string;
   unitPrice: string;
+  includeMap?: boolean;  // add a site-assessment map viewport of this trail as a proposal addendum page
+  mapImageUrl?: string;  // resolved Static Images URL for includeMap, stored so it survives save/reload and renders on the public signing page (which has no access to live location coordinates)
 }
 
 interface ReqRow {
@@ -137,6 +166,8 @@ export function ProposalBuilder() {
   const hiddenPrintRef = useRef<HTMLDivElement>(null);
   const [pdfGenerationMode, setPdfGenerationMode] = useState(false);
   const [newTrailMode, setNewTrailMode] = useState<Record<string, boolean>>({});
+  const [manualLocationMode, setManualLocationMode] = useState<Record<string, boolean>>({});
+  const [reqCustomMode, setReqCustomMode] = useState<Record<string, boolean>>({});
 
   // Edit mode: false when proposal already saved (locked), true when new or explicitly unlocked
   const alreadySaved = !!proposalRecord?.proposalCreated;
@@ -161,6 +192,7 @@ export function ProposalBuilder() {
 
   // ── Email sending ──────────────────────────────────────────────────────────
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showInstallNotesHelp, setShowInstallNotesHelp] = useState(false);
   const [emailRecipient, setEmailRecipient] = useState('');
   const [emailRecipientName, setEmailRecipientName] = useState('');
   const myEmail = user?.primaryEmailAddress?.emailAddress || '';
@@ -224,6 +256,35 @@ export function ProposalBuilder() {
     return installLocations.length;
   };
 
+  // Coordinates (from site-assessment locations) for a trail, used to compute
+  // an addendum-page map viewport that fits every location on that trail.
+  const trailMapCoords = (trailId: string): { latitude: number; longitude: number }[] =>
+    allLocations
+      .filter(l => l.trailId === trailId && l.coordinates)
+      .map(l => l.coordinates!)
+      .filter(c => isFinite(c.latitude) && isFinite(c.longitude));
+
+  // Mapbox Static Images API URL framing a viewport that fits every
+  // coordinate for the trail, with pins marking each location.
+  const trailMapUrl = (trailId: string): string | null => {
+    const coords = trailMapCoords(trailId);
+    if (coords.length === 0) return null;
+    const token = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
+    if (!token) return null;
+    const lats = coords.map(c => c.latitude);
+    const lngs = coords.map(c => c.longitude);
+    const pins = coords
+      .slice(0, 100) // Static Images API caps overlays around this count
+      .map(c => `pin-s+ff5c39(${c.longitude.toFixed(6)},${c.latitude.toFixed(6)})`)
+      .join(',');
+    if (coords.length === 1) {
+      // A single point has no bbox to fit — center on it at a reasonable zoom.
+      return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${pins}/${lngs[0]},${lats[0]},15,0/860x480@2x?access_token=${token}`;
+    }
+    const bbox = [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)].join(',');
+    return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${pins}/${bbox}/860x480@2x?padding=40&access_token=${token}`;
+  };
+
   // Seed trails from DB Trail records (falling back to a blank row)
   const seedTrails = (): TrailRow[] => {
     if (dbTrails.length > 0) {
@@ -234,12 +295,12 @@ export function ProposalBuilder() {
           trailId: t.id,
           name: t.name,
           capturePoints: count > 0 ? String(count) : '',
-          notes: t.notes || '',
+          notes: t.notes || DEFAULT_TRAIL_NOTE,
           unitPrice: '1000',
         };
       });
     }
-    return [{ id: uid(), trailId: undefined, name: '', capturePoints: '', notes: '', unitPrice: '1000' }];
+    return [{ id: uid(), trailId: undefined, name: '', capturePoints: '', notes: DEFAULT_TRAIL_NOTE, unitPrice: '1000' }];
   };
 
   const today = todayISO();
@@ -343,7 +404,7 @@ export function ProposalBuilder() {
 
   // ── Trail helpers ── (prefixed to avoid conflict with DataContext addTrail)
   const addProposalTrail = () =>
-    setForm(prev => ({ ...prev, trails: [...prev.trails, { id: uid(), trailId: undefined, name: '', capturePoints: '', notes: '', unitPrice: '1000' }] }));
+    setForm(prev => ({ ...prev, trails: [...prev.trails, { id: uid(), trailId: undefined, name: '', capturePoints: '', notes: DEFAULT_TRAIL_NOTE, unitPrice: '1000' }] }));
   const removeTrail = (id: string) => {
     setNewTrailMode(prev => { const n = { ...prev }; delete n[id]; return n; });
     setForm(prev => ({ ...prev, trails: prev.trails.filter(t => t.id !== id) }));
@@ -1003,6 +1064,19 @@ export function ProposalBuilder() {
           <div style={{ fontSize: 11, color: '#aaa', textAlign: 'center', marginTop: 16 }}>
             YULLR, Inc. &nbsp;|&nbsp; Confidential Proposal &nbsp;|&nbsp; Proposal # {form.proposalNumber}
           </div>
+
+          {/* Map Addendum — one page per trail marked "Include a map" */}
+          {form.trails.filter(t => t.trailId && t.includeMap).map(t => {
+            const mapUrl = t.mapImageUrl || trailMapUrl(t.trailId!);
+            if (!mapUrl) return null;
+            return (
+              <div key={t.id} data-pdf-section style={{ marginTop: 40, paddingTop: 24, borderTop: '2px solid #FF5C39' }}>
+                <h2 style={{ fontSize: 15, color: '#1a1a1a', marginBottom: 4 }}>Addendum: Site Map — {t.name}</h2>
+                <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Capture Point locations from the mountain's site assessment.</p>
+                <img src={mapUrl} alt={`Map of ${t.name}`} style={{ width: '100%', borderRadius: 6, border: '1px solid #eee' }} />
+              </div>
+            );
+          })}
         </div>
     );
   }
@@ -1201,7 +1275,7 @@ export function ProposalBuilder() {
         <div className={section}>
           <h2 className={sectionH}>Trails / Capture Points</h2>
           {/* Column headers */}
-          <div className="hidden sm:grid grid-cols-[1.8fr_0.8fr_2fr_1fr_1fr_28px] gap-2 mb-1">
+          <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_56px_minmax(0,2fr)_90px_110px_28px] gap-2 mb-1">
             {['Trail Name', 'Capture Points', 'Notes', 'Unit $', 'Total', ''].map(h => (
               <span key={h} className="text-[11px] text-[#9ca3af] font-semibold uppercase">{h}</span>
             ))}
@@ -1213,8 +1287,8 @@ export function ProposalBuilder() {
               const availableDbTrails = dbTrails.filter(dt => !usedIds.includes(dt.id));
               const hasDropdown = !t.trailId && !newTrailMode[t.id] && availableDbTrails.length > 0;
               return (
-              <div key={t.id} className="border border-[rgba(0,0,0,0.08)] rounded-[8px] p-3 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-[1.8fr_0.8fr_2fr_1fr_1fr_28px] sm:gap-2 sm:items-center">
-                <div>
+              <div key={t.id} className="border border-[rgba(0,0,0,0.08)] rounded-[8px] p-3 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-[minmax(0,1fr)_56px_minmax(0,2fr)_90px_110px_28px] sm:gap-2 sm:items-start">
+                <div className="min-w-0">
                   <span className="sm:hidden text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Trail Name</span>
                   {t.trailId ? (
                     /* Existing DB trail — editable name with cloud badge */
@@ -1262,23 +1336,42 @@ export function ProposalBuilder() {
                 </div>
                 <div>
                   <span className="sm:hidden text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Capture Points</span>
-                  <input className={inp(ro)} readOnly={ro} type="number" min="1" value={t.capturePoints} onChange={e => setTrail(t.id, 'capturePoints', e.target.value)} placeholder="1" />
+                  <input className={`${inp(ro)} text-center`} readOnly={ro} type="number" min="1" max="99" maxLength={2} value={t.capturePoints} onChange={e => setTrail(t.id, 'capturePoints', e.target.value)} placeholder="1" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="sm:hidden text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Notes</span>
-                  <input className={inp(ro)} readOnly={ro} value={t.notes} onChange={e => setTrail(t.id, 'notes', e.target.value)} placeholder="Notes" />
+                  <textarea className={`${inp(ro)} resize-y`} rows={3} readOnly={ro} value={t.notes} onChange={e => setTrail(t.id, 'notes', e.target.value)} placeholder="Notes" />
                 </div>
                 <div>
                   <span className="sm:hidden text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Unit Price</span>
-                  <input className={inp(ro)} readOnly={ro} value={t.unitPrice} onChange={e => setTrail(t.id, 'unitPrice', e.target.value)} placeholder="1000" />
+                  <input className={`${inp(ro)} text-right`} readOnly={ro} maxLength={4} value={t.unitPrice} onChange={e => setTrail(t.id, 'unitPrice', e.target.value)} placeholder="1000" />
                 </div>
                 <div>
                   <span className="sm:hidden text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Total</span>
-                  <input className={`${inp} bg-[#f9f9f9] text-right`} readOnly value={trailTotal(t) ? fmtMoney(trailTotal(t)) : ''} placeholder="$0.00" />
+                  <input className={`${inp(true)} bg-[#f9f9f9] text-right`} readOnly value={trailTotal(t) ? fmtMoney(trailTotal(t)) : ''} placeholder="$0.00" />
                 </div>
-                <button onClick={() => removeTrail(t.id)} className="flex-shrink-0 text-[#d1d5db] hover:text-[#ff5c39] active:opacity-60 self-center">
+                <button onClick={() => removeTrail(t.id)} className="flex-shrink-0 text-[#d1d5db] hover:text-[#ff5c39] active:opacity-60 pt-2.5">
                   <X size={16} />
                 </button>
+                {t.trailId && (
+                  <div className="sm:col-span-full pt-1">
+                    <label className="flex items-center gap-2 text-[12px] text-[#6a7282] font-['Inter:Medium',sans-serif]">
+                      <input
+                        type="checkbox"
+                        disabled={ro || trailMapCoords(t.trailId).length === 0}
+                        checked={!!t.includeMap}
+                        onChange={e => setTrailFields(t.id, {
+                          includeMap: e.target.checked,
+                          mapImageUrl: e.target.checked ? (trailMapUrl(t.trailId!) || undefined) : undefined,
+                        })}
+                      />
+                      Include a map of this trail as a proposal addendum
+                      {trailMapCoords(t.trailId).length === 0 && (
+                        <span className="text-[#9ca3af]">— no located Capture Points yet</span>
+                      )}
+                    </label>
+                  </div>
+                )}
               </div>
               );
             })}
@@ -1319,7 +1412,19 @@ export function ProposalBuilder() {
 
         {/* ── Installation Notes ── */}
         <div className={section}>
-          <h2 className={sectionH}>Installation Notes</h2>
+          <div className="flex items-center gap-1.5 mb-3">
+            <h2 className={sectionH} style={{ marginBottom: 0 }}>Installation Notes</h2>
+            {!ro && (
+              <button
+                type="button"
+                onClick={() => setShowInstallNotesHelp(true)}
+                className="text-[#9ca3af] hover:text-[#ff5c39] active:opacity-60 flex-shrink-0"
+                title="See example installation notes"
+              >
+                <HelpCircle size={14} />
+              </button>
+            )}
+          </div>
           <div className="flex items-end gap-4">
             <div>
               <label className={label}>Estimated Install Duration {!form.selfInstall && <span className="text-[#ff5c39]">*</span>}</label>
@@ -1390,15 +1495,22 @@ export function ProposalBuilder() {
           <div className="space-y-3">
             {form.requirements.map(r => (
               <div key={r.id} className="border border-[rgba(0,0,0,0.08)] rounded-[8px] p-3 space-y-2">
-                <div className="grid grid-cols-[1fr_1fr_1fr_28px] gap-2 items-end">
+                <div className="grid grid-cols-[1fr_1.8fr_70px_28px] gap-2 items-end">
                   <div>
                     <span className="text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Location</span>
-                    {allLocations.length > 0 ? (
+                    {allLocations.length > 0 && !manualLocationMode[r.id] ? (
                       <select
                         className={`${inp(ro)} appearance-none`}
                         disabled={ro}
                         value={r.location}
-                        onChange={e => setReq(r.id, 'location', e.target.value)}
+                        onChange={e => {
+                          if (e.target.value === '__manual__') {
+                            setManualLocationMode(prev => ({ ...prev, [r.id]: true }));
+                            setReq(r.id, 'location', '');
+                          } else {
+                            setReq(r.id, 'location', e.target.value);
+                          }
+                        }}
                       >
                         <option value="">Select a location…</option>
                         {allLocations.map(loc => (
@@ -1408,25 +1520,83 @@ export function ProposalBuilder() {
                         {r.location && !allLocations.some(loc => loc.name === r.location) && (
                           <option value={r.location}>{r.location}</option>
                         )}
+                        <option value="__manual__">＋ Type your own…</option>
                       </select>
                     ) : (
                       <div>
-                        <input className={inp(ro)} readOnly={ro} value={r.location} onChange={e => setReq(r.id, 'location', e.target.value)} placeholder="e.g. Summit" />
-                        {mountainId && (
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/mountains/${mountainId}/locations/new`)}
-                            className="text-[11px] text-[#307fe2] mt-1 active:opacity-70"
-                          >
-                            No locations yet — add one
-                          </button>
-                        )}
+                        <input
+                          className={inp(ro)}
+                          readOnly={ro}
+                          value={r.location}
+                          onChange={e => setReq(r.id, 'location', e.target.value)}
+                          placeholder="e.g. Summit"
+                          autoFocus={!!manualLocationMode[r.id]}
+                        />
+                        <div className="flex items-center gap-2 mt-1">
+                          {allLocations.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setManualLocationMode(prev => ({ ...prev, [r.id]: false }))}
+                              className="text-[11px] text-[#307fe2] active:opacity-70"
+                            >
+                              Choose from existing locations
+                            </button>
+                          )}
+                          {allLocations.length === 0 && mountainId && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/mountains/${mountainId}/locations/new`)}
+                              className="text-[11px] text-[#307fe2] active:opacity-70"
+                            >
+                              No locations yet — add one
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
                   <div>
                     <span className="text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Requirement</span>
-                    <input className={inp(ro)} readOnly={ro} value={r.requirement} onChange={e => setReq(r.id, 'requirement', e.target.value)} placeholder="Power Supply" />
+                    {reqCustomMode[r.id] ? (
+                      <input className={inp(ro)} readOnly={ro} value={r.requirement} onChange={e => setReq(r.id, 'requirement', e.target.value)} placeholder="Power Supply" autoFocus />
+                    ) : (
+                      <select
+                        className={`${inp(ro)} appearance-none`}
+                        disabled={ro}
+                        value={REQUIREMENT_PRESETS.some(p => p.label === r.requirement) ? r.requirement : ''}
+                        onChange={e => {
+                          if (e.target.value === '__custom__') {
+                            setReqCustomMode(prev => ({ ...prev, [r.id]: true }));
+                            setForm(prev => ({
+                              ...prev,
+                              requirements: prev.requirements.map(row =>
+                                row.id === r.id ? { ...row, requirement: '', details: '' } : row
+                              ),
+                            }));
+                            return;
+                          }
+                          const preset = REQUIREMENT_PRESETS.find(p => p.label === e.target.value);
+                          if (preset) {
+                            setForm(prev => ({
+                              ...prev,
+                              requirements: prev.requirements.map(row =>
+                                row.id === r.id ? { ...row, requirement: preset.label, details: preset.details } : row
+                              ),
+                            }));
+                          }
+                        }}
+                      >
+                        <option value="">Select a requirement…</option>
+                        {REQUIREMENT_PRESETS.map(p => (
+                          <option key={p.label} value={p.label}>{p.label}</option>
+                        ))}
+                        {/* Preserve a legacy/free-typed value that doesn't match any preset. */}
+                        {r.requirement && !REQUIREMENT_PRESETS.some(p => p.label === r.requirement) && (
+                          <option value={r.requirement}>{r.requirement}</option>
+                        )}
+                        <option value="__custom__">＋ Custom…</option>
+                      </select>
+                    )}
                   </div>
                   <div>
                     <span className="text-[11px] text-[#9ca3af] font-semibold uppercase block mb-1">Responsibility</span>
@@ -1483,7 +1653,7 @@ export function ProposalBuilder() {
                 <input className={inp(ro)} readOnly={ro} value={b.passType} onChange={e => setBulk(b.id, 'passType', e.target.value)} placeholder="Pass type" />
                 <input className={inp(ro)} readOnly={ro} type="number" min="0" value={b.qty} onChange={e => setBulk(b.id, 'qty', e.target.value)} placeholder="0" />
                 <input className={inp(ro)} readOnly={ro} value={b.unitPrice} onChange={e => setBulk(b.id, 'unitPrice', e.target.value)} placeholder="$0.00" />
-                <input className={`${inp} bg-[#f9f9f9] text-right`} readOnly value={bulkTotal(b) ? fmtMoney(bulkTotal(b)) : ''} placeholder="$0.00" />
+                <input className={`${inp(true)} bg-[#f9f9f9] text-right`} readOnly value={bulkTotal(b) ? fmtMoney(bulkTotal(b)) : ''} placeholder="$0.00" />
                 <button onClick={() => removeBulk(b.id)} className="text-[#d1d5db] hover:text-[#ff5c39] active:opacity-60">
                   <X size={16} />
                 </button>
@@ -1943,6 +2113,42 @@ export function ProposalBuilder() {
         onDiscard={handleDiscard}
         onCancel={handleCancel}
       />
+
+      {/* Installation Notes examples modal */}
+      {showInstallNotesHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="bg-white rounded-[16px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="px-6 pt-6 pb-4 flex items-start justify-between flex-shrink-0">
+              <div>
+                <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-semibold text-[16px] leading-snug">
+                  Example Installation Notes
+                </h3>
+                <p className="text-[#6a7282] text-[13px] mt-1">Click any example to add it to your Additional Notes.</p>
+              </div>
+              <button onClick={() => setShowInstallNotesHelp(false)} className="text-[#9ca3af] hover:text-[#0a0a0a] active:opacity-60 flex-shrink-0">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-6 pb-6 overflow-y-auto space-y-2">
+              {INSTALL_NOTES_EXAMPLES.map((ex, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    setForm(prev => ({
+                      ...prev,
+                      installNotes: prev.installNotes.trim() ? `${prev.installNotes}\n${ex}` : ex,
+                    }));
+                  }}
+                  className="w-full text-left border border-[rgba(0,0,0,0.08)] rounded-[8px] p-3 text-[13px] text-[#0a0a0a] font-['Inter:Regular',sans-serif] leading-relaxed hover:border-[#ff5c39] hover:bg-[#fff8f6] active:opacity-70 transition-colors"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Email Modal */}
       {showEmailModal && (
