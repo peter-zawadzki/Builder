@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
-  PlayCircle, ExternalLink, ChevronLeft, ChevronRight, Trash2, Upload,
+  PlayCircle, ExternalLink, ChevronLeft, ChevronRight, Trash2, Upload, FileText,
   Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,7 +12,12 @@ import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type O
 import { OdinVideoOffer } from './OdinVideoOffer';
 import { DocumentUploadForm } from './DocumentUploadForm';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { useIsSuperAdmin } from '../hooks/useRole';
+import { useIsSuperAdmin, useIsAdminOrAbove } from '../hooks/useRole';
+import { fileToBase64 } from '../utils/mountainDocumentsDB';
+import {
+  listResourceFiles, uploadResourceFile, deleteResourceFile,
+  type ResourceFile, type ResourceFileCategory,
+} from '../utils/resourceFilesApi';
 import { type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
@@ -647,7 +652,14 @@ function TrainingMaterialsSection() {
   }
 
   if (videos.length === 0) {
-    return <EmptyPlaceholder label="Training videos" />;
+    return (
+      <>
+        <EmptyPlaceholder label="Training videos" />
+        <div className="mt-4">
+          <ResourceFileManager category="training" emptyLabel="Training materials" />
+        </div>
+      </>
+    );
   }
 
   return (
@@ -704,12 +716,143 @@ function TrainingMaterialsSection() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+      <div className="mt-4">
+        <ResourceFileManager category="training" emptyLabel="Training materials" />
+      </div>
     </>
+  );
+}
+
+// Admin-uploaded files for Training Materials / Sales Tools / Marketing
+// Assets (server/routes/resourceFiles.ts) — any user can preview/download,
+// only admin/super_admin see the upload form and delete button. Shared
+// across all three tabs, parametrized by category.
+function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileCategory; emptyLabel: string }) {
+  const isAdmin = useIsAdminOrAbove();
+  const [files, setFiles] = useState<ResourceFile[] | null>(null);
+  const [name, setName] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const load = () => listResourceFiles(category).then(setFiles).catch(() => setFiles([]));
+  useEffect(() => { load(); }, [category]);
+
+  async function handleUpload() {
+    if (!file || !name.trim() || uploading) return;
+    setUploading(true);
+    try {
+      const dataUrl = await fileToBase64(file);
+      await uploadResourceFile({ category, name: name.trim(), dataUrl, fileName: file.name, mimeType: file.type });
+      setName('');
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed — please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteResourceFile(id);
+      setFiles(prev => (prev ?? []).filter(f => f.id !== id));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed — please try again.');
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {isAdmin && (
+        <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-4 space-y-3">
+          <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Upload a file</p>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Name, e.g. 'Coaches One Pager'"
+            className="w-full bg-[#f3f3f5] rounded-[8px] px-3 py-2 text-[13px] outline-none"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={e => setFile(e.target.files?.[0] ?? null)}
+            className="w-full text-[12px] text-[#6a7282]"
+          />
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={!file || !name.trim() || uploading}
+            className="flex items-center gap-1.5 bg-[#1D2930] text-white rounded-[8px] px-3 py-2 text-[12px] font-['Inter:Medium',sans-serif] disabled:opacity-40"
+          >
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            Upload
+          </button>
+        </div>
+      )}
+
+      {files === null ? (
+        <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-[#6a7282]" /></div>
+      ) : files.length === 0 ? (
+        <EmptyPlaceholder label={emptyLabel} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {files.map(f => (
+            <div key={f.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col">
+              <div className="h-40 bg-[#f9fafb] flex items-center justify-center overflow-hidden relative">
+                {f.mimeType.startsWith('image/') ? (
+                  <img src={f.url} alt={f.name} className="max-h-full max-w-full object-contain" />
+                ) : (
+                  <FileText size={32} className="text-[#307fe2]" />
+                )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(f.id)}
+                    className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 active:opacity-70"
+                    aria-label={`Delete ${f.name}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="p-3 flex flex-col gap-2 flex-1">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.name}</p>
+                  <p className="text-[11px] text-[#8992a0]">{f.fileSize ? formatFileSize(Math.round(f.fileSize / 1024)) : '—'}</p>
+                </div>
+                <div className="flex gap-1.5 mt-auto">
+                  <a
+                    href={f.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#0a0a0a] px-2 py-1.5 rounded-full hover:bg-[#eaeaec] active:opacity-70"
+                  >
+                    <ExternalLink size={10} /> Preview
+                  </a>
+                  <a
+                    href={f.url}
+                    download={f.originalFilename}
+                    className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#307fe2] px-2 py-1.5 rounded-full hover:bg-[#eef3fb] active:opacity-70"
+                  >
+                    <Download size={10} /> Download
+                  </a>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
 function SalesToolsSection() {
   return (
+    <div className="space-y-4">
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {SALES_TOOLS.map(f => (
         <div key={f.url} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col">
@@ -747,6 +890,8 @@ function SalesToolsSection() {
           </div>
         </div>
       ))}
+    </div>
+    <ResourceFileManager category="sales" emptyLabel="Sales tools" />
     </div>
   );
 }
@@ -1132,7 +1277,7 @@ export function ResourceCenterPage() {
         {tab === 'faq' && <FAQSection />}
         {tab === 'training' && <TrainingMaterialsSection />}
         {tab === 'sales' && <SalesToolsSection />}
-        {tab === 'marketing' && <EmptyPlaceholder label="Marketing assets" />}
+        {tab === 'marketing' && <ResourceFileManager category="marketing" emptyLabel="Marketing assets" />}
         {tab === 'logos' && <LogoFilesSection />}
         {tab === 'demo' && <DemoHubSection />}
         {tab === 'upload' && <UploadSection />}
