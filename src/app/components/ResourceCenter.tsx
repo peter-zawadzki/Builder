@@ -938,6 +938,22 @@ function BrandSection() {
   return (
     <div className="space-y-6">
       <div>
+        <h2 className="text-[13px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-3">Brand Voice &amp; Tone</h2>
+        <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] p-4 space-y-3">
+          <p className="text-[13px] text-[#0a0a0a] leading-relaxed">
+            A guide for every YULLR employee, how we sound in training videos, product copy, support and everywhere else we speak as YULLR.
+          </p>
+          <a
+            href="/resource-assets/brand/YULLR_Brand_Tone.pdf"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12px] font-['Inter:Medium',sans-serif] text-[#307fe2] hover:underline"
+          >
+            <FileText size={13} /> View the full Brand Voice &amp; Tone guide
+          </a>
+        </div>
+      </div>
+      <div>
         <h2 className="text-[13px] font-['Inter:Medium',sans-serif] text-[#6a7282] uppercase tracking-wide mb-3">Brand Colors</h2>
         <div className="space-y-3">
           {BRAND_COLORS.map(c => (
