@@ -14,13 +14,18 @@ import {
   type DeviceType, type CameraProperties, DEVICE_TYPE_CONFIG, DEFAULT_CAMERA_PROPS, START_FINISH_COLORS,
   createDeviceMarkerElement, createCameraMarkerElement,
 } from '../utils/deviceTypes';
+import { listConnections, type MountainConnection, type ConnectionType } from '../utils/mountainConnectionsApi';
 import { LocationDetail } from './LocationDetail';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
 
 const DEFAULT_CENTER: [number, number] = [-98.35, 39.5];
 const COVERAGE_SOURCE_ID = 'mapview-camera-coverage';
+const CONNECTIONS_SOURCE_ID = 'mapview-connections';
 const DEM_SOURCE_ID = 'mapbox-dem';
+const CONNECTION_COLORS: Record<ConnectionType, string> = {
+  wireless: '#0ea5e9', poe: '#22c55e', '120v': '#f59e0b',
+};
 // Standard style family (v3) for Satellite/Streets — real-time lighting,
 // atmosphere, shadowed 3D buildings/terrain, same as SiteAssessmentWorkspace.
 // Outdoors has no Standard equivalent, stays classic.
@@ -177,6 +182,15 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
   const [mapStyle, setMapStyle] = useState<'satellite' | 'streets' | 'outdoors'>('satellite');
   const [mapReady, setMapReady] = useState(false);
   const [styleReady, setStyleReady] = useState(false);
+  // Connections (Wireless/PoE/120V links) — a dedicated table, not a
+  // Location, loaded independently (see mountainConnectionsApi.ts).
+  const [connections, setConnections] = useState<MountainConnection[]>([]);
+
+  useEffect(() => {
+    listConnections(mountainId).then(setConnections).catch(err => {
+      console.error('[MountainMapView] failed to load connections:', err);
+    });
+  }, [mountainId]);
 
   const isValidCoordinate = (lat: number, lng: number) =>
     typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng) &&
@@ -215,6 +229,35 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
         map.addSource(COVERAGE_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({ id: 'mapview-coverage-fill', type: 'fill', source: COVERAGE_SOURCE_ID, paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 } });
         map.addLayer({ id: 'mapview-coverage-outline', type: 'line', source: COVERAGE_SOURCE_ID, paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.6 } });
+      }
+      // Connections — read-only rendering (no drag handles; this view
+      // never edits anything). Same 4-layer setup as
+      // SiteAssessmentWorkspace.tsx's editable version.
+      if (!map.getSource(CONNECTIONS_SOURCE_ID)) {
+        map.addSource(CONNECTIONS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+          id: 'mapview-connections-line', type: 'line', source: CONNECTIONS_SOURCE_ID,
+          filter: ['!=', ['get', 'connectionType'], '120v'],
+          paint: {
+            'line-color': ['get', 'color'], 'line-width': 3,
+            'line-dasharray': ['match', ['get', 'connectionType'], 'wireless', ['literal', [2, 1.5]], ['literal', [1, 0]]],
+          },
+        });
+        map.addLayer({
+          id: 'mapview-connections-120v-a', type: 'line', source: CONNECTIONS_SOURCE_ID,
+          filter: ['==', ['get', 'connectionType'], '120v'],
+          paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-offset': 2 },
+        });
+        map.addLayer({
+          id: 'mapview-connections-120v-b', type: 'line', source: CONNECTIONS_SOURCE_ID,
+          filter: ['==', ['get', 'connectionType'], '120v'],
+          paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-offset': -2 },
+        });
+        map.addLayer({
+          id: 'mapview-connections-label', type: 'symbol', source: CONNECTIONS_SOURCE_ID,
+          layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, 1.2] },
+          paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 1.5 },
+        });
       }
       setStyleReady(true);
     };
@@ -333,6 +376,23 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
     });
     source.setData({ type: 'FeatureCollection', features });
   }, [locations, styleReady]);
+
+  // Connections — read-only rendering, rebuilt whenever the connection set changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+    const source = map.getSource(CONNECTIONS_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const features = connections.map(cx => ({
+      type: 'Feature' as const,
+      properties: { id: cx.id, name: cx.name, connectionType: cx.connection_type, color: CONNECTION_COLORS[cx.connection_type] },
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: [[cx.start_longitude, cx.start_latitude], [cx.end_longitude, cx.end_latitude]],
+      },
+    }));
+    source.setData({ type: 'FeatureCollection', features });
+  }, [connections, styleReady]);
 
   // Pan map + scroll card into view when active location changes
   useEffect(() => {

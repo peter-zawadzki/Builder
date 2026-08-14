@@ -4,18 +4,23 @@ import mapboxgl from 'mapbox-gl';
 import {
   ArrowLeft, Loader2, LocateFixed, Search, MousePointer2,
   Trash2, X, Layers,
-  Mountain, Ruler, Pencil,
+  Mountain, Ruler, Pencil, Cable,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData, type Location } from '../context/DataContext';
 import { getSiteAssessment, updateSiteAssessment, archiveSiteAssessment, type SiteAssessment } from '../utils/siteAssessmentsApi';
 import { createMeasurement, deleteMeasurement, type SiteAssessmentMeasurement } from '../utils/siteAssessmentsApi';
 import {
+  listConnections, createConnection, updateConnection, deleteConnection,
+  type MountainConnection, type ConnectionType,
+} from '../utils/mountainConnectionsApi';
+import {
   type DeviceType, type CameraProperties, DEVICE_TYPE_CONFIG, DEVICE_TYPES, DEFAULT_CAMERA_PROPS, START_FINISH_COLORS,
   createDeviceMarkerElement, createCameraMarkerElement,
 } from '../utils/deviceTypes';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { LocationPropertiesPanel } from './LocationPropertiesPanel';
+import { ConnectionPropertiesPanel, CONNECTION_TYPE_CONFIG } from './ConnectionPropertiesPanel';
 import { LocationDetail } from './LocationDetail';
 import { geocodeWithMapbox } from '../utils/mapboxGeocode';
 import { bearingBetween, distanceBetween, destinationPoint, buildCoverageCone, compassLabel, METERS_PER_FOOT } from '../utils/geo';
@@ -28,7 +33,12 @@ const DEFAULT_CENTER: [number, number] = [-98.35, 39.5]; // continental US, same
 const COVERAGE_SOURCE_ID = 'camera-coverage';
 const MEASUREMENTS_SOURCE_ID = 'sa-measurements';
 const MEASURE_DRAFT_SOURCE_ID = 'sa-measure-draft';
+const CONNECTIONS_SOURCE_ID = 'sa-connections';
 const DEM_SOURCE_ID = 'mapbox-dem';
+
+const CONNECTION_COLORS: Record<ConnectionType, string> = {
+  wireless: '#0ea5e9', poe: '#22c55e', '120v': '#f59e0b',
+};
 
 // Base map styles — Satellite/Streets use Mapbox's v3 "Standard" style
 // family (real-time lighting, atmosphere, shadowed 3D buildings/terrain)
@@ -187,8 +197,13 @@ export function SiteAssessmentWorkspace() {
   const [mapReady, setMapReady] = useState(false);
   const [styleReady, setStyleReady] = useState(false);
 
-  const [activeTool, setActiveTool] = useState<'select' | 'measure' | DeviceType>('select');
+  const [activeTool, setActiveTool] = useState<'select' | 'measure' | 'connection' | DeviceType>('select');
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  const [connections, setConnections] = useState<MountainConnection[]>([]);
+  const [connectionDraftStart, setConnectionDraftStart] = useState<[number, number] | null>(null);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [connectionOpenInEditMode, setConnectionOpenInEditMode] = useState(false);
+  const [connectionPendingDelete, setConnectionPendingDelete] = useState<MountainConnection | null>(null);
   // Mobile "add at my current location" — capture GPS first, then show a
   // device-type picker; picking one places the device at those coordinates
   // directly, skipping the usual tap-the-map step. Button itself is
@@ -229,6 +244,7 @@ export function SiteAssessmentWorkspace() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const resortCenterRef = useRef<[number, number]>(DEFAULT_CENTER);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const connectionMarkersRef = useRef<Map<string, { start: mapboxgl.Marker; end: mapboxgl.Marker }>>(new Map());
   const handleMarkerRef = useRef<mapboxgl.Marker | null>(null);
   // Read inside the long-lived 'style.load' listener below, which is
   // registered once at map creation — closing over `mapStyle` directly would
@@ -265,6 +281,17 @@ export function SiteAssessmentWorkspace() {
   );
   const devices = useMemo(() => mountainLocations.filter(l => l.deviceType), [mountainLocations]);
   const selectedLocation = mountainLocations.find(l => l.id === selectedLocationId) || null;
+  const selectedConnection = connections.find(cx => cx.id === selectedConnectionId) || null;
+
+  // Connections (Wireless/PoE/120V links) — a dedicated table, not a
+  // Location; loaded independently of the mountainLocations/DataContext
+  // flow above (see mountainConnectionsApi.ts's header comment).
+  useEffect(() => {
+    if (!mountainId) return;
+    listConnections(mountainId).then(setConnections).catch(err => {
+      console.error('[SiteAssessmentWorkspace] failed to load connections:', err);
+    });
+  }, [mountainId]);
 
   // Debounced-by-nature: moveend only fires once movement has settled, so no
   // separate debounce timer is needed for this particular save.
@@ -403,6 +430,42 @@ export function SiteAssessmentWorkspace() {
           });
         }
 
+        if (!map.getSource(CONNECTIONS_SOURCE_ID)) {
+          map.addSource(CONNECTIONS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+          // Wireless (dashed) + PoE (solid) share one layer via a data-driven
+          // line-dasharray expression keyed on connectionType.
+          map.addLayer({
+            id: 'sa-connections-line', type: 'line', source: CONNECTIONS_SOURCE_ID,
+            filter: ['!=', ['get', 'connectionType'], '120v'],
+            paint: {
+              'line-color': ['get', 'color'], 'line-width': 3,
+              'line-dasharray': ['match', ['get', 'connectionType'], 'wireless', ['literal', [2, 1.5]], ['literal', [1, 0]]],
+            },
+          });
+          // 120V: Mapbox GL has no native double-line paint property — two
+          // solid line layers with opposite line-offset, same
+          // "two-layers-for-one-concept" idiom already used above for
+          // coverage cones (fill+outline) and measurements (line+symbol).
+          map.addLayer({
+            id: 'sa-connections-120v-a', type: 'line', source: CONNECTIONS_SOURCE_ID,
+            filter: ['==', ['get', 'connectionType'], '120v'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-offset': 2 },
+          });
+          map.addLayer({
+            id: 'sa-connections-120v-b', type: 'line', source: CONNECTIONS_SOURCE_ID,
+            filter: ['==', ['get', 'connectionType'], '120v'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-offset': -2 },
+          });
+          map.addLayer({
+            id: 'sa-connections-label', type: 'symbol', source: CONNECTIONS_SOURCE_ID,
+            layout: {
+              'symbol-placement': 'line-center', 'text-field': ['get', 'name'],
+              'text-size': 12, 'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'], 'text-offset': [0, 1.2],
+            },
+            paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 1.5 },
+          });
+        }
+
         map.setFog({});
         // Standard-only real-time lighting/shadow preset, always 'day' —
         // classic styles (Outdoors) have no 'basemap' config scope, so this
@@ -537,11 +600,48 @@ export function SiteAssessmentWorkspace() {
     updateLocation(cameraId, { deviceProperties: { ...(cam.deviceProperties || {}), heading } });
   }
 
+  // Connections are always exactly 2 clicks — start point, then end point —
+  // unlike the measure tool's N-click-then-finish flow. Nothing is created
+  // (or persisted) until both endpoints are known.
+  async function finishConnectionDraft(start: [number, number], end: [number, number]) {
+    if (!mountain) return;
+    const initialTrail = initialTrailId ? trails.find(t => t.id === initialTrailId) : undefined;
+    try {
+      const created = await createConnection({
+        mountain_id: mountain.id,
+        ...(initialTrail ? { trail_id: initialTrail.id } : {}),
+        name: `Connection ${connections.length + 1}`,
+        connection_type: 'wireless',
+        start_latitude: start[1], start_longitude: start[0],
+        end_latitude: end[1], end_longitude: end[0],
+      });
+      setConnections(prev => [...prev, created]);
+      setSelectedConnectionId(created.id);
+      setConnectionOpenInEditMode(true);
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
+    }
+    // Back to the pointer immediately, same as placeDevice — leaving the
+    // tool active made it too easy to draw several in a row by accident.
+    setActiveTool('select');
+  }
+
   async function handleDeleteLocation(locationId: string) {
     try {
       await deleteLocation(locationId);
       setSelectedLocationId(null);
       setLocationPendingDelete(null);
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteConnection(connectionId: string) {
+    try {
+      await deleteConnection(connectionId);
+      setConnections(prev => prev.filter(c => c.id !== connectionId));
+      setSelectedConnectionId(null);
+      setConnectionPendingDelete(null);
     } catch (err: any) {
       toast.error(`Error: ${err.message}`);
     }
@@ -627,7 +727,7 @@ export function SiteAssessmentWorkspace() {
   // Escape exits placement/aiming/measuring mode.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setActiveTool('select'); setCameraAimingId(null); setMeasureDraft([]); setMeasureHover(null); setMeasureSummary(null); }
+      if (e.key === 'Escape') { setActiveTool('select'); setCameraAimingId(null); setMeasureDraft([]); setMeasureHover(null); setMeasureSummary(null); setConnectionDraftStart(null); }
       if (e.key === 'Enter' && activeTool === 'measure' && measureDraft.length >= 2) finishMeasurement(measureDraft);
     };
     document.addEventListener('keydown', handler);
@@ -651,6 +751,15 @@ export function SiteAssessmentWorkspace() {
         else placeDevice('camera', e.lngLat.lat, e.lngLat.lng);
         return;
       }
+      if (activeTool === 'connection') {
+        if (!connectionDraftStart) {
+          setConnectionDraftStart([e.lngLat.lng, e.lngLat.lat]);
+        } else {
+          finishConnectionDraft(connectionDraftStart, [e.lngLat.lng, e.lngLat.lat]);
+          setConnectionDraftStart(null);
+        }
+        return;
+      }
       placeDevice(activeTool, e.lngLat.lat, e.lngLat.lng);
     };
     const dblHandler = (e: mapboxgl.MapMouseEvent) => {
@@ -667,7 +776,7 @@ export function SiteAssessmentWorkspace() {
     map.on('dblclick', dblHandler);
     return () => { map.off('click', handler); map.off('dblclick', dblHandler); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, activeTool, cameraAimingId, mountainLocations, mountain?.id]);
+  }, [mapReady, activeTool, cameraAimingId, connectionDraftStart, mountainLocations, mountain?.id]);
 
   // Live draft line/points while measuring, plus a rubber-band segment to
   // the current cursor position for a Caltopo-style "measure as you go" feel.
@@ -729,6 +838,84 @@ export function SiteAssessmentWorkspace() {
     map.on('click', 'sa-measurements-line', handler);
     return () => { map.off('click', 'sa-measurements-line', handler); };
   }, [mapReady]);
+
+  // Connections — rendered as permanent lines (dashed/solid/double per
+  // type), rebuilt whenever the connection set changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+    const source = map.getSource(CONNECTIONS_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const features = connections.map(cx => ({
+      type: 'Feature' as const,
+      properties: { id: cx.id, name: cx.name, connectionType: cx.connection_type, color: CONNECTION_COLORS[cx.connection_type] },
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: [[cx.start_longitude, cx.start_latitude], [cx.end_longitude, cx.end_latitude]],
+      },
+    }));
+    source.setData({ type: 'FeatureCollection', features });
+  }, [connections, styleReady]);
+
+  // Clicking a connection's line selects it (opens the read-only summary,
+  // same as clicking a saved measurement).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const handler = (e: mapboxgl.MapLayerMouseEvent) => {
+      const cid = e.features?.[0]?.properties?.id;
+      if (cid) { setConnectionOpenInEditMode(false); setSelectedConnectionId(cid); }
+    };
+    const layerIds = ['sa-connections-line', 'sa-connections-120v-a', 'sa-connections-120v-b'];
+    layerIds.forEach(l => map.on('click', l, handler));
+    return () => { layerIds.forEach(l => map.off('click', l, handler)); };
+  }, [mapReady]);
+
+  // Endpoint drag handles — two small markers per connection, draggable
+  // while in select mode and not locked. Mirrors the device-marker sync
+  // effect below, simplified (no camera-aim/classic-location branching).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    connectionMarkersRef.current.forEach(({ start, end }) => { start.remove(); end.remove(); });
+    connectionMarkersRef.current.clear();
+
+    if (activeTool !== 'select') return;
+
+    connections.forEach(cx => {
+      const makeHandle = () => {
+        const el = document.createElement('div');
+        el.style.cssText = `
+          width: 14px; height: 14px; border-radius: 50%;
+          background: white; border: 3px solid ${CONNECTION_COLORS[cx.connection_type]};
+          cursor: ${cx.is_locked ? 'default' : 'grab'};
+          box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        `;
+        return el;
+      };
+
+      const startMarker = new mapboxgl.Marker({ element: makeHandle(), draggable: !cx.is_locked })
+        .setLngLat([cx.start_longitude, cx.start_latitude])
+        .addTo(map);
+      const endMarker = new mapboxgl.Marker({ element: makeHandle(), draggable: !cx.is_locked })
+        .setLngLat([cx.end_longitude, cx.end_latitude])
+        .addTo(map);
+
+      startMarker.on('dragend', () => {
+        const ll = startMarker.getLngLat();
+        updateConnection(cx.id, { start_latitude: ll.lat, start_longitude: ll.lng }).catch(err => toast.error(`Error: ${err.message}`));
+        setConnections(prev => prev.map(c => (c.id === cx.id ? { ...c, start_latitude: ll.lat, start_longitude: ll.lng } : c)));
+      });
+      endMarker.on('dragend', () => {
+        const ll = endMarker.getLngLat();
+        updateConnection(cx.id, { end_latitude: ll.lat, end_longitude: ll.lng }).catch(err => toast.error(`Error: ${err.message}`));
+        setConnections(prev => prev.map(c => (c.id === cx.id ? { ...c, end_latitude: ll.lat, end_longitude: ll.lng } : c)));
+      });
+
+      connectionMarkersRef.current.set(cx.id, { start: startMarker, end: endMarker });
+    });
+  }, [connections, activeTool, mapReady]);
 
   // Marker sync — one marker per mountain Location (device or classic),
   // recreated whenever the location set/selection/tool changes. Devices open
@@ -992,6 +1179,13 @@ export function SiteAssessmentWorkspace() {
           >
             <Ruler size={18} />
           </button>
+          <button
+            onClick={() => { setActiveTool(activeTool === 'connection' ? 'select' : 'connection'); setConnectionDraftStart(null); }}
+            title="Draw a connection (Wireless / PoE / 120V)"
+            className={`w-11 h-11 shrink-0 rounded-[8px] flex items-center justify-center ${activeTool === 'connection' ? 'bg-[#0ea5e9] text-white' : 'text-[#0a0a0a] hover:bg-[#f3f3f5]'}`}
+          >
+            <Cable size={18} />
+          </button>
         </div>
 
         {/* Mobile-only single-icon trigger, opens the tools sheet below. */}
@@ -999,11 +1193,15 @@ export function SiteAssessmentWorkspace() {
           onClick={() => setToolsSheetOpen(true)}
           title="Tools"
           className={`sm:hidden absolute top-4 left-4 z-10 w-12 h-12 rounded-[12px] shadow-lg flex items-center justify-center ${
-            activeTool === 'select' ? 'bg-white text-[#0a0a0a]' : activeTool === 'measure' ? 'bg-[#a855f7] text-white' : 'bg-[#ff5c39] text-white'
+            activeTool === 'select' ? 'bg-white text-[#0a0a0a]'
+              : activeTool === 'measure' ? 'bg-[#a855f7] text-white'
+              : activeTool === 'connection' ? 'bg-[#0ea5e9] text-white'
+              : 'bg-[#ff5c39] text-white'
           }`}
         >
           {activeTool === 'select' ? <MousePointer2 size={20} />
             : activeTool === 'measure' ? <Ruler size={20} />
+            : activeTool === 'connection' ? <Cable size={20} />
             : (() => { const { Icon } = DEVICE_TYPE_CONFIG[activeTool as DeviceType]; return <Icon size={20} />; })()}
         </button>
 
@@ -1045,6 +1243,13 @@ export function SiteAssessmentWorkspace() {
                 <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[#a855f7]/10 text-[#a855f7]"><Ruler size={18} /></span>
                 <span className="text-[14px] font-['Inter:Regular',sans-serif] text-[#0a0a0a]">Measure distance</span>
               </button>
+              <button
+                onClick={() => { setActiveTool(activeTool === 'connection' ? 'select' : 'connection'); setConnectionDraftStart(null); setToolsSheetOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-[10px] text-left ${activeTool === 'connection' ? 'bg-[#f3f3f5]' : 'active:bg-[#f9fafb]'}`}
+              >
+                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[#0ea5e9]/10 text-[#0ea5e9]"><Cable size={18} /></span>
+                <span className="text-[14px] font-['Inter:Regular',sans-serif] text-[#0a0a0a]">Draw a connection</span>
+              </button>
             </div>
           </div>
         )}
@@ -1058,6 +1263,8 @@ export function SiteAssessmentWorkspace() {
                 ? measureDraft.length === 0
                   ? 'Click to start measuring'
                   : 'Click to add points · double-click or Enter to finish'
+                : activeTool === 'connection'
+                ? connectionDraftStart ? 'Click the second endpoint to finish' : 'Click the first endpoint of the connection'
                 : `Click map to place ${DEVICE_TYPE_CONFIG[activeTool as DeviceType].label}`}
             </span>
             {activeTool === 'measure' && measureSummary && (
@@ -1223,6 +1430,28 @@ export function SiteAssessmentWorkspace() {
           />
         )}
 
+        {selectedConnection && (
+          <ConnectionPropertiesPanel
+            key={selectedConnection.id}
+            connection={selectedConnection}
+            defaultEditing={connectionOpenInEditMode}
+            onUpdate={(data) => {
+              setConnections(prev => prev.map(c => (c.id === selectedConnection.id ? { ...c, ...data } : c)));
+              updateConnection(selectedConnection.id, data).catch(err => toast.error(`Error: ${err.message}`));
+            }}
+            onDelete={() => setConnectionPendingDelete(selectedConnection)}
+            onClose={() => setSelectedConnectionId(null)}
+          />
+        )}
+
+        {connectionPendingDelete && (
+          <DeleteConfirmModal
+            title={`Delete "${connectionPendingDelete.name}"?`}
+            description="This removes it from the map. This can't be undone."
+            onCancel={() => setConnectionPendingDelete(null)}
+            onConfirm={() => handleDeleteConnection(connectionPendingDelete.id)}
+          />
+        )}
 
         {gpsCoords && (
           <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50" onClick={() => setGpsCoords(null)}>

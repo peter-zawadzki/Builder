@@ -17,8 +17,15 @@ import { buildCoverageCone, encodePolyline } from '../utils/geo';
 import { DEVICE_TYPE_CONFIG, DEFAULT_CAMERA_PROPS, WARNING_480V_COLOR, type CameraProperties, type DeviceType } from '../utils/deviceTypes';
 import { MapIconLegend } from './MapIconLegend';
 import { TransformerBadge, TransformerFootnote } from './TransformerNotice';
+import { listConnections, type MountainConnection, type ConnectionType } from '../utils/mountainConnectionsApi';
 
 const API_BASE = '/api/documents';
+
+// Matches CONNECTION_COLORS in SiteAssessmentWorkspace.tsx/MountainMapView.tsx
+// (hex without '#', for the Static Images API path-{width}+{color} syntax).
+const CONNECTION_STATIC_COLORS: Record<ConnectionType, string> = {
+  wireless: '0ea5e9', poe: '22c55e', '120v': 'f59e0b',
+};
 
 const DEFAULT_TRAIL_NOTE = 'YULLR may reduce the number of cameras if full coverage can be maintained while optimizing the deployment.';
 
@@ -165,6 +172,17 @@ export function ProposalBuilder() {
   const dbTrails = mountainId ? getTrailsByMountainId(mountainId) : [];
   const allLocations = mountainId ? getLocationsByMountainId(mountainId) : [];
 
+  // Map "connections" (Wireless/PoE/120V links) — a dedicated table, not a
+  // Location, so it's loaded independently for the addendum map export
+  // (see mountainConnectionsApi.ts's header comment).
+  const [allConnections, setAllConnections] = useState<MountainConnection[]>([]);
+  useEffect(() => {
+    if (!mountainId) return;
+    listConnections(mountainId).then(setAllConnections).catch(err => {
+      console.error('[ProposalBuilder] failed to load connections:', err);
+    });
+  }, [mountainId]);
+
   const [showPreview, setShowPreview] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -263,11 +281,17 @@ export function ProposalBuilder() {
 
   // Coordinates (from site-assessment locations) for a trail, used to compute
   // an addendum-page map viewport that fits every location on that trail.
-  const trailMapCoords = (trailId: string): { latitude: number; longitude: number }[] =>
-    allLocations
+  const trailMapCoords = (trailId: string): { latitude: number; longitude: number }[] => [
+    ...allLocations
       .filter(l => l.trailId === trailId && l.coordinates)
-      .map(l => l.coordinates!)
-      .filter(c => isFinite(c.latitude) && isFinite(c.longitude));
+      .map(l => l.coordinates!),
+    ...allConnections
+      .filter(c => c.trail_id === trailId)
+      .flatMap(c => [
+        { latitude: c.start_latitude, longitude: c.start_longitude },
+        { latitude: c.end_latitude, longitude: c.end_longitude },
+      ]),
+  ].filter(c => isFinite(c.latitude) && isFinite(c.longitude));
 
   // Whether a trail has a 480V Power Source (or a camera whose own power is
   // 480V) — drives the TransformerBadge on that trail's addendum map.
@@ -325,7 +349,8 @@ export function ProposalBuilder() {
   // limit; encoded polylines run roughly 5x shorter for the same geometry.
   const trailMapOverlay = (trailId: string): string | null => {
     const locs = allLocations.filter(l => l.trailId === trailId && l.coordinates && isFinite(l.coordinates.latitude) && isFinite(l.coordinates.longitude));
-    if (locs.length === 0) return null;
+    const trailConnections = allConnections.filter(c => c.trail_id === trailId);
+    if (locs.length === 0 && trailConnections.length === 0) return null;
     const useCustomIcons = iconsHostedPublicly();
     const pins: string[] = [];
     const paths: string[] = [];
@@ -371,6 +396,18 @@ export function ProposalBuilder() {
           pins.push(pinFor(coord, 'w', WARNING_480V_COLOR, warningIconUrl));
         }
       }
+    }
+    // Connections (Wireless/PoE/120V links) — the Static Images API's
+    // `path` primitive can't dash or offset like the live map's GL layers
+    // do, so every type renders as a plain solid color-coded line here;
+    // MapIconLegend explains the color coding for this export specifically.
+    for (const cx of trailConnections) {
+      const color = CONNECTION_STATIC_COLORS[cx.connection_type];
+      const encoded = encodeURIComponent(encodePolyline([
+        [cx.start_longitude, cx.start_latitude],
+        [cx.end_longitude, cx.end_latitude],
+      ]));
+      paths.push(`path-2+${color}-1(${encoded})`);
     }
     return [...paths, ...pins].join(',');
   };
