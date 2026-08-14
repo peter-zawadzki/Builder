@@ -15,6 +15,15 @@ export async function getSignedGetUrl(key: string, expiresInSeconds = 86400): Pr
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn: expiresInSeconds });
 }
 
+// Fetches an object's bytes directly (not a signed URL) — for server-side
+// processing that needs the actual content, e.g. text extraction in
+// server/knowledge/processDocument.ts.
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+  const bytes = await res.Body!.transformToByteArray();
+  return Buffer.from(bytes);
+}
+
 export async function getSignedPutUrl(key: string, contentType: string, expiresInSeconds = 600): Promise<string> {
   return getSignedUrl(s3, new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType }), { expiresIn: expiresInSeconds });
 }
@@ -42,6 +51,8 @@ export function extFromMime(mime: string): string {
   const map: Record<string, string> = {
     "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
     "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm",
+    "text/plain": "txt", "text/markdown": "md", "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
   };
   return map[mime] ?? mime.split("/")[1] ?? "bin";
 }

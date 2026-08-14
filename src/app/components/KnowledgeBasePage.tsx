@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Loader2, Lock, X, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, X, Check, Trash2 } from 'lucide-react';
 import { useApi } from '../api/client';
-import type { KnowledgeGap, KnowledgeCandidate, KnowledgeBaseStats } from '../api/client';
+import type { KnowledgeGap, KnowledgeCandidate, KnowledgeBaseStats, KnowledgeDocument } from '../api/client';
 import { useIsAdminOrAbove } from '../hooks/useRole';
+import { DocumentUploadForm } from './DocumentUploadForm';
 
-type Tab = 'gaps' | 'candidates' | 'stats';
+type Tab = 'gaps' | 'candidates' | 'stats' | 'documents';
 
 // The admin side of the ODIN knowledge-base growth loop: real gaps (things
 // ODIN couldn't answer) and candidates (confident answers ODIN already gave
@@ -20,6 +21,8 @@ export function KnowledgeBasePage() {
   const [gaps, setGaps] = useState<KnowledgeGap[] | null>(null);
   const [candidates, setCandidates] = useState<KnowledgeCandidate[] | null>(null);
   const [stats, setStats] = useState<KnowledgeBaseStats | null>(null);
+  const [pendingDocs, setPendingDocs] = useState<KnowledgeDocument[] | null>(null);
+  const [liveDocs, setLiveDocs] = useState<KnowledgeDocument[] | null>(null);
   const [promoting, setPromoting] = useState<{ question: string; category: string; answer: string; gapIds?: number[] } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,13 +37,47 @@ export function KnowledgeBasePage() {
   async function loadStats() {
     setStats(await api.getKnowledgeBaseStats());
   }
+  async function loadDocuments() {
+    const [pending, live] = await Promise.all([api.listPendingKnowledgeDocuments(), api.listLiveKnowledgeDocuments()]);
+    setPendingDocs(pending.documents);
+    setLiveDocs(live.documents);
+  }
 
   useEffect(() => {
     if (!isAdmin) return;
     if (tab === 'gaps' && gaps === null) loadGaps();
     if (tab === 'candidates' && candidates === null) loadCandidates();
     if (tab === 'stats' && stats === null) loadStats();
+    if (tab === 'documents' && pendingDocs === null) loadDocuments();
   }, [isAdmin, tab]);
+
+  async function approveDocument(id: string) {
+    setBusy(true);
+    try {
+      await api.approveKnowledgeDocument(id);
+      await loadDocuments();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function rejectDocument(id: string) {
+    setBusy(true);
+    try {
+      await api.rejectKnowledgeDocument(id);
+      setPendingDocs(d => d?.filter(x => x.id !== id) ?? null);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function deleteDocument(id: string) {
+    setBusy(true);
+    try {
+      await api.deleteKnowledgeDocument(id);
+      setLiveDocs(d => d?.filter(x => x.id !== id) ?? null);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (!isAdmin) {
     return (
@@ -90,13 +127,13 @@ export function KnowledgeBasePage() {
       <p className="text-[#6a7282] text-[12px] mb-4"><strong>Promote</strong> writes it into the permanent FAQ (visible in the FAQ tab and used by ODIN going forward). <strong>Dismiss</strong> just clears it from this list without creating an FAQ entry — use it when the question isn't worth a permanent answer.</p>
 
       <div className="flex gap-2 mb-4 border-b border-[rgba(0,0,0,0.08)]">
-        {(['gaps', 'candidates', 'stats'] as Tab[]).map(t => (
+        {(['gaps', 'candidates', 'stats', 'documents'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-2 text-[13px] font-['Inter:Medium',sans-serif] border-b-2 -mb-px ${tab === t ? 'border-[#307fe2] text-[#0a0a0a]' : 'border-transparent text-[#6a7282]'}`}
           >
-            {t === 'gaps' ? 'Gaps' : t === 'candidates' ? 'Candidates' : 'Stats'}
+            {t === 'gaps' ? 'Gaps' : t === 'candidates' ? 'Candidates' : t === 'stats' ? 'Stats' : 'Documents'}
           </button>
         ))}
       </div>
@@ -181,6 +218,80 @@ export function KnowledgeBasePage() {
             </div>
           </div>
         )
+      )}
+
+      {tab === 'documents' && (
+        <div className="space-y-5">
+          <DocumentUploadForm isAdmin={true} onUploaded={loadDocuments} />
+
+          <div>
+            <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] mb-2">Pending approval</p>
+            {pendingDocs === null ? <Spinner /> : pendingDocs.length === 0 ? (
+              <EmptyState label="No documents waiting on review." />
+            ) : (
+              <div className="space-y-2">
+                {pendingDocs.map(d => (
+                  <div key={d.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{d.title}</p>
+                        <p className="text-[12px] text-[#6a7282] mt-0.5">
+                          {d.originalFilename} · uploaded by {d.uploadedByName || d.uploadedByEmail || 'Unknown'} · {new Date(d.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          disabled={busy}
+                          onClick={() => approveDocument(d.id)}
+                          className="bg-[#1D2930] text-white rounded-[6px] px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() => rejectDocument(d.id)}
+                          className="bg-[#f3f3f5] text-[#6a7282] rounded-[6px] px-3 py-1.5 text-[12px] font-['Inter:Medium',sans-serif] disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] mb-2">Live documents</p>
+            {liveDocs === null ? <Spinner /> : liveDocs.length === 0 ? (
+              <EmptyState label="No documents live yet." />
+            ) : (
+              <div className="space-y-2">
+                {liveDocs.map(d => (
+                  <div key={d.id} className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] text-[#0a0a0a] font-['Inter:Medium',sans-serif]">{d.title}</p>
+                        <p className="text-[12px] text-[#6a7282] mt-0.5">
+                          {d.originalFilename} · {d.chunkCount} chunk{d.chunkCount === 1 ? '' : 's'} indexed · uploaded by {d.uploadedByName || d.uploadedByEmail || 'Unknown'}
+                        </p>
+                      </div>
+                      <button
+                        disabled={busy}
+                        onClick={() => deleteDocument(d.id)}
+                        className="shrink-0 text-[#d1d5db] hover:text-[#ff5c39] active:opacity-60 disabled:opacity-50"
+                        aria-label={`Delete ${d.title}`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {promoting && (

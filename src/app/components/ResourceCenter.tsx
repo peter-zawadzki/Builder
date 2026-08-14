@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type OdinVideoListItem, type FaqEntry } from '../api/client';
 import { OdinVideoOffer } from './OdinVideoOffer';
+import { DocumentUploadForm } from './DocumentUploadForm';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { useIsSuperAdmin } from '../hooks/useRole';
 import { type FAQCategory } from '../data/faqData';
@@ -496,6 +497,7 @@ export function FAQSection() {
   return (
     <div className="space-y-3">
       <FaqAssistant />
+      <DocumentUploadForm isAdmin={false} />
       <div className="relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
         <input

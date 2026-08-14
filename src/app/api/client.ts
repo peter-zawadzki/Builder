@@ -193,6 +193,20 @@ export function useApi() {
         request<{ ok: true; id: string }>("/knowledge-base/promote", { method: "POST", body: JSON.stringify(data) }),
       getKnowledgeBaseStats: () => request<KnowledgeBaseStats>("/knowledge-base/stats"),
 
+      // Knowledge documents — uploaded reference material (transcripts,
+      // install-training PDFs/DOCX) chunked+embedded for ODIN's
+      // search_documents tool. Separate from the FAQ knowledge-base above.
+      uploadKnowledgeDocument: (data: { title: string; dataUrl: string; fileName: string; mimeType: string }) =>
+        request<{ success: true; document: { id: string; status: "pending" | "live" } }>("/knowledge-documents/upload", {
+          method: "POST",
+          body: JSON.stringify(data),
+        }),
+      listPendingKnowledgeDocuments: () => request<{ documents: KnowledgeDocument[] }>("/knowledge-documents/pending"),
+      listLiveKnowledgeDocuments: () => request<{ documents: KnowledgeDocument[] }>("/knowledge-documents/live"),
+      approveKnowledgeDocument: (id: string) => request<{ ok: true }>(`/knowledge-documents/${id}/approve`, { method: "POST" }),
+      rejectKnowledgeDocument: (id: string) => request<{ ok: true }>(`/knowledge-documents/${id}/reject`, { method: "POST" }),
+      deleteKnowledgeDocument: (id: string) => request<{ ok: true }>(`/knowledge-documents/${id}`, { method: "DELETE" }),
+
       // Notes — replies, notifications, semantic search, and keeping the RAG in sync
       embedNote: (data: NoteRef & { content: string; mountainId?: string }) =>
         request<{ ok: true }>("/notes/embed", { method: "POST", body: JSON.stringify(data) }),
@@ -352,6 +366,20 @@ export interface KnowledgeBaseStats {
   confidentRatePct: number;
   feedback: Record<string, number>;
   recentGaps: { question: string; created_at: string }[];
+}
+
+// Uploaded reference documents (transcripts, install-training PDFs/DOCX)
+// feeding ODIN's search_documents tool — see server/routes/knowledgeDocuments.ts.
+export interface KnowledgeDocument {
+  id: string;
+  title: string;
+  originalFilename: string;
+  mimeType: string;
+  status: "pending" | "live";
+  uploadedByName: string | null;
+  uploadedByEmail: string | null;
+  chunkCount: number;
+  createdAt: string;
 }
 
 // FEEDBACK section
