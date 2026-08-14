@@ -204,6 +204,14 @@ export function SiteAssessmentWorkspace() {
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [connectionOpenInEditMode, setConnectionOpenInEditMode] = useState(false);
   const [connectionPendingDelete, setConnectionPendingDelete] = useState<MountainConnection | null>(null);
+  // Everything on the map is locked/non-draggable by default — only the
+  // one item whose properties panel is actively in edit mode (pencil
+  // tapped, not yet "Apply"d) can be dragged. At most one of each can ever
+  // be true at a time since only one panel is ever open (selectedLocationId/
+  // selectedConnectionId are each singular), so a single id is enough
+  // rather than a per-item map.
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   // Mobile "add at my current location" — capture GPS first, then show a
   // device-type picker; picking one places the device at those coordinates
   // directly, skipping the usual tap-the-map step. Button itself is
@@ -864,16 +872,18 @@ export function SiteAssessmentWorkspace() {
     if (!map || !mapReady) return;
     const handler = (e: mapboxgl.MapLayerMouseEvent) => {
       const cid = e.features?.[0]?.properties?.id;
-      if (cid) { setConnectionOpenInEditMode(false); setSelectedConnectionId(cid); }
+      if (cid && cid !== selectedConnectionId) { setConnectionOpenInEditMode(false); setEditingConnectionId(null); }
+      if (cid) setSelectedConnectionId(cid);
     };
     const layerIds = ['sa-connections-line', 'sa-connections-120v-a', 'sa-connections-120v-b'];
     layerIds.forEach(l => map.on('click', l, handler));
     return () => { layerIds.forEach(l => map.off('click', l, handler)); };
-  }, [mapReady]);
+  }, [mapReady, selectedConnectionId]);
 
-  // Endpoint drag handles — two small markers per connection, draggable
-  // while in select mode and not locked. Mirrors the device-marker sync
-  // effect below, simplified (no camera-aim/classic-location branching).
+  // Endpoint drag handles — only rendered for the one connection whose
+  // panel is actively in edit mode (locked-by-default, same rule as device
+  // markers above). Mirrors the device-marker sync effect, simplified (no
+  // camera-aim/classic-location branching).
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
@@ -881,9 +891,7 @@ export function SiteAssessmentWorkspace() {
     connectionMarkersRef.current.forEach(({ start, end }) => { start.remove(); end.remove(); });
     connectionMarkersRef.current.clear();
 
-    if (activeTool !== 'select') return;
-
-    connections.forEach(cx => {
+    connections.filter(cx => cx.id === editingConnectionId).forEach(cx => {
       const makeHandle = () => {
         const el = document.createElement('div');
         el.style.cssText = `
@@ -915,7 +923,7 @@ export function SiteAssessmentWorkspace() {
 
       connectionMarkersRef.current.set(cx.id, { start: startMarker, end: endMarker });
     });
-  }, [connections, activeTool, mapReady]);
+  }, [connections, editingConnectionId, mapReady]);
 
   // Marker sync — one marker per mountain Location (device or classic),
   // recreated whenever the location set/selection/tool changes. Devices open
@@ -944,7 +952,7 @@ export function SiteAssessmentWorkspace() {
       if (isDevice) {
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (loc.id !== selectedLocationId) setOpenInEditMode(false);
+          if (loc.id !== selectedLocationId) { setOpenInEditMode(false); setEditingLocationId(null); }
           setSelectedLocationId(loc.id);
         });
       } else {
@@ -956,7 +964,11 @@ export function SiteAssessmentWorkspace() {
 
       const marker = new mapboxgl.Marker({
         element: el,
-        draggable: activeTool === 'select' && !loc.isLocked,
+        // Locked-by-default: only the item whose panel is actively in edit
+        // mode can be dragged — a page-wide "select tool = everything's
+        // draggable" mode made it too easy to nudge something by accident
+        // while just browsing the map.
+        draggable: loc.id === editingLocationId && !loc.isLocked,
         rotationAlignment: isCamera ? 'map' : 'auto',
         pitchAlignment: isCamera ? 'map' : 'auto',
       })
@@ -983,7 +995,7 @@ export function SiteAssessmentWorkspace() {
       markersRef.current.set(loc.id, marker);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mountainLocations, selectedLocationId, activeTool, mapReady, mountain?.id]);
+  }, [mountainLocations, selectedLocationId, editingLocationId, activeTool, mapReady, mountain?.id]);
 
   // Coverage-cone polygons — one per camera, rebuilt from heading/FOV/range
   // whenever any camera's deviceProperties or position change.
@@ -1425,8 +1437,9 @@ export function SiteAssessmentWorkspace() {
             defaultEditing={openInEditMode}
             onUpdate={(data) => updateLocation(selectedLocation.id, data)}
             onDelete={() => setLocationPendingDelete(selectedLocation)}
-            onClose={() => setSelectedLocationId(null)}
+            onClose={() => { setSelectedLocationId(null); setEditingLocationId(null); }}
             onViewFullDetails={() => setDetailsLocationId(selectedLocation.id)}
+            onEditingChange={(editing) => setEditingLocationId(editing ? selectedLocation.id : null)}
           />
         )}
 
@@ -1440,7 +1453,8 @@ export function SiteAssessmentWorkspace() {
               updateConnection(selectedConnection.id, data).catch(err => toast.error(`Error: ${err.message}`));
             }}
             onDelete={() => setConnectionPendingDelete(selectedConnection)}
-            onClose={() => setSelectedConnectionId(null)}
+            onClose={() => { setSelectedConnectionId(null); setEditingConnectionId(null); }}
+            onEditingChange={(editing) => setEditingConnectionId(editing ? selectedConnection.id : null)}
           />
         )}
 

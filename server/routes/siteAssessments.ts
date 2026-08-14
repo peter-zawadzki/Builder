@@ -83,6 +83,15 @@ function pick(body: any) {
   return out;
 }
 
+// Idempotent find-or-create: a mountain can have at most one active (not
+// archived) assessment (idx_site_assessments_one_active_per_mountain,
+// migration 0032). A double-click/slow-network race from the client's
+// check-then-create in useAddLocationToMap.ts used to be able to slip two
+// POSTs through before the first one's response updated client state,
+// creating real duplicate rows in production (confirmed: 7 of them) — this
+// ON CONFLICT makes a second concurrent POST for the same mountain return
+// the already-existing row instead of erroring or creating a duplicate,
+// closing the race at the one layer that can actually be atomic.
 siteAssessments.post("/", async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}));
@@ -93,16 +102,21 @@ siteAssessments.post("/", async (c) => {
   const cols = Object.keys(fields);
   const vals = Object.values(fields);
   const placeholders = cols.map((_, i) => `$${i + 1}`);
-  const siteAssessment = await queryOne(
-    `INSERT INTO site_assessments (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`,
+  const row = await queryOne<any>(
+    `INSERT INTO site_assessments (${cols.join(", ")}) VALUES (${placeholders.join(", ")})
+     ON CONFLICT (mountain_id) WHERE archived_at IS NULL DO UPDATE SET updated_at = now()
+     RETURNING *, (xmax = 0) AS inserted`,
     vals
   );
-  await query(
-    `INSERT INTO site_assessment_activity (site_assessment_id, type, summary, actor_user_id)
-       VALUES ($1, 'created', $2, $3)`,
-    [(siteAssessment as any).id, `Site Assessment "${body.name}" created`, user.id]
-  );
-  return c.json({ siteAssessment }, 201);
+  const { inserted, ...siteAssessment } = row;
+  if (inserted) {
+    await query(
+      `INSERT INTO site_assessment_activity (site_assessment_id, type, summary, actor_user_id)
+         VALUES ($1, 'created', $2, $3)`,
+      [siteAssessment.id, `Site Assessment "${body.name}" created`, user.id]
+    );
+  }
+  return c.json({ siteAssessment }, inserted ? 201 : 200);
 });
 
 siteAssessments.put("/:id", async (c) => {

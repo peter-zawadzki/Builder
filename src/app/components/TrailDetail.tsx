@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import {
   ArrowLeft, Plus, MapPin, Camera, Wifi, Box, Server,
-  Pencil, Trash2, ClipboardList,
+  Pencil, Trash2, ClipboardList, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
@@ -25,7 +25,7 @@ export function TrailDetail() {
 
   const mountain = getMountainById(mountainId!);
   const trail = trails.find(t => t.id === trailId);
-  const { start: startAddLocation, picking, choose, cancelPicking, hasAssessment, assessmentsLoading } = useAddLocationToMap(mountainId!, mountain?.name || '');
+  const { start: startAddLocation, loading, picking, choose, cancelPicking, hasAssessment, assessmentsLoading } = useAddLocationToMap(mountainId!, mountain?.name || '');
   // Include locations linked by trailId OR by matching trailName (legacy)
   const trailLocations = locations.filter(
     l => l.mountainId === mountainId &&
@@ -154,18 +154,20 @@ export function TrailDetail() {
 
           <button
             onClick={() => startAddLocation(trailId)}
-            className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-2 active:opacity-80"
+            disabled={loading}
+            className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-2 active:opacity-80 disabled:opacity-60"
           >
-            <Plus size={20} />
+            {loading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
             Add Location
           </button>
 
           {!assessmentsLoading && (
             <button
               onClick={() => startAddLocation(trailId)}
-              className="w-full bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:bg-[#e8e8ea]"
+              disabled={loading}
+              className="w-full bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-4 py-3 flex items-center justify-center gap-2 font-['Inter:Medium',sans-serif] font-medium mb-3 active:bg-[#e8e8ea] disabled:opacity-60"
             >
-              <ClipboardList size={18} />
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <ClipboardList size={18} />}
               {hasAssessment ? 'View Assessment' : 'Add Assessment'}
             </button>
           )}
