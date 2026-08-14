@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList, Mail, MailX, Search } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList, Mail, MailX } from 'lucide-react';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsAdminOrAbove } from '../hooks/useRole';
 import { useData, getMyNotifications } from '../context/DataContext';
@@ -12,7 +12,6 @@ import { useFeedbackNotifications } from '../hooks/useFeedbackNotifications';
 import { useNoteNotifications } from '../hooks/useNoteNotifications';
 import { useApi } from '../api/client';
 import { HelpModal } from './HelpModal';
-import { NotesSearchBar } from './NotesSearchBar';
 
 // Clerk's <UserButton.MenuItems> only accepts literal <UserButton.Action>/
 // <UserButton.Link> children — wrapping one in another component gets
@@ -57,7 +56,6 @@ export function AppHeader() {
   const { mountains, contacts, organizations, teams, projects, locations, inspections, notes } = useData();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [showNotesSearch, setShowNotesSearch] = useState(false);
 
   const notifications = getMyNotifications(me?.id, { mountains, contacts, organizations, teams, projects, locations, inspections, notes });
   const { notifications: odinNotifications, markRead: markOdinNotificationRead } = useOdinVideoNotifications();
@@ -105,9 +103,6 @@ export function AppHeader() {
                 {(notifications.length + odinNotifications.length + feedbackNotifications.length + noteNotifications.length) > 9 ? '9+' : notifications.length + odinNotifications.length + feedbackNotifications.length + noteNotifications.length}
               </span>
             )}
-          </button>
-          <button onClick={() => setShowNotesSearch(true)} className="p-2 rounded-[8px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title="Search notes">
-            <Search size={20} className="text-[#6a7282]" />
           </button>
           <button onClick={() => setShowHelp(true)} className="p-2 rounded-[8px] bg-[#f3f3f5] active:bg-[#e8e8ea]" title="Ask ODIN">
             <Sparkles size={20} className="text-[#307fe2]" />
@@ -241,18 +236,6 @@ export function AppHeader() {
       )}
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-
-      {showNotesSearch && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 pt-20" onClick={(e) => { if (e.target === e.currentTarget) setShowNotesSearch(false); }}>
-          <div className="bg-white rounded-[16px] w-full max-w-lg p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[16px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Search notes</h2>
-              <button onClick={() => setShowNotesSearch(false)} className="p-1 active:opacity-60"><X size={18} className="text-[#6a7282]" /></button>
-            </div>
-            <NotesSearchBar />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

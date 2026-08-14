@@ -1,6 +1,8 @@
 // Postmark integration — real outbound email for proposal/customer-agreement
 // send + countersign-complete notifications. Replaces the dead Supabase Edge
 // Function that used to (silently, since its env var was never set) no-op.
+import { IS_PRODUCTION } from "./env";
+
 export async function sendEmail({
   to,
   cc,
@@ -16,6 +18,10 @@ export async function sendEmail({
   const from = process.env.POSTMARK_FROM;
   if (!token || !from) {
     console.warn("Postmark not configured (POSTMARK_API_KEY/POSTMARK_FROM) — skipping email send");
+    return { ok: false, skipped: true };
+  }
+  if (!IS_PRODUCTION) {
+    console.log(`[dev] Email skipped (not production): "${subject}" to ${to}`);
     return { ok: false, skipped: true };
   }
   try {
@@ -71,6 +77,10 @@ export async function sendTemplateEmail({
   }
   if (!templateAlias && !templateId) {
     return { ok: false, error: "sendTemplateEmail requires templateAlias or templateId" };
+  }
+  if (!IS_PRODUCTION) {
+    console.log(`[dev] Template email skipped (not production): ${templateAlias ?? templateId} to ${to}`);
+    return { ok: false, skipped: true };
   }
   try {
     const res = await fetch("https://api.postmarkapp.com/email/withTemplate", {

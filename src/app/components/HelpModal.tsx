@@ -38,7 +38,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
             onClick={() => setTab('browse')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] ${tab === 'browse' ? 'bg-[#1D2930] text-white' : 'bg-[#f3f3f5] text-[#6a7282]'}`}
           >
-            <HelpCircle size={13} /> Browse FAQs
+            <HelpCircle size={13} /> FAQs
           </button>
           <button
             onClick={() => setTab('feedback')}
@@ -50,7 +50,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
 
         <div className="overflow-y-auto flex-1 p-4">
           {tab === 'ask' && <FaqAssistant />}
-          {tab === 'browse' && <FAQSection />}
+          {tab === 'browse' && <FAQSection showAssistant={false} />}
           {tab === 'feedback' && <FeedbackAssistant />}
         </div>
       </div>

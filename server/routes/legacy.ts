@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { query, queryOne } from "../db";
 import type { HonoEnv } from "../auth";
+import { IS_PRODUCTION } from "../env";
 
 // Serves the ORIGINAL record shapes from legacy_records, matching the contract
 // the existing app's data layer expects. This lets MountainsList and every other
@@ -253,6 +254,7 @@ async function resolveActorMention(actorId: string | null | undefined, actorName
 export async function mirrorToSlack(rec: { type: string; summary: string; actor: string; actorId?: string | null; path?: string | null; slackText?: string | null; tagged?: boolean }) {
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url || !SLACK_MIRROR_TYPES.has(rec.type)) return;
+  if (!IS_PRODUCTION) { console.log(`[dev] Slack mirror skipped (not production): ${rec.summary}`); return; }
   if (TAGGED_ONLY_TYPES.has(rec.type) && !rec.tagged) return;
   // slackText (when provided) carries a real <@USERID> mention instead of a
   // plain name — Slack-only, never shown in the app's own Updates feed. It

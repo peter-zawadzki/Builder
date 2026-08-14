@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
-  PlayCircle, ExternalLink, ChevronLeft, ChevronRight, Trash2,
+  PlayCircle, ExternalLink, ChevronLeft, ChevronRight, Trash2, Upload,
   Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
 import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES } from '../data/demoHubData';
 import { SALES_TOOLS } from '../data/salesToolsData';
 
-type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo';
+type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo' | 'upload';
 
 const TABS: { id: ResourceTab; label: string; icon: React.ReactNode }[] = [
   { id: 'faq',       label: 'FAQ',               icon: <HelpCircle size={14} /> },
@@ -28,6 +28,7 @@ const TABS: { id: ResourceTab; label: string; icon: React.ReactNode }[] = [
   { id: 'marketing', label: 'Marketing Assets',   icon: <ImageIcon size={14} /> },
   { id: 'logos',     label: 'Brand Assets',       icon: <Palette size={14} /> },
   { id: 'demo',      label: 'Demo Hub',           icon: <PlayCircle size={14} /> },
+  { id: 'upload',    label: 'Upload',             icon: <Upload size={14} /> },
 ];
 
 const FAQ_CATEGORIES: FAQCategory[] = ['General', 'Product & Features', 'Technical & Installation', 'Financial & Pricing'];
@@ -444,7 +445,7 @@ export function FaqAssistant() {
   );
 }
 
-export function FAQSection() {
+export function FAQSection({ showAssistant = true }: { showAssistant?: boolean } = {}) {
   const api = useApi();
   const [entries, setEntries] = useState<FaqEntry[] | null>(null);
   const [query, setQuery] = useState('');
@@ -496,15 +497,14 @@ export function FAQSection() {
 
   return (
     <div className="space-y-3">
-      <FaqAssistant />
-      <DocumentUploadForm isAdmin={false} />
+      {showAssistant && <FaqAssistant />}
       <div className="relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a7282]" />
         <input
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Ask a question or search FAQs…"
+          placeholder="Search FAQs..."
           className="w-full bg-[#f3f3f5] rounded-[8px] pl-9 pr-3 py-2.5 text-[#0a0a0a] text-[14px] outline-none"
         />
       </div>
@@ -1090,6 +1090,16 @@ function DemoHubSection() {
   );
 }
 
+// Uploading a reference document for ODIN's knowledge base — split out of
+// the FAQ tab into its own pill so it's not buried under the chat/search UI.
+function UploadSection() {
+  return (
+    <div className="space-y-3">
+      <DocumentUploadForm isAdmin={false} />
+    </div>
+  );
+}
+
 export function ResourceCenterPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1125,6 +1135,7 @@ export function ResourceCenterPage() {
         {tab === 'marketing' && <EmptyPlaceholder label="Marketing assets" />}
         {tab === 'logos' && <LogoFilesSection />}
         {tab === 'demo' && <DemoHubSection />}
+        {tab === 'upload' && <UploadSection />}
       </div>
     </div>
   );
