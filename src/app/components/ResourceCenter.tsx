@@ -727,16 +727,29 @@ function TrainingMaterialsSection() {
 // Assets (server/routes/resourceFiles.ts) — any user can preview/download,
 // only admin/super_admin see the upload form and delete button. Shared
 // across all three tabs, parametrized by category.
+// Strips the extension and swaps separators for spaces so a dropped file
+// like "coaches_one-pager.pdf" pre-fills a readable default name instead of
+// making the admin retype what's already in the filename.
+function defaultNameFromFilename(fileName: string): string {
+  return fileName.replace(/\.[^./]+$/, '').replace(/[_-]+/g, ' ').trim();
+}
+
 function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileCategory; emptyLabel: string }) {
   const isAdmin = useIsAdminOrAbove();
   const [files, setFiles] = useState<ResourceFile[] | null>(null);
   const [name, setName] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => listResourceFiles(category).then(setFiles).catch(() => setFiles([]));
   useEffect(() => { load(); }, [category]);
+
+  function selectFile(f: File) {
+    setFile(f);
+    setName(prev => prev.trim() ? prev : defaultNameFromFilename(f.name));
+  }
 
   async function handleUpload() {
     if (!file || !name.trim() || uploading) return;
@@ -779,9 +792,38 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
           <input
             ref={fileInputRef}
             type="file"
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-[12px] text-[#6a7282]"
+            onChange={e => { const f = e.target.files?.[0]; if (f) selectFile(f); }}
+            className="hidden"
           />
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+            onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={e => {
+              e.preventDefault();
+              setDragActive(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) selectFile(f);
+            }}
+            className={`flex flex-col items-center justify-center gap-1.5 text-center rounded-[8px] border-2 border-dashed px-4 py-6 cursor-pointer transition-colors ${
+              dragActive ? 'border-[#307fe2] bg-[#eef3fb]' : 'border-[rgba(0,0,0,0.15)] bg-[#f9fafb] hover:bg-[#f3f3f5]'
+            }`}
+          >
+            <Upload size={18} className="text-[#6a7282]" />
+            {file ? (
+              <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{file.name}</p>
+            ) : (
+              <>
+                <p className="text-[13px] text-[#0a0a0a]">
+                  <span className="font-['Inter:Medium',sans-serif] text-[#307fe2]">Browse</span> or drag a file here
+                </p>
+                <p className="text-[11px] text-[#8992a0]">PDF, Word, PowerPoint, images, and more</p>
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleUpload}
