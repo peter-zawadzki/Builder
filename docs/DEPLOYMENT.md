@@ -185,21 +185,36 @@ package doesn't enable it by default on AL2023). Verified working with
 
 ## Deploying a code change (current manual process)
 
+**Never run `npm run build` (i.e. `vite build`) directly on the production
+box.** This instance is a `t4g.small` — 2GB RAM, **0B swap** — and bundling
+this app's ~2,435 modules is memory-heavy enough to OOM the whole instance,
+not just fail the build: on 2026-08-17 it made the box unresponsive to SSH
+and HTTPS entirely (a full stop/start was needed to recover), and this
+apparently happened on prior deploys too. Always build locally (or anywhere
+with real RAM) and ship the compiled `dist/` output instead.
+
 From a machine with the repo checked out and `~/.ssh/builder-prod.pem`:
 
 ```bash
+npm install && npm run build   # LOCAL machine only — never on the server
+
 rsync -az --delete \
-  --exclude 'node_modules' --exclude '.git' --exclude 'dist' --exclude '.env.local' --exclude '.DS_Store' \
+  --exclude 'node_modules' --exclude '.git' --exclude '.env.local' --exclude '.DS_Store' \
   -e "ssh -i ~/.ssh/builder-prod.pem" \
   /path/to/Builder/ ec2-user@52.86.78.62:/home/ec2-user/builder/
 
 ssh -i ~/.ssh/builder-prod.pem ec2-user@52.86.78.62 '
   cd /home/ec2-user/builder &&
   npm install &&
-  npm run build &&
   sudo systemctl restart builder-api
 '
 ```
+
+The full-repo rsync above now includes `dist/` (no longer excluded), so the
+locally-built output ships as part of the same sync — no separate step
+needed. `npm install` still has to run *on* the server too (for server-side
+dependencies used by `tsx`), but that's a plain dependency install, not a
+bundler/minifier run, and hasn't been the source of any OOM.
 
 If `server/routes/legacy.ts` or another server file changed but the DB
 schema didn't, that's all that's needed. If a new file was added under
