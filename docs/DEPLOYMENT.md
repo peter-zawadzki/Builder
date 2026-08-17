@@ -297,6 +297,7 @@ Type=oneshot
 User=ec2-user
 WorkingDirectory=/home/ec2-user/builder
 ExecStart=/usr/bin/npx tsx server/digest/run.ts
+Environment=NODE_ENV=production
 EnvironmentFile=/home/ec2-user/builder/.env.local
 ```
 
@@ -382,6 +383,7 @@ Type=oneshot
 User=ec2-user
 WorkingDirectory=/home/ec2-user/builder
 ExecStart=/usr/bin/npx tsx server/gmail/run.ts
+Environment=NODE_ENV=production
 EnvironmentFile=/home/ec2-user/builder/.env.local
 ```
 

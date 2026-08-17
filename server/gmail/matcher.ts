@@ -16,15 +16,23 @@ export interface ContactMatch {
 // contacts still produces exactly one note. From is checked first (an
 // inbound email from a CRM contact obviously attaches to that contact),
 // then `To` in header order, then `Cc`.
-export function findContactMatch(headers: ParsedHeaders, contactsByEmail: Map<string, LegacyContact>): ContactMatch | null {
-  const fromMatch = contactsByEmail.get(headers.from);
+//
+// Employees have their own contact records too (type='Staff', used for
+// author/assignee attribution elsewhere) — those must NOT count as a CRM
+// match here, or every email an employee sends/receives would trivially
+// "match" their own contact record (their own address is always a
+// participant in their own mailbox), defeating the entire point of this
+// filter. `employeeEmails` excludes those candidates.
+export function findContactMatch(headers: ParsedHeaders, contactsByEmail: Map<string, LegacyContact>, employeeEmails: Set<string>): ContactMatch | null {
+  const isRealCrmContact = (addr: string) => contactsByEmail.get(addr) && !employeeEmails.has(addr) ? contactsByEmail.get(addr)! : null;
+  const fromMatch = isRealCrmContact(headers.from);
   if (fromMatch) return { contact: fromMatch, matchedIn: "from" };
   for (const addr of headers.to) {
-    const match = contactsByEmail.get(addr);
+    const match = isRealCrmContact(addr);
     if (match) return { contact: match, matchedIn: "to" };
   }
   for (const addr of headers.cc) {
-    const match = contactsByEmail.get(addr);
+    const match = isRealCrmContact(addr);
     if (match) return { contact: match, matchedIn: "cc" };
   }
   return null;

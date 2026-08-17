@@ -313,6 +313,12 @@ legacy.post("/activity", async (c) => {
 export async function insertActivity(rec: {
   mountainId?: string | null; type: string; summary: string; path?: string | null;
   slackText?: string | null; tagged?: boolean; actor: string; actorId?: string | null;
+  // The Gmail-to-CRM sync sets this false: its notes/action items still
+  // need an Updates-feed entry for mountain-rollup visibility, but Peter
+  // asked that they never mirror to Slack — a 1am nightly run can produce
+  // more pings than anyone wants to track, and the same items already
+  // surface in each person's morning digest email instead.
+  skipSlackMirror?: boolean;
 }) {
   const full = {
     id: crypto.randomUUID(),
@@ -327,7 +333,7 @@ export async function insertActivity(rec: {
     actorId: rec.actorId ?? null,
   };
   await upsert("activity", full.id, full);
-  void mirrorToSlack(full);
+  if (!rec.skipSlackMirror) void mirrorToSlack(full);
   return full;
 }
 

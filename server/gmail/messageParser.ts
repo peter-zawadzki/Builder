@@ -83,6 +83,18 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+// The raw Date header (e.g. "Mon, 17 Aug 2026 10:22:44 +0000 (UTC)") isn't
+// always a format Postgres's timestamptz parser accepts — some mail clients
+// append a trailing zone-name comment that makes `INSERT ... VALUES ($n)`
+// fail outright with "invalid input syntax for type timestamp with time
+// zone". JS's Date parser handles this format fine, so normalize through it
+// before the value ever reaches a SQL parameter.
+export function normalizeDateForSql(date: string | null): string | null {
+  if (!date) return null;
+  const parsed = new Date(date);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 export function extractPlainTextBody(payload: gmail_v1.Schema$MessagePart | undefined): string {
   let plain: string | null = null;
   let html: string | null = null;

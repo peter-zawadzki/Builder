@@ -44,6 +44,13 @@ export function contactsByEmail(contacts: LegacyContact[]): Map<string, LegacyCo
   return new Map(contacts.map((c) => [c.email, c]));
 }
 
+// Every note/action item this sync creates is attributed to "Odin" as the
+// author — the real employee is still the assignee (assigneeContactId
+// keeps pointing at their actual contact record, so they can still
+// complete/edit it), but the display name should make it obvious this was
+// generated automatically, not typed by that person.
+export const AUTOMATED_AUTHOR_NAME = "Odin";
+
 export interface NewActivityEntry {
   id: string;
   text: string;
@@ -99,7 +106,8 @@ export async function logContactActivity(contact: LegacyContact, entry: NewActiv
     summary: activitySummary(entry),
     path: contact.mountainId ? `/mountains/${contact.mountainId}` : `/crm?tab=contacts&open=${contact.id}`,
     tagged: !!entry.assigneeContactId,
-    actor: entry.authorName || "Gmail sync",
+    actor: entry.authorName || AUTOMATED_AUTHOR_NAME,
     actorId: entry.authorContactId ?? null,
+    skipSlackMirror: true,
   });
 }
