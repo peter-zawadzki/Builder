@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 .env.local
+google-service-account.json
+builder-update-agent-*.json
+*.iam.gserviceaccount.json
 .DS_Store
 coverage/
 .vite/

@@ -68,9 +68,8 @@ function ExpandablePane({
             {headerRight}
           </div>
         </div>
-        <div className="h-[360px] overflow-hidden relative">
+        <div className="h-[360px] overflow-y-auto relative">
           <div className="pb-8">{children}</div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent" />
         </div>
       </div>
 
@@ -108,9 +107,8 @@ function ExpandableSection({
   const openModal = () => setOpen(true);
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 min-h-[360px] overflow-hidden relative rounded-[12px]">
+      <div className="flex-1 min-h-[360px] overflow-y-auto relative rounded-[12px]">
         <div className="h-full pb-10">{children(openModal)}</div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
       </div>
 
       {open && (
@@ -510,7 +508,14 @@ export function MountainDetail() {
             }
           >
             {(() => {
-              const crmContacts = contacts.filter((c) => c.mountainId === mountainId);
+              // Most recently active first — falls back to when the contact
+              // itself was created if it has no activity yet, same recency
+              // signal already used for the Status pane's activity rollup.
+              const mostRecentActivityTime = (c: typeof contacts[number]) =>
+                (c.activities ?? []).reduce((latest, a) => (a.createdAt > latest ? a.createdAt : latest), c.createdAt ?? '');
+              const crmContacts = contacts
+                .filter((c) => c.mountainId === mountainId)
+                .sort((a, b) => mostRecentActivityTime(b).localeCompare(mostRecentActivityTime(a)));
               if (crmContacts.length === 0) {
                 return (
                   <div className="text-[13px] text-[#6a7282]">No contacts yet.</div>

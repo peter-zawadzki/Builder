@@ -120,6 +120,18 @@ export async function loadDigestData(sinceIso: string): Promise<DigestData> {
     }
   }
 
+  // Contacts carry their own embedded `activities` too (e.g. notes/action
+  // items added via the CRM contact page, or by the automated Gmail-to-CRM
+  // sync) — same shape as mountains/projects, just scoped to a contact
+  // instead. mountainName falls back to "CRM contact" for contacts with no
+  // mountainId (org-only or standalone leads).
+  for (const row of contacts) {
+    const contact = row.data;
+    const mountainId: string | null = contact.mountainId ?? null;
+    const mountainName = mountainId ? mountainNameById.get(mountainId) ?? "Unknown mountain" : "CRM contact";
+    scanActivities(contact.activities, mountainId, mountainName, undefined, sinceIso, bucket);
+  }
+
   for (const row of notesRows) {
     const note = row.data;
     if (note.archived || !note.assigneeContactId || note.createdAt < sinceIso) continue;

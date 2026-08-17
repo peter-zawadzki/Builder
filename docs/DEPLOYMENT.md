@@ -317,6 +317,94 @@ drop `--dry-run` to send for real. The job is idempotent per calendar day
 (`digest_runs` table, unique on `(run_date, user_id)`), so re-running it
 after a real send that day is safe — already-sent recipients are skipped.
 
+## One-time setup for the nightly Gmail CRM sync
+
+`server/gmail/run.ts` scans every Yullr employee's Gmail nightly at 1am,
+finds messages that touch a known CRM contact (matched by exact email
+address on From/To/Cc), summarizes them, extracts action items, and writes
+both onto the matching `contacts` row (as a `notes` row + `contact_activities`
+rows) — so the CRM stays current without manual entry, and ODIN's existing
+`search_notes` semantic search picks these up automatically (no changes to
+`faqAgent.ts` needed). It's incremental (Gmail History API, one cursor per
+employee in `gmail_sync_state`) and dedups the same message landing in
+multiple mailboxes (e.g. sender's Sent copy + a CC'd colleague's Inbox copy)
+by the RFC822 `Message-ID` header, via a unique constraint on
+`processed_email_messages`. See the plan doc for full design rationale.
+
+**Manual prerequisite — Peter (the Workspace admin) must do this himself in
+Google Cloud/Workspace Admin; it can't be automated from this repo:**
+
+1. In Google Cloud Console, create a service account (a dedicated project is
+   fine) and enable the Gmail API for it.
+2. Generate a JSON key for that service account. Two ways to hand it to the
+   app — either works, `server/gmail/client.ts` checks both:
+   - Drop the downloaded file at the repo root as `google-service-account.json`
+     and set `GOOGLE_SERVICE_ACCOUNT_KEY_PATH=google-service-account.json` in
+     `.env.local`. That exact filename is already in `.gitignore`, so it can
+     never be accidentally committed — this is the simpler option.
+   - Or paste its contents into `.env.local` as `GOOGLE_SERVICE_ACCOUNT_KEY`
+     (base64-encode it first, since raw JSON has newlines: `base64 -i key.json`).
+3. In Google Workspace Admin console → Security → API Controls →
+   Domain-wide Delegation, add the service account's numeric Client ID,
+   authorized for scope `https://www.googleapis.com/auth/gmail.readonly`.
+   Read-only is sufficient — this job never sends or modifies mail.
+4. Verify impersonation works for at least one mailbox before trusting it for
+   everyone: `npx tsx server/gmail/run.ts --dry-run --only=<test>@yullr.com`.
+   A 401/403 here means delegation isn't finished yet, not a code bug —
+   delegation failures are per-user, so one misconfigured mailbox never
+   blocks the rest of the nightly run.
+
+Same "no in-process scheduler" situation as the digest job above — driven by
+a systemd timer:
+
+```ini
+# /etc/systemd/system/builder-gmail-sync.service
+[Unit]
+Description=Builder nightly Gmail-to-CRM sync
+
+[Service]
+Type=oneshot
+User=ec2-user
+WorkingDirectory=/home/ec2-user/builder
+ExecStart=/usr/bin/npx tsx server/gmail/run.ts
+EnvironmentFile=/home/ec2-user/builder/.env.local
+```
+
+```ini
+# /etc/systemd/system/builder-gmail-sync.timer
+[Unit]
+Description=Run the Builder Gmail-to-CRM sync nightly at 1am
+
+[Timer]
+OnCalendar=*-*-* 01:00:00 America/New_York
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now builder-gmail-sync.timer
+```
+
+Verify with `systemctl list-timers | grep builder-gmail-sync` and, after it
+fires, `journalctl -u builder-gmail-sync`. Test by hand with
+`npx tsx server/gmail/run.ts --dry-run` (logs match/skip decisions without
+writing anything) or `--only=<email>` to target one mailbox. Idempotent: the
+per-employee `gmail_sync_state.last_history_id` cursor only advances after a
+mailbox's full batch completes, and `processed_email_messages` (unique on the
+Message-ID header) means a rerun only redoes messages that weren't already
+ledgered — safe to run again after a partial failure. A message that errors
+mid-summarization is ledgered as `error` and is **not** automatically
+retried (its Message-ID is already claimed) — a known v1 limitation, not a
+bug, since these should be rare and are visible via
+`SELECT * FROM processed_email_messages WHERE status = 'error'`.
+
+New dependency added for this: `googleapis` (`npm install googleapis`) — make
+sure it's installed on the server after the next rsync deploy (see the
+`npm install` step in the deploy process above).
+
 ## Known gaps / deliberately deferred
 
 1. **Git-based deploy.** Deploys are still manual `rsync` from a local
