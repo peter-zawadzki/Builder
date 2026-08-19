@@ -25,18 +25,21 @@ export const DEMO_LINKS: DemoLink[] = [
 export interface PipelineStep {
   label: string;
   file: string;
+  startTime?: number;
 }
 
 export const PIPELINE_STEPS: PipelineStep[] = [
-  { label: 'Capture', file: `${BASE}/videos/celine-1-video.mp4` },
-  { label: 'Detect', file: `${BASE}/videos/celine-2-detection.mp4` },
+  { label: 'Capture', file: `${BASE}/videos/celine-1-video.mp4`, startTime: 3 },
+  { label: 'Detect', file: `${BASE}/videos/celine-2-detection.mp4`, startTime: 1 },
   { label: 'Process', file: `${BASE}/videos/celine-3-corridor.mp4` },
-  { label: 'Deliver', file: `${BASE}/videos/celine-4-zoom.mp4` },
+  { label: 'Deliver', file: `${BASE}/videos/celine-4-zoom.mp4`, startTime: 11 },
 ];
 
 export interface DemoSlide {
   label: string;
   file: string;
+  type?: 'image' | 'video';
+  poster?: string;
 }
 
 export const DEMO_SLIDES: DemoSlide[] = [
@@ -50,4 +53,8 @@ export const DEMO_SLIDES: DemoSlide[] = [
   { label: 'Server', file: `${BASE}/slides/8.jpg` },
   { label: 'Stromotion', file: `${BASE}/slides/9.jpg` },
   { label: 'Optimal Line', file: `${BASE}/slides/10.jpg` },
+  { label: 'Ski Boots', file: `${BASE}/slides/11.png` },
+  { label: 'Wide Shot', file: `${BASE}/slides/12.png` },
+  { label: 'Two Lanes', file: `${BASE}/slides/13.mp4`, type: 'video', poster: `${BASE}/slides/13-poster.jpg` },
+  { label: 'Skier Zoom', file: `${BASE}/slides/14.mp4`, type: 'video', poster: `${BASE}/slides/14-poster.jpg` },
 ];

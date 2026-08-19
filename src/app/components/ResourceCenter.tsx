@@ -21,7 +21,7 @@ import {
 import { type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
-import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES } from '../data/demoHubData';
+import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES, type DemoSlide } from '../data/demoHubData';
 import { SALES_TOOLS } from '../data/salesToolsData';
 
 type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo' | 'upload';
@@ -1147,6 +1147,7 @@ function useDemoHubFonts() {
 function DemoHubSection() {
   const [pipelineIndex, setPipelineIndex] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
+  const [videoModalSlide, setVideoModalSlide] = useState<DemoSlide | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useDemoHubFonts();
@@ -1235,6 +1236,9 @@ function DemoHubSection() {
                 muted
                 playsInline
                 preload="auto"
+                onLoadedMetadata={e => {
+                  if (activeStep.startTime) e.currentTarget.currentTime = activeStep.startTime;
+                }}
                 className="w-full h-full object-contain bg-black"
               />
             </div>
@@ -1258,7 +1262,20 @@ function DemoHubSection() {
         <h2 style={leagueGothic} className="font-normal text-[32px] leading-none uppercase text-[#1D252D] mb-1">YULLR Slideshow</h2>
         <p className="text-[13px] text-[#61666C] mb-3">Browse sample stills from the mountain.</p>
         <div className="relative bg-[#1D252D] border-2 border-[#1D252D] aspect-video overflow-hidden" style={{ boxShadow: '4px 4px 0 #1D252D' }}>
-          <img src={activeSlide.file} alt={activeSlide.label} className="w-full h-full object-contain bg-[#1D252D]" />
+          {activeSlide.type === 'video' ? (
+            <button
+              onClick={() => setVideoModalSlide(activeSlide)}
+              aria-label={`Play ${activeSlide.label}`}
+              className="w-full h-full p-0 border-none cursor-pointer relative group"
+            >
+              <img src={activeSlide.poster} alt={activeSlide.label} className="w-full h-full object-contain bg-[#1D252D]" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                <PlayCircle size={64} className="text-white drop-shadow-lg" />
+              </div>
+            </button>
+          ) : (
+            <img src={activeSlide.file} alt={activeSlide.label} className="w-full h-full object-contain bg-[#1D252D]" />
+          )}
           <button
             onClick={prevSlide}
             aria-label="Previous"
@@ -1281,14 +1298,43 @@ function DemoHubSection() {
             <button
               key={i}
               onClick={() => setSlideIndex(i)}
-              className="aspect-square overflow-hidden border-2 p-0 cursor-pointer"
+              className="relative aspect-square overflow-hidden border-2 p-0 cursor-pointer"
               style={{ borderColor: i === slideIndex ? '#FF5C39' : '#1D252D' }}
             >
-              <img src={s.file} alt={s.label} className="w-full h-full object-cover block" />
+              <img src={s.type === 'video' ? s.poster : s.file} alt={s.label} className="w-full h-full object-cover block" />
+              {s.type === 'video' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <PlayCircle size={20} className="text-white drop-shadow" />
+                </div>
+              )}
             </button>
           ))}
         </div>
       </div>
+
+      {videoModalSlide && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setVideoModalSlide(null)}
+        >
+          <div className="relative w-full max-w-4xl" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setVideoModalSlide(null)}
+              aria-label="Close"
+              className="absolute -top-10 right-0 text-white border-none bg-transparent cursor-pointer p-1"
+            >
+              <X size={28} />
+            </button>
+            <video
+              src={videoModalSlide.file}
+              controls
+              autoPlay
+              playsInline
+              className="w-full max-h-[80vh] bg-black rounded-[6px]"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
