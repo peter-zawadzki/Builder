@@ -22,7 +22,6 @@ import { type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
 import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES, type DemoSlide } from '../data/demoHubData';
-import { SALES_TOOLS } from '../data/salesToolsData';
 
 type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo' | 'upload';
 
@@ -779,6 +778,59 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
 
   return (
     <div className="space-y-3">
+      {files === null ? (
+        <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-[#6a7282]" /></div>
+      ) : files.length === 0 ? (
+        <EmptyPlaceholder label={emptyLabel} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {files.map(f => (
+            <div key={f.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col">
+              <div className="h-40 bg-[#f9fafb] flex items-center justify-center overflow-hidden relative">
+                {f.mimeType.startsWith('image/') ? (
+                  <img src={f.url} alt={f.name} className="max-h-full max-w-full object-contain" />
+                ) : (
+                  <FileText size={32} className="text-[#307fe2]" />
+                )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(f.id)}
+                    className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 active:opacity-70"
+                    aria-label={`Delete ${f.name}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="p-3 flex flex-col gap-2 flex-1">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.name}</p>
+                  <p className="text-[11px] text-[#8992a0]">{f.fileSize ? formatFileSize(Math.round(f.fileSize / 1024)) : '—'}</p>
+                </div>
+                <div className="flex gap-1.5 mt-auto">
+                  <a
+                    href={f.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#0a0a0a] px-2 py-1.5 rounded-full hover:bg-[#eaeaec] active:opacity-70"
+                  >
+                    <ExternalLink size={10} /> Preview
+                  </a>
+                  <a
+                    href={f.url}
+                    download={f.originalFilename}
+                    className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#307fe2] px-2 py-1.5 rounded-full hover:bg-[#eef3fb] active:opacity-70"
+                  >
+                    <Download size={10} /> Download
+                  </a>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {isAdmin && (
         <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-4 space-y-3">
           <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">Upload a file</p>
@@ -835,105 +887,6 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
           </button>
         </div>
       )}
-
-      {files === null ? (
-        <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-[#6a7282]" /></div>
-      ) : files.length === 0 ? (
-        <EmptyPlaceholder label={emptyLabel} />
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {files.map(f => (
-            <div key={f.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col">
-              <div className="h-40 bg-[#f9fafb] flex items-center justify-center overflow-hidden relative">
-                {f.mimeType.startsWith('image/') ? (
-                  <img src={f.url} alt={f.name} className="max-h-full max-w-full object-contain" />
-                ) : (
-                  <FileText size={32} className="text-[#307fe2]" />
-                )}
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(f.id)}
-                    className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 active:opacity-70"
-                    aria-label={`Delete ${f.name}`}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
-              <div className="p-3 flex flex-col gap-2 flex-1">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.name}</p>
-                  <p className="text-[11px] text-[#8992a0]">{f.fileSize ? formatFileSize(Math.round(f.fileSize / 1024)) : '—'}</p>
-                </div>
-                <div className="flex gap-1.5 mt-auto">
-                  <a
-                    href={f.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#0a0a0a] px-2 py-1.5 rounded-full hover:bg-[#eaeaec] active:opacity-70"
-                  >
-                    <ExternalLink size={10} /> Preview
-                  </a>
-                  <a
-                    href={f.url}
-                    download={f.originalFilename}
-                    className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#307fe2] px-2 py-1.5 rounded-full hover:bg-[#eef3fb] active:opacity-70"
-                  >
-                    <Download size={10} /> Download
-                  </a>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SalesToolsSection() {
-  return (
-    <div className="space-y-4">
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-      {SALES_TOOLS.map(f => (
-        <div key={f.url} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col">
-          <a
-            href={f.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Preview ${f.label}`}
-            className="h-40 bg-[#f9fafb] flex items-center justify-center overflow-hidden"
-          >
-            <img src={f.thumbnailUrl} alt={f.label} className="max-h-full max-w-full object-contain" />
-          </a>
-          <div className="p-3 flex flex-col gap-2 flex-1">
-            <div className="min-w-0">
-              <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.label}</p>
-              <p className="text-[11px] text-[#8992a0]">{f.type} · {formatFileSize(f.sizeKB)}</p>
-            </div>
-            <div className="flex gap-1.5 mt-auto">
-              <a
-                href={f.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#0a0a0a] px-2 py-1.5 rounded-full hover:bg-[#eaeaec] active:opacity-70"
-              >
-                <ExternalLink size={10} /> Preview
-              </a>
-              <a
-                href={f.url}
-                download
-                className="flex-1 flex items-center justify-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] bg-[#f3f3f5] text-[#307fe2] px-2 py-1.5 rounded-full hover:bg-[#eef3fb] active:opacity-70"
-              >
-                <Download size={10} /> Download
-              </a>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-    <ResourceFileManager category="sales" emptyLabel="Sales tools" />
     </div>
   );
 }
@@ -1380,7 +1333,7 @@ export function ResourceCenterPage() {
       <div className="p-4 pb-16">
         {tab === 'faq' && <FAQSection />}
         {tab === 'training' && <TrainingMaterialsSection />}
-        {tab === 'sales' && <SalesToolsSection />}
+        {tab === 'sales' && <ResourceFileManager category="sales" emptyLabel="Sales tools" />}
         {tab === 'marketing' && <ResourceFileManager category="marketing" emptyLabel="Marketing assets" />}
         {tab === 'logos' && <LogoFilesSection />}
         {tab === 'demo' && <DemoHubSection />}

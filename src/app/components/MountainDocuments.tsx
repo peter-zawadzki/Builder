@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, File, FileText, Image, Video, Download, Trash2, X, Grid, List, Edit3, Maximize2 } from 'lucide-react';
+import { Upload, File, FileText, Image, Video, Download, Trash2, X, Grid, List, Edit3, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import * as locMediaDB from '../utils/locationMediaDB';
 import * as photoDB from '../utils/photoDB';
@@ -598,6 +598,30 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
     }
   };
 
+  // The set of images the open preview can step through with prev/next —
+  // scoped to this mountain's documents, same list the grid/list view shows.
+  const previewImages = documents.filter(d => d.type.startsWith('image/'));
+  const previewIndex = previewDoc ? previewImages.findIndex(d => d.id === previewDoc.id) : -1;
+
+  const navigatePreview = (delta: number) => {
+    if (previewIndex === -1) return;
+    const nextDoc = previewImages[previewIndex + delta];
+    if (nextDoc) handleOpenPreview(nextDoc);
+  };
+
+  // Arrow keys step through images; Escape closes. Only active while the
+  // preview modal is open.
+  useEffect(() => {
+    if (!previewDoc) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewDoc(null);
+      else if (e.key === 'ArrowLeft') navigatePreview(-1);
+      else if (e.key === 'ArrowRight') navigatePreview(1);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewDoc, previewImages]);
+
   // Draw annotations on preview canvas
   useEffect(() => {
     if (!previewDoc || !previewDoc.type.startsWith('image/') || annotations.length === 0) {
@@ -956,6 +980,9 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
           <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" onClick={e => e.stopPropagation()}>
             <p className="text-white font-['Inter:Medium',sans-serif] text-[14px] truncate flex-1 mr-3">
               {previewDoc.name}
+              {previewIndex !== -1 && previewImages.length > 1 && (
+                <span className="text-white/60 font-normal ml-2">{previewIndex + 1} / {previewImages.length}</span>
+              )}
             </p>
             <div className="flex items-center gap-2">
               {previewDoc.type.startsWith('image/') && (
@@ -992,7 +1019,25 @@ export function MountainDocuments({ mountainId, onExpandClick }: MountainDocumen
           </div>
 
           {/* Content */}
-          <div className="flex-1 flex items-center justify-center p-4 overflow-auto" onClick={e => e.stopPropagation()}>
+          <div className="flex-1 flex items-center justify-center p-4 overflow-auto relative" onClick={e => e.stopPropagation()}>
+            {previewIndex > 0 && (
+              <button
+                onClick={() => navigatePreview(-1)}
+                aria-label="Previous image"
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center active:bg-white/30 z-10"
+              >
+                <ChevronLeft size={20} className="text-white" />
+              </button>
+            )}
+            {previewIndex !== -1 && previewIndex < previewImages.length - 1 && (
+              <button
+                onClick={() => navigatePreview(1)}
+                aria-label="Next image"
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center active:bg-white/30 z-10"
+              >
+                <ChevronRight size={20} className="text-white" />
+              </button>
+            )}
             {previewDoc.type.startsWith('image/') ? (
               <div className="relative">
                 {annotations.length > 0 ? (
