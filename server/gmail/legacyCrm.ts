@@ -14,6 +14,7 @@ export interface LegacyContact {
   email: string;
   mountainId: string | null;
   organizationId: string | null;
+  teamId: string | null;
 }
 
 interface LegacyContactRow {
@@ -22,6 +23,7 @@ interface LegacyContactRow {
   email?: string;
   mountainId?: string;
   organizationId?: string;
+  teamId?: string;
 }
 
 // Loaded once per run (not per message) — the contact list doesn't change
@@ -37,6 +39,7 @@ export async function loadLegacyContacts(): Promise<LegacyContact[]> {
       email: d.email!.toLowerCase(),
       mountainId: d.mountainId ?? null,
       organizationId: d.organizationId ?? null,
+      teamId: d.teamId ?? null,
     }));
 }
 

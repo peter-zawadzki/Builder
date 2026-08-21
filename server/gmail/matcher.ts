@@ -1,9 +1,10 @@
 // CRM-contact and primary-employee resolution — the core business rule of
 // the sync: a message is in scope iff at least one of From/To/Cc (never Bcc)
-// matches a legacy contact's email exactly. That single rule is what makes
-// pure internal (employee<->employee) and pure external (employee<->
-// stranger) mail fall out of scope on its own, with no separate "is this
-// internal" check needed.
+// matches a legacy contact's email exactly, AND that contact is tied to a
+// mountain or team. That rule is what makes pure internal (employee<->
+// employee) and pure external (employee<->stranger, or employee<->
+// untethered contact record) mail fall out of scope on its own, with no
+// separate "is this internal" check needed.
 import type { ParsedHeaders } from "./messageParser";
 import type { LegacyContact } from "./legacyCrm";
 
@@ -23,8 +24,20 @@ export interface ContactMatch {
 // "match" their own contact record (their own address is always a
 // participant in their own mailbox), defeating the entire point of this
 // filter. `employeeEmails` excludes those candidates.
+//
+// A matched contact must also be tied to a mountain or team —
+// untethered contact records (including ones that only carry a generic
+// organizationId, e.g. an investor group with no mountain/team
+// relationship) aren't real, actively-managed CRM relationships, and
+// matching on them (e.g. a stale/shared address left over on an orphaned
+// record) surfaced unrelated mail as contact activity.
 export function findContactMatch(headers: ParsedHeaders, contactsByEmail: Map<string, LegacyContact>, employeeEmails: Set<string>): ContactMatch | null {
-  const isRealCrmContact = (addr: string) => contactsByEmail.get(addr) && !employeeEmails.has(addr) ? contactsByEmail.get(addr)! : null;
+  const isRealCrmContact = (addr: string) => {
+    const contact = contactsByEmail.get(addr);
+    if (!contact || employeeEmails.has(addr)) return null;
+    if (!contact.mountainId && !contact.teamId) return null;
+    return contact;
+  };
   const fromMatch = isRealCrmContact(headers.from);
   if (fromMatch) return { contact: fromMatch, matchedIn: "from" };
   for (const addr of headers.to) {

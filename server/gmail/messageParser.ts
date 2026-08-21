@@ -71,7 +71,7 @@ export function isBulkOrAutomated(headers: ParsedHeaders, payload: gmail_v1.Sche
 const MAX_BODY_CHARS = 20_000;
 
 function decodeBase64Url(data: string): string {
-  return Buffer.from(data, "base64").toString("utf8");
+  return Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
 }
 
 function stripHtml(html: string): string {
