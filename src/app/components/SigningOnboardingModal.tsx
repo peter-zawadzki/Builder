@@ -33,17 +33,18 @@ const addRowBtnStyle: React.CSSProperties = {
 };
 
 // Shown immediately after a customer signs their proposal (SigningPage.tsx),
-// and reachable again later via the "Outstanding items" banner if skipped.
+// and reachable again later via the "Outstanding items" banner if not yet
+// completed. Not dismissible/skippable — at least one Technical Contact is
+// required before the customer can move on to the Customer Agreement.
 // Collects Technical Contact(s) — created as real CRM contacts tied to the
 // mountain via POST /api/public/proposal-sign/:token/onboarding, replacing
 // the Customer Agreement's old manually-entered Technical Administrator(s)
 // section — plus optional preferred install dates/ranges.
 export function OnboardingModal({
-  token, caUrl, onClose, onSaved,
+  token, caUrl, onSaved,
 }: {
   token: string;
   caUrl?: string | null;
-  onClose: () => void;
   onSaved: (technicalContactAdded: boolean, installWindowsAdded: boolean) => void;
 }) {
   const [contacts, setContacts] = useState<TechContactRow[]>([emptyContact()]);
@@ -66,9 +67,9 @@ export function OnboardingModal({
     .filter(w => w.start)
     .map(w => ({ start: w.start, end: w.isRange ? (w.end || undefined) : undefined }));
 
-  const submit = async (skipContacts: boolean) => {
-    if (!skipContacts && validContacts.length === 0) {
-      setError('Add at least one Technical Contact (first name, last name, and email) to continue, or skip for now.');
+  const submit = async () => {
+    if (validContacts.length === 0) {
+      setError('Add at least one Technical Contact (first name, last name, and email) to continue.');
       return;
     }
     setSubmitting(true);
@@ -78,16 +79,15 @@ export function OnboardingModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          technicalContacts: skipContacts ? [] : validContacts,
+          technicalContacts: validContacts,
           installWindows: validWindows,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to save — please try again.');
-      const technicalContactAdded = !skipContacts && validContacts.length > 0;
       const installWindowsAdded = validWindows.length > 0;
-      if (technicalContactAdded && caUrl) window.open(caUrl, '_blank', 'noopener,noreferrer');
-      onSaved(technicalContactAdded, installWindowsAdded);
+      if (caUrl) window.open(caUrl, '_blank', 'noopener,noreferrer');
+      onSaved(true, installWindowsAdded);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -98,13 +98,10 @@ export function OnboardingModal({
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', padding: 28, fontFamily: 'Inter, sans-serif' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+        <div style={{ marginBottom: 6 }}>
           <h2 style={{ fontSize: 12, fontWeight: 700, color: '#FF5C39', textTransform: 'uppercase', letterSpacing: 0.6, margin: 0 }}>
             Technical Contact(s)
           </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, lineHeight: 0 }}>
-            <X size={18} color="#888" />
-          </button>
         </div>
         <p style={{ fontSize: 13, color: '#555', lineHeight: 1.6, marginBottom: 20 }}>
           Designate the individual(s) at your facility who will serve as the primary point of contact for the YULLR integration. This person will coordinate scheduling, technical requirements, and onsite activities with the YULLR team.
@@ -166,16 +163,9 @@ export function OnboardingModal({
 
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
           <button
-            onClick={() => submit(true)}
+            onClick={() => submit()}
             disabled={submitting}
-            style={{ flex: 1, background: '#f3f3f5', color: '#555', border: 'none', borderRadius: 8, padding: '11px 0', fontSize: 13, fontWeight: 600, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.6 : 1, fontFamily: 'Inter, sans-serif' }}
-          >
-            Skip for now
-          </button>
-          <button
-            onClick={() => submit(false)}
-            disabled={submitting}
-            style={{ flex: 2, background: '#FF5C39', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 0', fontSize: 13.5, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'Inter, sans-serif' }}
+            style={{ flex: 1, background: '#FF5C39', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 0', fontSize: 13.5, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'Inter, sans-serif' }}
           >
             {submitting && <Loader2 size={16} className="animate-spin" />}
             Continue to Customer Agreement

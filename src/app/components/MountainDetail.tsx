@@ -582,7 +582,7 @@ export function MountainDetail() {
         {/* Projects — the unit of work; one progress bar per project */}
         <ProjectsPane mountainId={mountainId!} initialEditId={initialProjectId ?? undefined} />
 
-        {/* Proposals — one per project */}
+        {/* Orders — one per project */}
         <ProposalsPane mountainId={mountainId!} />
 
         {/* Top Row: Trails + Notes */}

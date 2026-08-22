@@ -535,9 +535,9 @@ export function ContactTagsPage() {
   );
 }
 
-// Default proposal terms — super-admin only. Seeds every NEW proposal's own
-// editable terms list; already-created proposals keep their own copy, so
-// editing here is safe and never silently rewrites a signed/sent proposal.
+// Default order terms — super-admin only. Seeds every NEW order's own
+// editable terms list; already-created orders keep their own copy, so
+// editing here is safe and never silently rewrites a signed/sent order.
 export function ProposalTermsPage() {
   const navigate = useNavigate();
   const isSuperAdmin = useIsSuperAdmin();
@@ -564,7 +564,7 @@ export function ProposalTermsPage() {
         </div>
         <div>
           <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[18px]">Not available</h1>
-          <p className="text-[#6a7282] text-[14px] mt-1">Proposal terms are restricted to super admins.</p>
+          <p className="text-[#6a7282] text-[14px] mt-1">Order terms are restricted to super admins.</p>
         </div>
         <button onClick={() => navigate('/')} className="bg-[#1D2930] text-white rounded-[8px] px-5 py-2.5 font-['Inter:Medium',sans-serif] font-medium text-[14px]">Back to app</button>
       </div>
@@ -591,7 +591,7 @@ export function ProposalTermsPage() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      <PageHeader icon={<FileText size={20} className="text-[#307fe2]" />} title="Proposal Terms" />
+      <PageHeader icon={<FileText size={20} className="text-[#307fe2]" />} title="Order Terms" />
       <div className="p-4 pb-16 max-w-2xl mx-auto space-y-3">
         <div className="bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-3 space-y-2">
           <div className="flex items-center justify-between">
@@ -763,15 +763,15 @@ export function ProposalTemplatePage() {
   const { proposalTemplate, updateProposalTemplate } = useData();
   return (
     <RawTemplateEditorPage
-      title="Proposal Document Template"
+      title="Order Document Template"
       icon={<FileText size={20} className="text-[#307fe2]" />}
-      helpText="The entire raw content of the proposal document — every static heading, paragraph, bullet, callout box, and subscription-plan card. Changes apply to every proposal going forward (existing proposals aren't retroactively changed since they render from the template live at view time, same as the rest of the app's data)."
+      helpText="The entire raw content of the order document — every static heading, paragraph, bullet, callout box, and subscription-plan card. Changes apply to every order going forward (existing orders aren't retroactively changed since they render from the template live at view time, same as the rest of the app's data)."
       legend={
         <>
           {MARKUP_BASICS}
           <p><code>{'!!plan Name | Price | Scope | Description'}</code> — a subscription-plan card (consecutive lines become a 3-up grid)</p>
           <p><code>{'!!box-orange Title'}</code> / <code>{'!!box-green Title'}</code> — a callout box; the title line followed by bullets or a paragraph</p>
-          <p><code>{'{{mountainName}}'}</code>, <code>{'{{clientAddress}}'}</code>, <code>{'{{installDays}}'}</code> — merge fields, resolved per-proposal</p>
+          <p><code>{'{{mountainName}}'}</code>, <code>{'{{clientAddress}}'}</code>, <code>{'{{installDays}}'}</code> — merge fields, resolved per-order</p>
           <p><code>{'{{splice:trailsTable}}'}</code>, <code>{'{{splice:requirementsTable}}'}</code>, <code>{'{{splice:finalQuoteTable}}'}</code>, <code>{'{{splice:installNotesExtra}}'}</code>, <code>{'{{splice:paymentTermsBox}}'}</code>, <code>{'{{splice:termsList}}'}</code> — where the real computed tables/lists get inserted; don't delete these, but you can move/reorder them</p>
         </>
       }

@@ -17,3 +17,7 @@ coverage/
 /alex/
 /Sales Tools/
 /new3k/
+
+# Same pattern — raw legal PDF drop zone; served copies live in
+# public/legal/ and are committed normally.
+/legal/

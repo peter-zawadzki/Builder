@@ -5,10 +5,10 @@ import { toast } from 'sonner';
 import { Plus, X, FileText, ChevronRight, Archive } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
-// Proposals for a mountain — one active proposal per project. Create/open
-// the ProposalBuilder per proposal. Proposals are never hard-deleted —
+// Orders for a mountain — one active order per project. Create/open
+// the ProposalBuilder per order. Orders are never hard-deleted —
 // archiving keeps the historical record (including signatures) while
-// freeing the project up for a brand-new proposal.
+// freeing the project up for a brand-new order.
 export function ProposalsPane({ mountainId }: { mountainId: string }) {
   const { getProposalsByMountainId, getProjectsByMountainId, getProjectById, addProposal, getCustomerAgreementByMountainId } = useData();
   const navigate = useNavigate();
@@ -32,7 +32,7 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
 
   const create = (projectId?: string) => {
     const proj = projectId ? getProjectById(projectId) : undefined;
-    const id = addProposal({ mountainId, projectId, title: proj ? `${proj.name} proposal` : 'Proposal', createdBy });
+    const id = addProposal({ mountainId, projectId, title: proj ? `${proj.name} order` : 'Order', createdBy });
     setShowNew(false);
     navigate(`/mountains/${mountainId}/proposal/${id}`);
   };
@@ -41,7 +41,7 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
     <div className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.1)] p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px]">
-          Proposals{proposals.length > 0 && <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({proposals.length})</span>}
+          Orders{proposals.length > 0 && <span className="ml-2 text-[#6a7282] text-[13px] font-normal">({proposals.length})</span>}
         </h2>
         <button onClick={() => setShowNew(true)} className="bg-[#ff5c39] text-white rounded-[8px] px-2.5 py-1.5 flex items-center gap-1 font-['Inter:Medium',sans-serif] font-medium text-[13px] active:opacity-80">
           <Plus size={14} /> New
@@ -49,7 +49,7 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
       </div>
 
       {proposals.length === 0 ? (
-        <div className="text-[13px] text-[#6a7282]">No proposals yet.</div>
+        <div className="text-[13px] text-[#6a7282]">No Orders yet.</div>
       ) : (
         <div className="space-y-2">
           {proposals.map(pr => {
@@ -73,7 +73,7 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
                 <div className="flex items-center gap-2 min-w-0">
                   <FileText size={15} className={`shrink-0 ${status.icon}`} />
                   <div className="min-w-0">
-                    <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{pr.form?.proposalNumber || pr.title || 'Proposal'}</div>
+                    <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{pr.form?.proposalNumber || pr.title || 'Order'}</div>
                     <div className="text-[11px] text-[#6a7282]">{proj ? proj.name : 'No project'}{pr.form?.date ? ` · ${pr.form.date}` : ''}</div>
                   </div>
                 </div>
@@ -117,7 +117,7 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText size={15} className="text-[#8992a0] shrink-0" />
                       <div className="min-w-0">
-                        <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{pr.form?.proposalNumber || pr.title || 'Proposal'}</div>
+                        <div className="text-[14px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{pr.form?.proposalNumber || pr.title || 'Order'}</div>
                         <div className="text-[11px] text-[#6a7282]">{proj ? proj.name : 'No project'}</div>
                       </div>
                     </div>
@@ -134,12 +134,12 @@ export function ProposalsPane({ mountainId }: { mountainId: string }) {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowNew(false); }}>
           <div className="bg-white rounded-[16px] w-full max-w-sm p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-[16px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">New proposal</h3>
+              <h3 className="text-[16px] font-['Inter:Medium',sans-serif] text-[#0a0a0a]">New order</h3>
               <button onClick={() => setShowNew(false)} className="p-1.5 rounded-full bg-[#f3f3f5]"><X size={16} className="text-[#6a7282]" /></button>
             </div>
-            <p className="text-[13px] text-[#6a7282]">Pick the project this proposal is for (one proposal per project).</p>
+            <p className="text-[13px] text-[#6a7282]">Pick the project this order is for (one order per project).</p>
             {projectsWithoutProposal.length === 0 && projects.length > 0 ? (
-              <p className="text-[13px] text-[#8992a0]">Every project already has a proposal.</p>
+              <p className="text-[13px] text-[#8992a0]">Every project already has an order.</p>
             ) : (
               <div className="space-y-1.5 max-h-56 overflow-y-auto">
                 {projectsWithoutProposal.map(p => (

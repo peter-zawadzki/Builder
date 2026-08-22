@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useUser } from '@clerk/clerk-react';
 import { useData, DEFAULT_PROPOSAL_TERMS, DEFAULT_PAYMENT_TERMS } from '../context/DataContext';
-import { renderTemplate } from '../utils/templateRenderer';
+import { renderTemplate, renderInline } from '../utils/templateRenderer';
 import { ArrowLeft, Plus, X, Printer, FileText, ChevronLeft, Cloud, CloudOff, Pencil, Save, Copy, CheckCircle, Clock, RefreshCw, PenLine, Send, Lock, Trash2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Archive, Bell, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAuthToken } from '../context/DataContext';
@@ -42,7 +42,7 @@ const REQUIREMENT_PRESETS: { label: string; details: string }[] = [
 ];
 
 const INSTALL_NOTES_EXAMPLES = [
-  'Installation will be performed by YULLR personnel or an authorized installation partner. Unless otherwise specified in this proposal, the following conditions apply:',
+  'Installation will be performed by YULLR personnel or an authorized installation partner. Unless otherwise specified in this order, the following conditions apply:',
   'A designated mountain representative shall be available throughout the installation to provide site access, answer operational questions, and coordinate any required mountain resources.',
   'The Customer is responsible for providing 120V AC power and an internet connection at the designated server location prior to the installation date. Where approved, YULLR may utilize a customer-provided network or install a dedicated wireless backhaul solution.',
   'The Customer is responsible for providing 120V AC power at all locations where a PoE switch is required. Where only 480V power is available, the Customer shall provide a properly installed step-down transformer with a minimum capacity of 0.5 kVA to supply 120V AC service.',
@@ -88,6 +88,8 @@ interface ProposalForm {
   date: string;
   validUntil: string;
   legalEntity: string;
+  entityType?: string;
+  entityTypeOther?: string;
   clientName: string;
   mountainName: string;
   clientAddress: string;
@@ -462,6 +464,8 @@ export function ProposalBuilder() {
       date: today,
       validUntil: addDays(today, 30),
       legalEntity: mountain?.legalEntity || '',
+      entityType: '',
+      entityTypeOther: '',
       clientName: mountain?.legalEntity || mountain?.name || '',
       mountainName: mountain?.name || '',
       clientAddress: mountain?.address || '',
@@ -473,8 +477,8 @@ export function ProposalBuilder() {
       installFee: '',
       bulkRows: [
         { id: uid(), passType: 'Day Passes', qty: '', unitPrice: '10' },
-        { id: uid(), passType: 'Mountain Passes', qty: '', unitPrice: '75' },
-        { id: uid(), passType: 'Season Passes', qty: '', unitPrice: '100' },
+        { id: uid(), passType: 'Single Mountain Passes', qty: '', unitPrice: '50' },
+        { id: uid(), passType: 'All Access Passes', qty: '', unitPrice: '100' },
       ],
       miscFee: '',
       selfInstall: false,
@@ -599,14 +603,14 @@ export function ProposalBuilder() {
     setIsEditMode(false);
     savedFormSnapshot.current = JSON.stringify(form);
     setFormIsDirty(false);
-    toast.success('Proposal saved');
+    toast.success('Order saved');
   };
 
   // Unsaved changes protection — only warn when the form actually changed
   // from what's saved (not just because it's a brand-new, never-saved proposal).
   const { showPrompt, handleSave: handleSaveDialog, handleDiscard, handleCancel, markSaved } = useUnsavedChanges({
     when: isEditMode && !bothSigned && formIsDirty,
-    message: 'You have unsaved changes to this proposal. Do you want to save before leaving?',
+    message: 'You have unsaved changes to this order. Do you want to save before leaving?',
     onSave: handleSave,
   });
 
@@ -760,7 +764,7 @@ export function ProposalBuilder() {
     setPrintLoading(true);
     try {
       const pdf = await buildProposalPdf(printRef.current);
-      const filename = `YULLR-Proposal-${form.proposalNumber || 'Draft'}-${(form.mountainName || 'Mountain').replace(/\s+/g, '-')}.pdf`;
+      const filename = `YULLR-Order-${form.proposalNumber || 'Draft'}-${(form.mountainName || 'Mountain').replace(/\s+/g, '-')}.pdf`;
       pdf.save(filename);
       toast.success('PDF downloaded');
     } catch (e: any) {
@@ -795,13 +799,13 @@ export function ProposalBuilder() {
       const pdf = await buildProposalPdf(el);
       const dataUrl = pdf.output('datauristring');
       const blob = await (await fetch(dataUrl)).blob();
-      const filename = `YULLR-Proposal-${form.proposalNumber || 'Signed'}-${(form.mountainName || 'Mountain').replace(/\s+/g, '-')} (Signed).pdf`;
+      const filename = `YULLR-Order-${form.proposalNumber || 'Signed'}-${(form.mountainName || 'Mountain').replace(/\s+/g, '-')} (Signed).pdf`;
 
       await mountainDocsDB.saveDocuments(mountainId, [
         ...existing,
         { id: docId, name: filename, type: 'application/pdf', size: blob.size, data: dataUrl, uploadedAt: new Date().toISOString() },
       ]);
-      toast.success('Signed proposal saved to Documents');
+      toast.success('Signed order saved to Documents');
     } catch (e) {
       console.error('Signed-PDF auto-save failed:', e);
     } finally {
@@ -894,7 +898,7 @@ export function ProposalBuilder() {
   async function clearSignatures() {
     if (!proposalId) return;
     if (bothSigned) {
-      toast.error("A fully-executed proposal can't be cleared — archive it and start a new one instead.");
+      toast.error("A fully-executed order can't be cleared — archive it and start a new one instead.");
       setConfirmModal(null);
       return;
     }
@@ -902,7 +906,7 @@ export function ProposalBuilder() {
     try {
       updateProposal(proposalId, { clientSignature: null as any, yullrSignature: null as any });
       setConfirmModal(null);
-      toast.success('Signatures cleared — proposal unlocked for editing');
+      toast.success('Signatures cleared — order unlocked for editing');
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
     } finally {
@@ -919,7 +923,7 @@ export function ProposalBuilder() {
     setConfirmBusy(true);
     try {
       updateProposal(proposalId, { archived: true });
-      toast.success('Proposal archived');
+      toast.success('Order archived');
       markSaved(); // deliberate navigation away — don't also trip the unsaved-changes blocker
       navigate(mountainId ? `/mountains/${mountainId}` : '/');
     } catch (e: any) {
@@ -936,7 +940,7 @@ export function ProposalBuilder() {
     setConfirmBusy(true);
     try {
       await deleteProposal(proposalId);
-      toast.success('Proposal deleted');
+      toast.success('Order deleted');
       markSaved(); // deleting implies discarding any in-progress edits — don't prompt about them
       navigate(mountainId ? `/mountains/${mountainId}` : '/');
     } catch (e: any) {
@@ -961,7 +965,7 @@ export function ProposalBuilder() {
       setEmailRecipient('');
       setEmailRecipientName('');
       setEmailCc(myEmail);
-      toast.success(`Proposal sent to ${emailRecipient.trim()}`);
+      toast.success(`Order sent to ${emailRecipient.trim()}`);
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
     } finally {
@@ -1099,7 +1103,7 @@ export function ProposalBuilder() {
       paymentTermsBox: (
         <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '10px 14px', marginTop: 10, fontSize: 12, color: '#78350f' }}>
           <strong style={{ display: 'block', marginBottom: 3 }}>Payment Terms</strong>
-          {form.paymentTerms}
+          {renderInline(form.paymentTerms)}
         </div>
       ),
       termsList: (
@@ -1110,7 +1114,7 @@ export function ProposalBuilder() {
           ].map((term, i) => (
             <li key={i} style={{ counterIncrement: 'terms', padding: '7px 0 7px 26px', position: 'relative', borderBottom: '1px solid #f0f0f0', fontSize: 12.5, lineHeight: 1.6, color: '#444' }}>
               <span style={{ position: 'absolute', left: 0, fontWeight: 700, color: '#FF5C39' }}>{i + 1}.</span>
-              {term}
+              {renderInline(term)}
             </li>
           ))}
         </ol>
@@ -1123,19 +1127,10 @@ export function ProposalBuilder() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #FF5C39', paddingBottom: 24, marginBottom: 32 }}>
             <img src="https://race.yullr.com/_assets/v11/8b719608599361ca2b1d142742df531a9af04c08.png" alt="YULLR" style={{ height: 48 }} />
             <div style={{ textAlign: 'right', color: '#555', fontSize: 12, lineHeight: 1.9 }}>
-              <div><strong style={{ color: '#1a1a1a' }}>Proposal #:</strong> {form.proposalNumber}</div>
+              <div><strong style={{ color: '#1a1a1a' }}>Order #:</strong> {form.proposalNumber}</div>
               <div><strong style={{ color: '#1a1a1a' }}>Date:</strong> {fmtDate(form.date)}</div>
               <div><strong style={{ color: '#1a1a1a' }}>Valid until:</strong> {fmtDate(form.validUntil)}</div>
             </div>
-          </div>
-
-          {/* Title */}
-          <div style={{ background: '#fff3f0', borderLeft: '4px solid #FF5C39', padding: '16px 20px', marginBottom: 28, borderRadius: '0 6px 6px 0' }}>
-            <h1 style={{ fontSize: 19, color: '#FF5C39', marginBottom: 4 }}>Project Proposal</h1>
-            <h2 style={{ fontSize: 15, color: '#555', fontWeight: 400 }}>{form.legalEntity || form.clientName}</h2>
-            {form.legalEntity && form.mountainName && form.legalEntity !== form.mountainName && (
-              <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{form.mountainName}</p>
-            )}
           </div>
 
           {renderTemplate(proposalTemplate, {
@@ -1203,7 +1198,7 @@ export function ProposalBuilder() {
             </div>
           </div>
           <div style={{ fontSize: 11, color: '#aaa', textAlign: 'center', marginTop: 16 }}>
-            YULLR, Inc. &nbsp;|&nbsp; Confidential Proposal &nbsp;|&nbsp; Proposal # {form.proposalNumber}
+            YULLR, Inc. &nbsp;|&nbsp; Confidential Order &nbsp;|&nbsp; Order # {form.proposalNumber}
           </div>
 
           {/* Map Addendum — one page per trail marked "Include a map" */}
@@ -1251,7 +1246,7 @@ export function ProposalBuilder() {
             onClick={() => setShowPreview(false)}
             style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
           >
-            <ChevronLeft size={16} /> Edit Proposal
+            <ChevronLeft size={16} /> Edit Order
           </button>
           <button
             onClick={handlePrint}
@@ -1266,7 +1261,7 @@ export function ProposalBuilder() {
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
 
-        {/* Proposal Document */}
+        {/* Order Document */}
         {renderProposalDocument(printRef)}
       </div>
     );
@@ -1288,7 +1283,7 @@ export function ProposalBuilder() {
           </button>
           <div className="flex-1">
             <h1 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[20px] leading-tight">
-              Proposal Builder
+              Order Builder
             </h1>
             {mountain && (
               <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px]">
@@ -1314,8 +1309,8 @@ export function ProposalBuilder() {
                 <button
                   onClick={() => setIsEditMode(true)}
                   className="p-2 bg-[#f3f3f5] rounded-[8px] active:bg-[#e5e7eb]"
-                  title="Edit proposal"
-                  aria-label="Edit proposal"
+                  title="Edit order"
+                  aria-label="Edit order"
                 >
                   <Pencil size={17} className="text-[#1D2930]" />
                 </button>
@@ -1328,16 +1323,16 @@ export function ProposalBuilder() {
                 </button>
               </>
             ) : (
-              /* Editing / new state: Save Proposal + Preview, plus a real
-                 delete — only offered before the proposal has ever been
+              /* Editing / new state: Save Order + Preview, plus a real
+                 delete — only offered before the order has ever been
                  sent for signatures, since nothing's been shared yet. */
               <>
                 {!!proposalId && !signRecord?.sentAt && (
                   <button
                     onClick={() => setConfirmModal('hardDelete')}
                     className="p-2 bg-[#fff0ee] rounded-[8px] active:bg-[#ffe0da]"
-                    title="Delete proposal"
-                    aria-label="Delete proposal"
+                    title="Delete order"
+                    aria-label="Delete order"
                   >
                     <Trash2 size={17} className="text-[#ff5c39]" />
                   </button>
@@ -1357,7 +1352,7 @@ export function ProposalBuilder() {
                   }`}
                 >
                   <Save size={15} />
-                  Save Proposal
+                  Save Order
                 </button>
               </>
             )}
@@ -1370,26 +1365,26 @@ export function ProposalBuilder() {
         <div className="bg-[#fff7ed] border-b border-[#fed7aa] px-4 py-2.5 flex items-center gap-2">
           <Lock size={13} className="text-[#c2410c] flex-shrink-0" />
           <p className="text-[#c2410c] font-['Inter:Regular',sans-serif] text-[13px] flex-1">
-            This proposal is fully executed and cannot be edited. Archive this proposal to create a new one.
+            This order is fully executed and cannot be edited. Archive this order to create a new one.
           </p>
         </div>
       ) : ro && (
         <div className="bg-[#f0fdf4] border-b border-[#bbf7d0] px-4 py-2.5 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#22c55e] flex-shrink-0" />
           <p className="text-[#166534] font-['Inter:Regular',sans-serif] text-[13px] flex-1">
-            Proposal saved — tap the pencil icon to make edits.
+            Order saved — tap the pencil icon to make edits.
           </p>
         </div>
       )}
 
       <div className="p-4 space-y-4 pb-24">
 
-        {/* ── Proposal Info ── */}
+        {/* ── Order Info ── */}
         <div className={section}>
-          <h2 className={sectionH}>Proposal Info</h2>
+          <h2 className={sectionH}>Order Info</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={label}>Proposal #</label>
+              <label className={label}>Order #</label>
               <input className={inp(ro)} readOnly={ro} value={form.proposalNumber} onChange={e => setField('proposalNumber', e.target.value)} placeholder="YLR-2026-001" />
             </div>
             <div>
@@ -1406,16 +1401,46 @@ export function ProposalBuilder() {
         {/* ── Client Details ── */}
         <div className={section}>
           <h2 className={sectionH}>Client Details</h2>
-          <div>
-            <label className={label}>Legal Entity Name</label>
-            <input
-              className={inp(ro)}
-              readOnly={ro}
-              value={form.legalEntity}
-              onChange={e => { setField('legalEntity', e.target.value); setField('clientName', e.target.value); }}
-              placeholder="e.g., Whistler Mountain Resort Ltd."
-            />
-            {!ro && <p className="text-[11px] text-[#9ca3af] mt-1">This will also update the Legal Entity field on the mountain record when saved.</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>Legal Entity Name</label>
+              <input
+                className={inp(ro)}
+                readOnly={ro}
+                value={form.legalEntity}
+                onChange={e => { setField('legalEntity', e.target.value); setField('clientName', e.target.value); }}
+                placeholder="e.g., Whistler Mountain Resort Ltd."
+              />
+              {!ro && <p className="text-[11px] text-[#9ca3af] mt-1">This will also update the Legal Entity field on the mountain record when saved.</p>}
+            </div>
+            <div>
+              <label className={label}>Entity Type</label>
+              {ro ? (
+                <div className={inp(ro)}>{form.entityType === 'Other' ? (form.entityTypeOther || 'Other') : (form.entityType || '—')}</div>
+              ) : (
+                <select
+                  className={inp(ro)}
+                  value={form.entityType || ''}
+                  onChange={e => setField('entityType', e.target.value)}
+                >
+                  <option value="">Select…</option>
+                  <option value="Ski Area">Ski Area</option>
+                  <option value="Ski Team">Ski Team</option>
+                  <option value="Ski Academy">Ski Academy</option>
+                  <option value="Ski School">Ski School</option>
+                  <option value="Other">Other</option>
+                </select>
+              )}
+              {!ro && form.entityType === 'Other' && (
+                <input
+                  className={inp(ro)}
+                  style={{ marginTop: 6 }}
+                  value={form.entityTypeOther || ''}
+                  onChange={e => setField('entityTypeOther', e.target.value)}
+                  placeholder="Specify entity type"
+                />
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1524,7 +1549,7 @@ export function ProposalBuilder() {
                           has480vWarning: e.target.checked ? trailHas480vWarning(t.trailId!) : undefined,
                         })}
                       />
-                      Include a map of this trail as a proposal addendum
+                      Include a map of this trail as an order addendum
                       {trailMapCoords(t.trailId).length === 0 && (
                         <span className="text-[#9ca3af]">— no located Capture Points yet</span>
                       )}
@@ -1587,16 +1612,19 @@ export function ProposalBuilder() {
           <div className="flex items-end gap-4">
             <div>
               <label className={label}>Estimated Install Duration {!form.selfInstall && <span className="text-[#ff5c39]">*</span>}</label>
-              <input
-                className={`${inp(ro)} text-center`}
-                style={{ width: 56 }}
-                readOnly={ro}
-                value={form.installDays}
-                onChange={e => setField('installDays', e.target.value)}
-                placeholder="2"
-                maxLength={3}
-                required={!form.selfInstall}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  className={`${inp(ro)} text-center`}
+                  style={{ width: 56 }}
+                  readOnly={ro}
+                  value={form.installDays}
+                  onChange={e => setField('installDays', e.target.value)}
+                  placeholder="2"
+                  maxLength={3}
+                  required={!form.selfInstall}
+                />
+                <span className="text-[13px] text-[#6a7282]">Day(s)</span>
+              </div>
             </div>
             <div className="relative inline-flex bg-[#f3f3f5] rounded-full p-1 mb-[1px]">
               <button
@@ -1923,7 +1951,7 @@ export function ProposalBuilder() {
             }`}
           >
             <Save size={18} />
-            Save Proposal
+            Save Order
           </button>
         ) : (
           <button
@@ -1931,7 +1959,7 @@ export function ProposalBuilder() {
             className="w-full bg-[#ff5c39] text-white rounded-[8px] px-4 py-4 font-['Inter:Medium',sans-serif] font-bold text-[15px] active:opacity-80 flex items-center justify-center gap-2"
           >
             <FileText size={18} />
-            Preview Proposal
+            Preview Order
           </button>
         )}
 
@@ -1958,7 +1986,7 @@ export function ProposalBuilder() {
                 <button
                   onClick={() => setConfirmModal('deleteProposal')}
                   className="flex items-center gap-1 text-[11px] font-['Inter:Medium',sans-serif] font-medium text-[#6a7282] bg-[#f3f3f5] border border-[rgba(0,0,0,0.08)] px-2.5 py-1 rounded-full active:opacity-70"
-                  title={bothSigned ? "Archive this proposal — fully-executed proposals can't be cleared, only archived" : "Archive this proposal"}
+                  title={bothSigned ? "Archive this order — fully-executed orders can't be cleared, only archived" : "Archive this order"}
                 >
                   <Archive size={11} /> Archive
                 </button>
@@ -2025,8 +2053,8 @@ export function ProposalBuilder() {
                   <div className="flex items-center gap-2 mb-3">
                     <CheckCircle size={20} className="text-[#22c55e] flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="text-[#0a0a0a] font-['Inter:SemiBold',sans-serif] font-semibold text-[15px]">Proposal Fully Executed</p>
-                      <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px]">Both parties have signed this proposal</p>
+                      <p className="text-[#0a0a0a] font-['Inter:SemiBold',sans-serif] font-semibold text-[15px]">Order Fully Executed</p>
+                      <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[12px]">Both parties have signed this order</p>
                     </div>
                   </div>
 
@@ -2035,7 +2063,7 @@ export function ProposalBuilder() {
                     className="w-full flex items-center justify-center gap-2 bg-white border border-[#22c55e] text-[#22c55e] rounded-[8px] px-4 py-2.5 text-[13px] font-['Inter:Medium',sans-serif] font-medium active:opacity-80"
                   >
                     <FileText size={15} />
-                    View Proposal
+                    View Order
                   </button>
                 </div>
               ) : (
@@ -2157,7 +2185,7 @@ export function ProposalBuilder() {
             <div className="mt-4 pt-4 border-t border-[rgba(0,0,0,0.07)] space-y-3">
               <div>
                 <p className="text-[11px] text-[#6a7282] font-['Inter:Regular',sans-serif] mb-1.5">
-                  Proposal link
+                  Order link
                 </p>
                 {signingUrl ? (
                   <div className="flex items-center gap-2">
@@ -2216,12 +2244,12 @@ export function ProposalBuilder() {
                 </div>
                 <div>
                   <h3 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-semibold text-[16px] leading-snug">
-                    {confirmModal === 'deleteProposal' ? 'Archive Proposal?' : 'Clear Signatures?'}
+                    {confirmModal === 'deleteProposal' ? 'Archive Order?' : 'Clear Signatures?'}
                   </h3>
                   <p className="text-[#6a7282] font-['Inter:Regular',sans-serif] text-[13px] mt-1 leading-relaxed">
                     {confirmModal === 'deleteProposal'
-                      ? 'This proposal (including any signatures) is kept for the historical record but hidden from the active list. Start a fresh proposal for this project any time — it will never inherit this one\'s data.'
-                      : 'This will clear both the YULLR and client signatures. The proposal will be unlocked for editing and can be re-submitted for signatures.'}
+                      ? 'This order (including any signatures) is kept for the historical record but hidden from the active list. Start a fresh order for this project any time — it will never inherit this one\'s data.'
+                      : 'This will clear both the YULLR and client signatures. The order will be unlocked for editing and can be re-submitted for signatures.'}
                   </p>
                 </div>
               </div>
@@ -2244,7 +2272,7 @@ export function ProposalBuilder() {
                 {confirmBusy
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   : confirmModal === 'deleteProposal'
-                    ? <><Archive size={15} /> Archive Proposal</>
+                    ? <><Archive size={15} /> Archive Order</>
                     : <><XCircle size={15} /> Clear Signatures</>
                 }
               </button>
@@ -2257,8 +2285,8 @@ export function ProposalBuilder() {
           destructive delete in the app (Location, Asset, Trail...). */}
       {confirmModal === 'hardDelete' && (
         <DeleteConfirmModal
-          title="Delete Proposal"
-          description="This proposal has never been sent for signatures, so it will be permanently deleted with no historical record kept. This cannot be undone."
+          title="Delete Order"
+          description="This order has never been sent for signatures, so it will be permanently deleted with no historical record kept. This cannot be undone."
           isDeleting={confirmBusy}
           onConfirm={hardDeleteProposal}
           onCancel={() => setConfirmModal(null)}
@@ -2318,7 +2346,7 @@ export function ProposalBuilder() {
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="text-white font-['Inter:Medium',sans-serif] font-semibold text-[18px] leading-snug">
-                    Send Proposal via Email
+                    Send Order via Email
                   </h3>
                 </div>
                 <button
@@ -2373,7 +2401,7 @@ export function ProposalBuilder() {
 
               <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-[8px] p-3">
                 <p className="text-[#0369a1] font-['Inter:Regular',sans-serif] text-[12px] leading-relaxed">
-                  The recipient will receive an email with a link to review and digitally sign the proposal.
+                  The recipient will receive an email with a link to review and digitally sign the order.
                 </p>
               </div>
             </div>

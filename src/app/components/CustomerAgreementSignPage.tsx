@@ -82,6 +82,7 @@ export function CustomerAgreementSignPage() {
   const [agreementTemplate, setAgreementTemplate] = useState(FALLBACK_AGREEMENT_TEMPLATE);
   const [hasTechnicalContact, setHasTechnicalContact] = useState(false);
   const [hasPreferredInstallWindows, setHasPreferredInstallWindows] = useState(false);
+  const [technicalContacts, setTechnicalContacts] = useState<{ name: string; title: string | null; email: string; phone: string | null }[]>([]);
 
   const [customerLegalName, setCustomerLegalName] = useState('');
   const [entityType, setEntityType] = useState('LLC');
@@ -116,6 +117,7 @@ export function CustomerAgreementSignPage() {
         setRecord(rec);
         setHasTechnicalContact(!!data.hasTechnicalContact);
         setHasPreferredInstallWindows(!!data.hasPreferredInstallWindows);
+        setTechnicalContacts(Array.isArray(data.technicalContacts) ? data.technicalContacts : []);
         const fd = rec.formData || {};
         setCustomerLegalName(fd.customerLegalName || '');
         setEntityType(ENTITY_TYPES.includes(fd.entityType || '') ? fd.entityType! : 'LLC');
@@ -202,16 +204,22 @@ export function CustomerAgreementSignPage() {
   const fd = record.formData || {};
   const facilityName = fd.facilityName || 'Agreement';
   const facilityLocation = fd.facilityLocation || '';
-  const effectiveDate = fd.effectiveDate || new Date().toISOString().split('T')[0];
-  const yullrEmail = fd.yullrEmail || 'support@yullr.com';
+  // Live "today" right up until the agreement is fully executed, then
+  // locked to the date it actually became effective (the countersignature —
+  // the moment it's binding on both parties), same as the internal builder.
   const yullrSigned = !!record.yullrSignature;
+  const bothSigned = yullrSigned && !!record.clientSignature;
+  const effectiveDate = bothSigned && record.yullrSignature
+    ? record.yullrSignature.signedAt.split('T')[0]
+    : new Date().toISOString().split('T')[0];
+  const yullrEmail = fd.yullrEmail || 'support@yullr.com';
 
-  // Same 4-step progress bar shown on the proposal signing page, carried
+  // Same 4-step progress bar shown on the order signing page, carried
   // over here so the customer sees consistent progress across both public
-  // pages. Reaching this page at all means the proposal was already signed.
+  // pages. Reaching this page at all means the order was already signed.
   const progressBar = (() => {
     const steps = [
-      { label: 'Sign Proposal', done: true },
+      { label: 'Sign Order', done: true },
       { label: 'Technical Contact', done: hasTechnicalContact },
       { label: 'Install Preferences', done: hasPreferredInstallWindows },
       { label: 'Sign Agreement', done: submitted },
@@ -388,6 +396,17 @@ export function CustomerAgreementSignPage() {
         <ReadRow label="Facility Name" value={facilityName} />
         <ReadRow label="Location" value={facilityLocation} />
         <ReadRow label="Effective Date" value={fmtDate(effectiveDate)} />
+
+        <div style={{ marginTop: 24, marginBottom: 8 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: '#FF5C39', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>§1.5 — Technical Administrator(s)</p>
+          {technicalContacts.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#9ca3af' }}>None on file yet.</p>
+          ) : (
+            technicalContacts.map((c, i) => (
+              <ReadRow key={i} label={c.title || 'Technical Admin'} value={`${c.name} — ${c.email}${c.phone ? ` · ${c.phone}` : ''}`} />
+            ))
+          )}
+        </div>
 
 
         {/* ── Full Agreement Text — on screen, no PDF download required ── */}

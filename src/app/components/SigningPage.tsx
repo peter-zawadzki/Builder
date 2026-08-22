@@ -5,12 +5,31 @@ import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import { OnboardingModal } from './SigningOnboardingModal';
 import { MapIconLegend } from './MapIconLegend';
 import { TransformerBadge, TransformerFootnote } from './TransformerNotice';
+import { renderInline } from '../utils/templateRenderer';
 
-// Proposal send/view/sign, and now Customer Agreement auto-creation, run
+// Order send/view/sign, and now Customer Agreement auto-creation, run
 // through our own local server — public, token-authenticated, no Clerk
 // session (server/routes/proposalPublicSign.ts, agreementPublicSign.ts).
 const PROPOSAL_SIGN_BASE = '/api/public/proposal-sign';
 const AGREEMENT_SIGN_BASE = '/api/public/agreement-sign';
+
+// Kept in sync with DEFAULT_PROPOSAL_TERMS in src/app/context/DataContext.tsx
+// — used only as a fallback for very old orders saved before per-order terms
+// existed; any order with its own saved `terms` uses those instead.
+const FALLBACK_ORDER_TERMS = [
+  'This order is valid for 30 days from the date of issue. After this period, pricing may be subject to change.',
+  'Acceptance of this Order constitutes agreement to execute the **Customer Agreement** within 30 days.',
+  'All hardware remains the property of YULLR.',
+  'Installation dates are subject to availability and will be confirmed upon receipt of deposit.',
+  'YULLR is not responsible for delays caused by site conditions that do not meet the requirements outlined in Section 4.',
+  'Subscription and pass pricing is subject to change at the start of each new ski season.',
+  'An annual maintenance fee of $250.00 will apply to each Capture Point starting in year 2.',
+  'The YULLR **Customer Agreement** is for a {{termYearsWord}} ({{termYears}}) year Initial Term.',
+  'Where Customer does not own or operate the Facility, a **Facility Authorization Addendum** signed by the Facility operator will be required prior to installation.',
+  'In the event of a conflict between this Order Form and the Agreement, this Order Form shall control.',
+  'Customer shall designate a Technical Administrator, as described in Section 1.5 of the **Customer Agreement**, prior to installation.',
+  'The **Customer Agreement** (and, where applicable, the **Facility Authorization Addendum**) must be fully executed prior to installation.',
+];
 
 function parseAmt(v: string) { return parseFloat((v || '').replace(/[$,]/g, '')) || 0; }
 function fmtMoney(n: number) { return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
@@ -19,6 +38,18 @@ function fmtDate(d: string) {
   const [y, m, dd] = d.split('-');
   if (!y) return d;
   return `${m}/${dd}/${y}`;
+}
+function numberToWord(n: string): string {
+  const map: Record<string, string> = {
+    '1': 'one', '2': 'two', '3': 'three', '4': 'four', '5': 'five',
+    '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine', '10': 'ten',
+  };
+  return map[n] || n;
+}
+function interpolateTerm(term: string, termYears: string): string {
+  return term
+    .replace(/\{\{termYearsWord\}\}/g, numberToWord(termYears || '5'))
+    .replace(/\{\{termYears\}\}/g, termYears || '5');
 }
 
 interface Signature { name: string; title?: string | null; legalEntity?: string | null; signatureImage?: string | null; signedAt: string; }
@@ -183,7 +214,7 @@ export function SigningPage() {
       <div className="min-h-screen bg-[#F2F3F5] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#ff5c39] border-t-transparent rounded-full animate-spin" />
-          <p className="text-[#6a7282] text-[14px]">Loading proposal…</p>
+          <p className="text-[#6a7282] text-[14px]">Loading order…</p>
         </div>
       </div>
     );
@@ -210,9 +241,9 @@ export function SigningPage() {
       <div className="min-h-screen bg-[#F2F3F5] flex items-center justify-center p-6">
         <div className="bg-white rounded-[16px] border border-[rgba(0,0,0,0.1)] p-8 text-center max-w-sm w-full">
           <AlertCircle size={40} className="text-[#ff5c39] mx-auto mb-4" />
-          <h2 className="text-[#0a0a0a] font-medium text-[18px] mb-2">Proposal Unavailable</h2>
+          <h2 className="text-[#0a0a0a] font-medium text-[18px] mb-2">Order Unavailable</h2>
           <p className="text-[#6a7282] text-[14px]">
-            This proposal does not contain a valid snapshot. Please contact YULLR for a new signing link.
+            This order does not contain a valid snapshot. Please contact YULLR for a new signing link.
           </p>
         </div>
       </div>
@@ -260,12 +291,12 @@ export function SigningPage() {
       </div>
 
       {/* ── Progress bar — what's completed vs outstanding across the whole ── */}
-      {/* flow (sign proposal -> technical contact -> install prefs -> sign  */}
+      {/* flow (sign order -> technical contact -> install prefs -> sign      */}
       {/* the agreement), so a return visit always shows exactly where things */}
       {/* stand, not just a plain "something's missing" banner.              */}
       {(() => {
         const steps = [
-          { label: 'Sign Proposal', done: clientSigned },
+          { label: 'Sign Order', done: clientSigned },
           { label: 'Technical Contact', done: hasTechnicalContact },
           { label: 'Install Preferences', done: hasPreferredInstallWindows },
           { label: 'Sign Agreement', done: caSigned },
@@ -322,7 +353,6 @@ export function SigningPage() {
         <OnboardingModal
           token={token!}
           caUrl={caToken ? `${window.location.origin}/agreement-sign/${caToken}` : null}
-          onClose={() => setShowOnboardingModal(false)}
           onSaved={(technicalContactAdded, installWindowsAdded) => {
             if (technicalContactAdded) setHasTechnicalContact(true);
             if (installWindowsAdded) setHasPreferredInstallWindows(true);
@@ -331,31 +361,22 @@ export function SigningPage() {
         />
       )}
 
-      {/* ── Proposal Document ── */}
+      {/* ── Order Document ── */}
       <div style={{ maxWidth: 860, margin: '28px auto 60px', background: '#fff', padding: '60px 70px', boxShadow: '0 2px 20px rgba(0,0,0,0.10)' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #FF5C39', paddingBottom: 24, marginBottom: 32 }}>
           <img src="https://race.yullr.com/_assets/v11/8b719608599361ca2b1d142742df531a9af04c08.png" alt="YULLR" style={{ height: 48 }} />
           <div style={{ textAlign: 'right', color: '#555', fontSize: 12, lineHeight: 1.9 }}>
-            <div><strong style={{ color: '#1a1a1a' }}>Proposal #:</strong> {p.proposalNumber}</div>
+            <div><strong style={{ color: '#1a1a1a' }}>Order #:</strong> {p.proposalNumber}</div>
             <div><strong style={{ color: '#1a1a1a' }}>Date:</strong> {fmtDate(p.date)}</div>
             <div><strong style={{ color: '#1a1a1a' }}>Valid until:</strong> {fmtDate(p.validUntil)}</div>
           </div>
         </div>
 
-        {/* Title block */}
-        <div style={{ background: '#fff3f0', borderLeft: '4px solid #FF5C39', padding: '16px 20px', marginBottom: 28, borderRadius: '0 6px 6px 0' }}>
-          <h1 style={{ fontSize: 19, color: '#FF5C39', marginBottom: 4, fontWeight: 700 }}>Project Proposal</h1>
-          <h2 style={{ fontSize: 15, color: '#333', fontWeight: 600, marginBottom: 2 }}>{displayClientName}</h2>
-          {p.mountainName && p.mountainName !== displayClientName && (
-            <p style={{ fontSize: 12.5, color: '#777', margin: 0 }}>{p.mountainName}</p>
-          )}
-        </div>
-
-        {/* 1. Project Summary */}
-        <PreviewH2>1. Project Summary</PreviewH2>
-        <p style={pStyle}>This proposal outlines the scope, hardware, subscription services, and associated costs for deploying the YULLR platform at <strong>{p.mountainName}</strong>, located at <strong>{p.clientAddress}</strong>.</p>
+        {/* 1. Order Summary */}
+        <PreviewH2>1. Order Summary</PreviewH2>
+        <p style={pStyle}>This order outlines the scope, hardware, subscription services, and associated costs for deploying the YULLR platform at <strong>{p.mountainName}</strong>, located at <strong>{p.clientAddress}</strong>.</p>
         <p style={pStyle}>Built for demanding alpine environments, the YULLR system is designed to operate reliably in sub-zero temperatures, high winds, and heavy snowfall. Each camera is remotely managed through the YULLR cloud platform, providing real-time monitoring, firmware updates, and centralized footage management with minimal on-site maintenance.</p>
 
         {/* 2. Trails */}
@@ -392,7 +413,7 @@ export function SigningPage() {
         <PreviewH2>3. Installation Notes</PreviewH2>
         <p style={pStyle}>Installation will be carried out by a YULLR technician or approved installation partner. The following conditions apply:</p>
         <ul style={{ marginLeft: 18, lineHeight: 2.2, color: '#444', fontSize: 12.5 }}>
-          <li>Installation is estimated to take <strong>{p.installDays || '[X]'}</strong> to complete.</li>
+          <li>Installation is estimated to take <strong>{p.installDays || '[X]'} day(s)</strong> to complete.</li>
           <li>All installations will be scheduled and coordinated with designated on mountain contact.</li>
           <li>Each Capture Point will be mounted, aligned, and tested on-site before sign-off.</li>
           <li>YULLR will provide full system commissioning and staff orientation prior to the start of the season.</li>
@@ -429,12 +450,12 @@ export function SigningPage() {
 
         {/* 5. YULLR Subscriptions */}
         <PreviewH2>5. YULLR Subscriptions</PreviewH2>
-        <p style={pStyle}>Skiers and riders at {p.mountainName} can purchase YULLR subscriptions to receive their footage. The following subscription types are available at published rates:</p>
+        <p style={pStyle}>Skiers and riders at {p.mountainName} can purchase YULLR subscriptions to receive their footage. The following subscription types are available at published rates. Every pass grants lifetime access to the footage it covers. A 26/27 All Access Pass keeps that season forever, a Day Pass keeps that day and mountain forever.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 10 }}>
           {[
-            { name: 'Day Pass', price: '$20', scope: '1 Mountain · 1 Day', desc: `Access to all YULLR footage captured at ${p.mountainName} for a single visit day.` },
-            { name: 'Mountain Pass', price: '$150', scope: '1 Mountain · Full Season', desc: `Unlimited footage access at ${p.mountainName} for the entire ski season.` },
-            { name: 'Season Pass', price: '$200', scope: 'All YULLR Mountains · Full Season', desc: `Unlimited footage access across all YULLR-enabled mountains for the full season.` },
+            { name: 'Day Pass', price: '$20', scope: '1 Mountain · 1 Day', desc: `Access to all YULLR race and training footage captured at ${p.mountainName} for a single visit day.` },
+            { name: 'Single Mountain Pass', price: '$100', scope: '1 Mountain · Full Season', desc: `Unlimited race footage access at ${p.mountainName} for the entire ski season.` },
+            { name: 'All Access Pass', price: '$200', scope: 'All YULLR Mountains · Full Season', desc: `Unlimited race and training footage access across all YULLR-enabled mountains for the full season.` },
           ].map(s => (
             <div key={s.name} style={{ border: '1px solid #ffd5cc', borderRadius: 8, padding: 16, textAlign: 'center' }}>
               <h3 style={{ fontSize: 13, color: '#FF5C39', marginBottom: 4 }}>{s.name}</h3>
@@ -534,7 +555,7 @@ export function SigningPage() {
         {p.paymentTerms && (
           <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '10px 14px', marginTop: 10, fontSize: 12, color: '#78350f' }}>
             <strong style={{ display: 'block', marginBottom: 3 }}>Payment Terms</strong>
-            {p.paymentTerms}
+            {renderInline(p.paymentTerms)}
           </div>
         )}
 
@@ -542,24 +563,17 @@ export function SigningPage() {
         <PreviewH2>7. Terms</PreviewH2>
         <ol style={{ listStyle: 'none', counterReset: 'terms' } as React.CSSProperties}>
           {[
-            'This proposal is valid for 30 days from the date of issue. After this period, pricing may be subject to change.',
-            'Acceptance of this proposal constitutes agreement to execute the Customer Agreement and Order Form within 30 days.',
-            'All hardware remains the property of YULLR.',
-            'Installation dates are subject to availability and will be confirmed upon receipt of deposit.',
-            'YULLR is not responsible for delays caused by site conditions that do not meet the requirements outlined in Section 4.',
-            'Subscription and pass pricing is subject to change at the start of each new ski season.',
-            'An annual maintenance fee of $250.00 will apply to each Capture Point starting in year 2.',
-            'The YULLR Customer Agreement is for a five (5) year Initial Term.',
+            ...(p.terms && p.terms.length > 0 ? p.terms : FALLBACK_ORDER_TERMS).map((t: string) => interpolateTerm(t, p.termYears)),
             ...extraTermsArr,
           ].map((term, i) => (
             <li key={i} style={{ counterIncrement: 'terms', padding: '7px 0 7px 26px', position: 'relative', borderBottom: '1px solid #f0f0f0', fontSize: 12.5, lineHeight: 1.6, color: '#444' }}>
               <span style={{ position: 'absolute', left: 0, fontWeight: 700, color: '#FF5C39' }}>{i + 1}.</span>
-              {term}
+              {renderInline(term)}
             </li>
           ))}
         </ol>
 
-        {/* Map Addendum — one page per trail marked "Include a map" in the proposal builder */}
+        {/* Map Addendum — one page per trail marked "Include a map" in the order builder */}
         {(() => {
           const mapTrails = (p.trails || []).filter((t: any) => t.includeMap && t.mapImageUrl);
           return (
@@ -629,10 +643,10 @@ export function SigningPage() {
             </div>
           ) : null}
 
-          {/* Customer Agreement CTA — must stay visible after the proposal is
+          {/* Customer Agreement CTA — must stay visible after the order is
               countersigned, not just in the moment right after the client
               signs, since it tracks the Agreement's own status, not the
-              proposal's (Dev Story 14.2). */}
+              order's (Dev Story 14.2). */}
           {bothSigned && (
             <div style={{
               marginTop: 20,
@@ -644,7 +658,34 @@ export function SigningPage() {
               <p style={{ fontSize: 12.5, color: caSigned ? '#166534' : '#c2410c', fontWeight: 600, marginBottom: 8 }}>
                 {caSigned ? 'Customer Agreement — Fully Executed' : 'Next Step: Review & Sign Customer Agreement'}
               </p>
-              {caToken ? (
+              {!caSigned && !hasTechnicalContact ? (
+                <>
+                  <p style={{ fontSize: 12, color: '#6a7282', marginBottom: 14 }}>
+                    Before you can review and sign the Customer Agreement, we need a Technical Contact on file for your facility.
+                  </p>
+                  <button
+                    onClick={() => setShowOnboardingModal(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      background: '#FF5C39',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '11px 18px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      width: '100%',
+                      justifyContent: 'center',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Add Technical Contact
+                  </button>
+                </>
+              ) : caToken ? (
                 <>
                   <p style={{ fontSize: 12, color: '#6a7282', marginBottom: 14 }}>
                     {caSigned
@@ -680,6 +721,9 @@ export function SigningPage() {
                   Your YULLR representative will send you a link to sign the Customer Agreement — the formal service contract for your installation.
                 </p>
               )}
+              <a href="/legal/YULLR_Customer_Agreement.pdf" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', fontSize: 11.5, color: '#6a7282', textDecoration: 'underline', marginTop: 10 }}>
+                View Customer Agreement (PDF)
+              </a>
             </div>
           )}
 
@@ -712,10 +756,10 @@ export function SigningPage() {
                 <div style={{ background: '#fff', border: '2px solid #FF5C39', borderRadius: 12, padding: '28px 32px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                     <PenLine size={20} color="#FF5C39" />
-                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>Sign this Proposal</h3>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>Sign this Order</h3>
                   </div>
                   <p style={{ fontSize: 13, color: '#555', lineHeight: 1.7, marginBottom: 20 }}>
-                    By signing below, you confirm on behalf of <strong>{displayClientName}</strong> that you have read and agree to the terms of this proposal.
+                    By signing below, you confirm on behalf of <strong>{displayClientName}</strong> that you have read and agree to the terms of this order.
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                     <div>
@@ -785,7 +829,7 @@ export function SigningPage() {
                       )}
                     </div>
                     <span style={{ fontSize: 13, color: '#444', lineHeight: 1.65 }} onClick={() => setAgreed(!agreed)}>
-                      I agree to the terms of this proposal on behalf of <strong style={{ color: '#1a1a1a' }}>{displayClientName}</strong> and understand this constitutes a binding agreement upon execution by both parties.
+                      I agree to the terms of this order on behalf of <strong style={{ color: '#1a1a1a' }}>{displayClientName}</strong> and understand this constitutes a binding agreement upon execution by both parties.
                     </span>
                   </label>
 
@@ -804,7 +848,7 @@ export function SigningPage() {
                     {submitting ? (
                       <><div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} /> Submitting…</>
                     ) : (
-                      <><PenLine size={17} /> Sign &amp; Accept Proposal</>
+                      <><PenLine size={17} /> Sign &amp; Accept Order</>
                     )}
                   </button>
                 </div>
@@ -812,7 +856,7 @@ export function SigningPage() {
                 /* Just signed — success state */
                 <div style={{ background: '#f0fdf4', border: '2px solid #22c55e', borderRadius: 12, padding: '28px 32px', textAlign: 'center' }}>
                   <CheckCircle size={40} color="#22c55e" style={{ margin: '0 auto 12px' }} />
-                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#166534', marginBottom: 6 }}>Proposal Signed!</h3>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#166534', marginBottom: 6 }}>Order Signed!</h3>
                   <p style={{ fontSize: 14, color: '#166534', margin: '0 0 16px' }}>
                     Thank you, <strong>{clientName}</strong>. Your signature has been recorded.
                   </p>
@@ -867,6 +911,9 @@ export function SigningPage() {
                         Your YULLR representative will send you a link to sign the Customer Agreement — the formal service contract for your installation.
                       </p>
                     )}
+                    <a href="/legal/YULLR_Customer_Agreement.pdf" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', fontSize: 11.5, color: '#6a7282', textDecoration: 'underline', marginTop: 10 }}>
+                      View Customer Agreement (PDF)
+                    </a>
                   </div>
                 </div>
               )}
@@ -876,7 +923,7 @@ export function SigningPage() {
 
         {/* Footer */}
         <div style={{ fontSize: 11, color: '#aaa', textAlign: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
-          YULLR, Inc. &nbsp;|&nbsp; Confidential Proposal &nbsp;|&nbsp; Proposal # {p.proposalNumber}
+          YULLR, Inc. &nbsp;|&nbsp; Confidential Order &nbsp;|&nbsp; Order # {p.proposalNumber}
         </div>
       </div>
 

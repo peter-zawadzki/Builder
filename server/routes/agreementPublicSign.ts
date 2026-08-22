@@ -17,16 +17,25 @@ async function findAgreementByToken(token: string) {
 // Same outstanding-items checks as proposalPublicSign.ts, duplicated here
 // (rather than imported) since this page needs them for its own progress
 // bar and the two public routers are intentionally kept independent.
-async function countTechnicalContacts(mountainId: string): Promise<number> {
-  const row = await queryOne<{ count: string }>(
-    `SELECT count(*) FROM legacy_records
+// Full Technical Administrator(s) details for §1.5 of the Party Information
+// section — the customer never enters these here; they're collected via the
+// Technical Contact modal on the proposal signing page as real CRM contacts.
+async function getTechnicalContacts(mountainId: string): Promise<{ name: string; title: string | null; email: string; phone: string | null }[]> {
+  const rows = await queryOne<{ rows: any }>(
+    `SELECT COALESCE(json_agg(json_build_object(
+        'name', data->>'name',
+        'title', data->>'title',
+        'email', data->>'email',
+        'phone', data->>'phone'
+      )), '[]') AS rows
+      FROM legacy_records
       WHERE collection = 'contacts'
         AND data->>'mountainId' = $1
         AND (data->>'archived' IS DISTINCT FROM 'true')
         AND data->'tags' ? 'Technical'`,
     [mountainId]
   );
-  return row ? parseInt(row.count, 10) : 0;
+  return Array.isArray(rows?.rows) ? rows.rows : [];
 }
 
 async function getPreferredInstallWindows(mountainId: string): Promise<any[]> {
@@ -91,9 +100,9 @@ agreementPublicSign.get("/:token", async (c) => {
   // Progress-bar status — same "Sign Proposal / Technical Contact / Install
   // Preferences" steps shown on the proposal signing page, carried over here
   // so the customer sees consistent progress across both public pages.
-  const [technicalContactCount, preferredInstallWindows] = mountainId
-    ? await Promise.all([countTechnicalContacts(mountainId), getPreferredInstallWindows(mountainId)])
-    : [0, []];
+  const [technicalContacts, preferredInstallWindows] = mountainId
+    ? await Promise.all([getTechnicalContacts(mountainId), getPreferredInstallWindows(mountainId)])
+    : [[], []];
 
   return c.json({
     agreement: {
@@ -103,7 +112,8 @@ agreementPublicSign.get("/:token", async (c) => {
       clientSignature: data.clientSignature ?? null,
       yullrSignature: data.yullrSignature ?? null,
     },
-    hasTechnicalContact: technicalContactCount > 0,
+    technicalContacts,
+    hasTechnicalContact: technicalContacts.length > 0,
     hasPreferredInstallWindows: preferredInstallWindows.length > 0,
   });
 });

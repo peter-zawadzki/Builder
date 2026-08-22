@@ -113,8 +113,8 @@ export function AppHeader() {
                 <UserButton.Action label="Resource Center" labelIcon={<BookOpen size={16} />} onClick={() => navigate('/resources')} />
                 {canManageTeam && <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />}
                 {canManageTeam && <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />}
-                {canManageTeam && <UserButton.Action label="Proposal terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />}
-                {canManageTeam && <UserButton.Action label="Proposal template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />}
+                {canManageTeam && <UserButton.Action label="Order Terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />}
+                {canManageTeam && <UserButton.Action label="Order Template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />}
                 {canManageTeam && <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />}
                 {canManageTeam && <UserButton.Action label="Contact tags" labelIcon={<Tag size={16} />} onClick={() => navigate('/contact-tags')} />}
                 {canManageTeam && <UserButton.Action label="Knowledge base" labelIcon={<BrainCircuit size={16} />} onClick={() => navigate('/admin/knowledge-base')} />}

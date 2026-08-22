@@ -82,10 +82,17 @@ export function CustomerAgreementBuilder() {
   const {
     getMountainById, addCustomerAgreement, updateCustomerAgreement,
     getCustomerAgreementByMountainId, countersignCustomerAgreement, refreshCustomerAgreement,
-    agreementTemplate, getProposalsByMountainId,
+    agreementTemplate, getProposalsByMountainId, contacts,
   } = useData();
   const mountain = getMountainById(mountainId || '');
   const agreement = mountainId ? getCustomerAgreementByMountainId(mountainId) : undefined;
+
+  // Technical Administrator(s) — collected earlier via the Technical Contact
+  // modal on the proposal signing page as real CRM contacts tagged
+  // 'Technical', not entered on this form. Displayed read-only in §1.5.
+  const technicalAdmins = mountainId
+    ? contacts.filter(c => c.mountainId === mountainId && c.tags?.includes('Technical') && !c.archived)
+    : [];
 
   // The Customer Agreement doesn't store which proposal led to it — find the
   // one that actually got fully executed (that's what triggers the
@@ -159,6 +166,13 @@ export function CustomerAgreementBuilder() {
   const bothSigned = yullrSigned && clientSigned;
   const locked = bothSigned;
   const signingUrl = agreement?.signToken ? `${window.location.origin}/agreement-sign/${agreement.signToken}` : null;
+
+  // Effective Date is live (always "today") right up until the agreement is
+  // fully executed, then locks to the date it actually became effective —
+  // the countersignature, which is what makes it binding on both parties.
+  const effectiveDateISO = bothSigned && agreement?.yullrSignature
+    ? agreement.yullrSignature.signedAt.split('T')[0]
+    : todayISO();
 
   // Once both signatures are in, render the fully-signed agreement to a PDF
   // and drop it into this mountain's Documents pane — same pattern as the
@@ -390,10 +404,28 @@ export function CustomerAgreementBuilder() {
 
           <p className={`${SEC_LABEL} mt-5`}>§1.4 — Effective Date</p>
           <div>
-            <label className={LBL}>Effective Date *</label>
-            {locked ? <div className={INP_RO}>{form.effectiveDate ? fmtDate(form.effectiveDate) : '—'}</div>
-              : <input className={INP} type="date" value={form.effectiveDate} onChange={e => set('effectiveDate', e.target.value)} />}
+            <label className={LBL}>Effective Date</label>
+            <div className={INP_RO}>{fmtDate(effectiveDateISO)}</div>
+            <p className="text-[11px] text-[#9ca3af] mt-1">
+              {bothSigned
+                ? 'Locked to the date this agreement was fully executed.'
+                : 'Always reflects the date this document is being viewed — not a fixed, editable value until both parties sign.'}
+            </p>
           </div>
+
+          <p className={`${SEC_LABEL} mt-5`}>§1.5 — Technical Administrator(s)</p>
+          {technicalAdmins.length === 0 ? (
+            <div className={INP_RO}>None on file yet — collected via the Technical Contact step after the order is signed.</div>
+          ) : (
+            <div className="space-y-2">
+              {technicalAdmins.map(c => (
+                <div key={c.id} className={INP_RO}>
+                  <div className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">{c.name}{c.title ? ` — ${c.title}` : ''}</div>
+                  <div className="text-[12px]">{c.email}{c.phone ? ` · ${c.phone}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
 
@@ -551,7 +583,7 @@ export function CustomerAgreementBuilder() {
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>{form.facilityName || mountain?.name}</h1>
               </div>
               <div style={{ textAlign: 'right', fontSize: 12, color: '#555', lineHeight: 1.9 }}>
-                <div><strong style={{ color: '#1a1a1a' }}>Date:</strong> {fmtDate(form.effectiveDate)}</div>
+                <div><strong style={{ color: '#1a1a1a' }}>Date:</strong> {fmtDate(effectiveDateISO)}</div>
                 <div><strong style={{ color: '#1a1a1a' }}>YULLR:</strong> YULLR, Inc.</div>
               </div>
             </div>
@@ -562,13 +594,16 @@ export function CustomerAgreementBuilder() {
               spliceNodes: {
                 parties: (
                   <>
-                    <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', marginTop: 20, marginBottom: 10 }}>1. Parties</h2>
+                    <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', textTransform: 'uppercase', marginTop: 20, marginBottom: 10 }}>1. Party Information</h2>
                     <p style={{ fontSize: 12.5, color: '#374151' }}><strong>YULLR:</strong> YULLR, Inc., 173 Tin Mountain Road, Jackson, NH 03846 — {form.yullrEmail}</p>
                     <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}>
                       <strong>Customer:</strong> {form.customerLegalName} ({form.entityType}, {form.stateOfFormation}) — Authorized Signatory: {form.authorizedSignatory}
                     </p>
                     <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Facility:</strong> {form.facilityName} — {form.facilityLocation}</p>
-                    <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Effective Date:</strong> {fmtDate(form.effectiveDate)}</p>
+                    <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}><strong>Effective Date:</strong> {fmtDate(effectiveDateISO)}</p>
+                    <p style={{ fontSize: 12.5, color: '#374151', marginTop: 6 }}>
+                      <strong>Technical Administrator(s):</strong> {technicalAdmins.length > 0 ? technicalAdmins.map(c => `${c.name}${c.title ? ` (${c.title})` : ''} — ${c.email}`).join('; ') : 'None on file'}
+                    </p>
                   </>
                 ),
               },

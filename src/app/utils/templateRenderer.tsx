@@ -35,11 +35,31 @@ function applyMergeFields(text: string, mergeFields: Record<string, string>): st
   return text.replace(/\{\{(\w+)\}\}/g, (match, key) => (key in mergeFields ? mergeFields[key] : match));
 }
 
-// **bold** -> <strong>. No nested/overlapping markup support needed for
-// this content.
-function renderInline(text: string): React.ReactNode {
+// Bolded mentions of these two defined terms also link out to the actual
+// signed-document PDFs (in /public/legal), so a customer reading terms text
+// can open the real Customer Agreement / Facility Authorization Addendum
+// without hunting for them.
+const LEGAL_DOC_LINKS: Record<string, string> = {
+  'Customer Agreement': '/legal/YULLR_Customer_Agreement.pdf',
+  'Facility Authorization Addendum': '/legal/YULLR_Facility_Authorization_Addendum.pdf',
+};
+
+// **bold** -> <strong> (or a link to the PDF, for the two terms above). No
+// nested/overlapping markup support needed for this content.
+export function renderInline(text: string): React.ReactNode {
   const parts = text.split(/\*\*(.+?)\*\*/g);
-  return parts.map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : <React.Fragment key={i}>{part}</React.Fragment>));
+  return parts.map((part, i) => {
+    if (i % 2 !== 1) return <React.Fragment key={i}>{part}</React.Fragment>;
+    const href = LEGAL_DOC_LINKS[part.trim()];
+    if (href) {
+      return (
+        <a key={i} href={href} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 700, color: 'inherit', textDecoration: 'underline' }}>
+          {part}
+        </a>
+      );
+    }
+    return <strong key={i}>{part}</strong>;
+  });
 }
 
 const defaultParagraphStyle: React.CSSProperties = { lineHeight: 1.75, color: '#333', marginBottom: 10, fontSize: 13 };

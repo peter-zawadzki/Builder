@@ -1062,15 +1062,18 @@ const STORAGE_KEYS = {
 // from that proposal's own Contract Term field, so the wording stays correct
 // even if a proposal's term length changes after its terms were seeded.
 export const DEFAULT_PROPOSAL_TERMS: string[] = [
-  'This proposal is valid for 30 days from the date of issue. After this period, pricing may be subject to change.',
-  'Acceptance of this proposal constitutes agreement to execute the Customer Agreement and Order Form within 30 days.',
+  'This order is valid for 30 days from the date of issue. After this period, pricing may be subject to change.',
+  'Acceptance of this Order constitutes agreement to execute the **Customer Agreement** within 30 days.',
   'All hardware remains the property of YULLR.',
   'Installation dates are subject to availability and will be confirmed upon receipt of deposit.',
   'YULLR is not responsible for delays caused by site conditions that do not meet the requirements outlined in Section 4.',
   'Subscription and pass pricing is subject to change at the start of each new ski season.',
   'An annual maintenance fee of $250.00 will apply to each Capture Point starting in year 2.',
-  'The YULLR Customer Agreement is for a {{termYearsWord}} ({{termYears}}) year Initial Term.',
-  'Where Customer does not own or operate the Facility, a Facility Authorization Addendum signed by the Facility operator will be required prior to installation.',
+  'The YULLR **Customer Agreement** is for a {{termYearsWord}} ({{termYears}}) year Initial Term.',
+  'Where Customer does not own or operate the Facility, a **Facility Authorization Addendum** signed by the Facility operator will be required prior to installation.',
+  'In the event of a conflict between this Order Form and the Agreement, this Order Form shall control.',
+  'Customer shall designate a Technical Administrator, as described in Section 1.5 of the **Customer Agreement**, prior to installation.',
+  'The **Customer Agreement** (and, where applicable, the **Facility Authorization Addendum**) must be fully executed prior to installation.',
 ];
 
 // Seeded onto every new proposal's own editable Payment Terms field (Dev
@@ -1078,7 +1081,7 @@ export const DEFAULT_PROPOSAL_TERMS: string[] = [
 // involvement, same as DEFAULT_PROPOSAL_TERMS). {{year}} is resolved at
 // proposal-creation time to that year's actual calendar year.
 export const DEFAULT_PAYMENT_TERMS =
-  '50% deposit is due upon execution of the Customer Agreement. The remaining 50% balance is due on or before November 1, {{year}}.';
+  '50% deposit is due upon execution of this order form. The remaining 50% balance is due on or before November 1st.';
 
 // Super Admin "edit the entire raw content" template for the Proposal
 // document — every static heading/paragraph/bullet/box/plan-card the
@@ -1090,9 +1093,9 @@ export const DEFAULT_PAYMENT_TERMS =
 // plain prose. See src/app/utils/templateRenderer.tsx for the markup this
 // text understands (## headings, - bullets, !!plan cards, !!box- callouts,
 // {{splice:x}}, {{mergeField}}, **bold**).
-export const DEFAULT_PROPOSAL_TEMPLATE = `## 1. Project Summary
+export const DEFAULT_PROPOSAL_TEMPLATE = `## 1. Order Summary
 
-This proposal outlines the scope, hardware, subscription services, and associated costs for deploying the YULLR platform at **{{mountainName}}**, located at **{{clientAddress}}**.
+This order outlines the scope, hardware, subscription services, and associated costs for deploying the YULLR platform at **{{mountainName}}**, located at **{{clientAddress}}**.
 
 Built for demanding alpine environments, the YULLR system is designed to operate reliably in sub-zero temperatures, high winds, and heavy snowfall. Each camera is remotely managed through the YULLR cloud platform, providing real-time monitoring, firmware updates, and centralized footage management with minimal on-site maintenance.
 
@@ -1106,7 +1109,7 @@ The following trails have been identified for YULLR Capture Points. Capture Poin
 
 Installation will be carried out by a YULLR technician or approved installation partner. The following conditions apply:
 
-- Installation is estimated to take **{{installDays}}** to complete.
+- Installation is estimated to take **{{installDays}} day(s)** to complete.
 - All installations will be scheduled and coordinated with designated on mountain contact.
 - Each Capture Point will be mounted, aligned, and tested on-site before sign-off.
 - YULLR will provide full system commissioning and staff orientation prior to the start of the season.
@@ -1122,11 +1125,11 @@ The following requirements must be in place at each designated location prior to
 
 ## 5. YULLR Subscriptions
 
-Skiers and riders at {{mountainName}} can purchase YULLR subscriptions to receive their footage. The following subscription types are available at published rates:
+Skiers and riders at {{mountainName}} can purchase YULLR subscriptions to receive their footage. The following subscription types are available at published rates. Every pass grants lifetime access to the footage it covers. A 26/27 All Access Pass keeps that season forever, a Day Pass keeps that day and mountain forever.
 
-!!plan Day Pass | $20 | 1 Mountain · 1 Day | Access to all YULLR footage captured at {{mountainName}} for a single visit day.
-!!plan Mountain Pass | $150 | 1 Mountain · Full Season | Unlimited footage access at {{mountainName}} for the entire ski season.
-!!plan Season Pass | $200 | All YULLR Mountains · Full Season | Unlimited footage access across all YULLR-enabled mountains for the full season.
+!!plan Day Pass | $20 | 1 Mountain · 1 Day | Access to all YULLR race and training footage captured at {{mountainName}} for a single visit day.
+!!plan Single Mountain Pass | $100 | 1 Mountain · Full Season | Unlimited race footage access at {{mountainName}} for the entire ski season.
+!!plan All Access Pass | $200 | All YULLR Mountains · Full Season | Unlimited race and training footage access across all YULLR-enabled mountains for the full season.
 
 !!box-orange Bulk Purchase Program
 - A 75% discount applies to all season pass bulk purchases of 25 or more in year 1.
