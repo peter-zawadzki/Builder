@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { useData, DEFAULT_PROPOSAL_TEMPLATE, DEFAULT_AGREEMENT_TEMPLATE } from '../context/DataContext';
+import { useData, DEFAULT_PROPOSAL_TEMPLATE, DEFAULT_AGREEMENT_TEMPLATE, DEFAULT_PROPOSAL_TERMS, DEFAULT_PAYMENT_TERMS } from '../context/DataContext';
 import {
   ArrowLeft, Plus, Trash2, RotateCcw,
   DollarSign, Wrench, Settings, Pencil, Check, X, Lock, Boxes, FileText, ChevronUp, ChevronDown,
@@ -616,10 +616,24 @@ export function ProposalTermsPage() {
           </p>
         </div>
 
-        <p className="text-[13px] text-[#6a7282]">
-          These are the default terms seeded onto every new proposal (Section 7). Editing them here does not
-          change any proposal that already exists — each proposal gets its own editable copy the moment it's created.
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[13px] text-[#6a7282] flex-1">
+            These are the default terms seeded onto every new proposal (Section 7). Editing them here does not
+            change any proposal that already exists — each proposal gets its own editable copy the moment it's created.
+          </p>
+          <button
+            onClick={() => {
+              if (!confirm('Reset the default terms and payment terms to the built-in defaults? This overwrites what\'s currently saved here — existing proposals are unaffected.')) return;
+              commit(DEFAULT_PROPOSAL_TERMS);
+              setPaymentTerms(DEFAULT_PAYMENT_TERMS);
+              updateDefaultPaymentTerms(DEFAULT_PAYMENT_TERMS);
+              setPaymentTermsDirty(false);
+            }}
+            className="flex items-center gap-1 text-[12px] text-[#6a7282] bg-[#f3f3f5] px-3 py-1.5 rounded-[8px] active:opacity-70 shrink-0"
+          >
+            <RotateCcw size={12} /> Reset to defaults
+          </button>
+        </div>
         {terms.map((term, i) => (
           <div key={i} className="flex items-start gap-2 bg-white rounded-[10px] border border-[rgba(0,0,0,0.08)] p-3">
             <span className="text-[#9ca3af] text-[13px] mt-2.5 w-4 shrink-0 text-right">{i + 1}.</span>
