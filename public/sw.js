@@ -14,12 +14,17 @@
  *    because asset filenames are content-hashed by Vite, so a given hash's
  *    bytes never change; only the app shell's reference to *which* hash can
  *    go stale.
+ *  - public/legal/ and public/resource-assets/: network-only, never cached —
+ *    these are fixed filenames that get re-uploaded in place, not
+ *    content-hashed, and aren't needed for offline use (only the on-mountain
+ *    assessment flow needs to work offline; legal docs and resource assets
+ *    are opened as explicit links, online).
  *  - Supabase API calls: skip entirely (dead code path — app no longer talks
  *    to Supabase at all, but kept as a no-op safety net)
  *  - OSM tile requests: stale-while-revalidate (map works offline after first view)
  */
 
-const CACHE = 'builder-v4';
+const CACHE = 'builder-v5';
 const SUPABASE_PATTERN = /supabase\.co/;
 
 // ── Install: warm up the app shell cache ──────────────────────────────────────
@@ -75,6 +80,16 @@ self.addEventListener('fetch', event => {
   // "clicking the asset shows a 404, but a hard refresh finds it" — hard
   // refresh bypasses the service worker entirely, network fetch worked).
   if (url.pathname.startsWith('/resource-assets/')) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
+  // Legal PDFs (public/legal/) are re-uploaded in place under fixed filenames
+  // (not content-hashed like Vite bundles), so stale-while-revalidate below
+  // would serve outdated bytes to any device that already cached them. Always
+  // go to the network — these are only opened as explicit links, never part
+  // of the offline app-shell/assessment flow.
+  if (url.pathname.startsWith('/legal/')) {
     event.respondWith(fetch(req));
     return;
   }

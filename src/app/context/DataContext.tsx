@@ -1101,7 +1101,7 @@ Built for demanding alpine environments, the YULLR system is designed to operate
 
 ## 2. Trails
 
-The following trails have been identified for YULLR Capture Points. Capture Point quantities and positioning are subject to adjustment based on site conditions.
+The following trails and Capture Points have been identified and constitute the Authorized Deployment Scope under the Customer Agreement. Capture Point quantities and positioning are subject to adjustment based on site conditions.
 
 {{splice:trailsTable}}
 
@@ -1113,7 +1113,7 @@ Installation will be carried out by a YULLR technician or approved installation 
 - All installations will be scheduled and coordinated with designated on mountain contact.
 - Each Capture Point will be mounted, aligned, and tested on-site before sign-off.
 - YULLR will provide full system commissioning and staff orientation prior to the start of the season.
-- For installation locations requiring work more than 20 feet above ground level, the Customer shall provide appropriate access equipment, qualified personnel, and reasonable access to on-mountain resources and staff necessary to safely complete the installation.
+- YULLR will work alongside existing mountain staff and resources to support installation, including identifying locations, providing technical guidance, and assisting with system setup. The Customer will provide  appropriate personnel, equipment, and on-mountain resources as needed.
 
 {{splice:installNotesExtra}}
 

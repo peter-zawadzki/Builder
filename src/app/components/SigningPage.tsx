@@ -381,7 +381,7 @@ export function SigningPage() {
 
         {/* 2. Trails */}
         <PreviewH2>2. Trails</PreviewH2>
-        <p style={pStyle}>The following trails have been identified for YULLR Capture Points. Capture Point quantities and positioning are subject to adjustment based on site conditions.</p>
+        <p style={pStyle}>The following trails and Capture Points have been identified and constitute the Authorized Deployment Scope under the Customer Agreement. Capture Point quantities and positioning are subject to adjustment based on site conditions.</p>
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -412,12 +412,12 @@ export function SigningPage() {
         {/* 3. Installation Notes */}
         <PreviewH2>3. Installation Notes</PreviewH2>
         <p style={pStyle}>Installation will be carried out by a YULLR technician or approved installation partner. The following conditions apply:</p>
-        <ul style={{ marginLeft: 18, lineHeight: 2.2, color: '#444', fontSize: 12.5 }}>
+        <ul style={{ marginLeft: 18, lineHeight: 2.2, color: '#444', fontSize: 12.5, listStyle: 'disc' }}>
           <li>Installation is estimated to take <strong>{p.installDays || '[X]'} day(s)</strong> to complete.</li>
           <li>All installations will be scheduled and coordinated with designated on mountain contact.</li>
           <li>Each Capture Point will be mounted, aligned, and tested on-site before sign-off.</li>
           <li>YULLR will provide full system commissioning and staff orientation prior to the start of the season.</li>
-          <li>For installation locations requiring work more than 20 feet above ground level, the Customer shall provide appropriate access equipment, qualified personnel, and reasonable access to on-mountain resources and staff necessary to safely complete the installation.</li>
+          <li>YULLR will work alongside existing mountain staff and resources to support installation, including identifying locations, providing technical guidance, and assisting with system setup. The Customer will provide  appropriate personnel, equipment, and on-mountain resources as needed.</li>
           {installNotesArr.map((n: string, i: number) => <li key={i}>{n}</li>)}
         </ul>
 
