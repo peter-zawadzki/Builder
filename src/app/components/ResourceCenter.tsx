@@ -740,6 +740,8 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ResourceFile | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => listResourceFiles(category).then(setFiles).catch(() => setFiles([]));
@@ -767,12 +769,17 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await deleteResourceFile(id);
-      setFiles(prev => (prev ?? []).filter(f => f.id !== id));
+      await deleteResourceFile(deleteTarget.id);
+      setFiles(prev => (prev ?? []).filter(f => f.id !== deleteTarget.id));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Delete failed — please try again.');
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
   }
 
@@ -795,7 +802,7 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
                 {isAdmin && (
                   <button
                     type="button"
-                    onClick={() => handleDelete(f.id)}
+                    onClick={() => setDeleteTarget(f)}
                     className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 active:opacity-70"
                     aria-label={`Delete ${f.name}`}
                   >
@@ -886,6 +893,16 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
             Upload
           </button>
         </div>
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          title={`Delete "${deleteTarget.name}"?`}
+          description="This can't be undone."
+          isDeleting={isDeleting}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );
