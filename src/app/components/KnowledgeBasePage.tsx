@@ -5,6 +5,7 @@ import { useApi } from '../api/client';
 import type { KnowledgeGap, KnowledgeCandidate, KnowledgeBaseStats, KnowledgeDocument } from '../api/client';
 import { useIsAdminOrAbove } from '../hooks/useRole';
 import { DocumentUploadForm } from './DocumentUploadForm';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 type Tab = 'gaps' | 'candidates' | 'stats' | 'documents';
 
@@ -25,6 +26,8 @@ export function KnowledgeBasePage() {
   const [liveDocs, setLiveDocs] = useState<KnowledgeDocument[] | null>(null);
   const [promoting, setPromoting] = useState<{ question: string; category: string; answer: string; gapIds?: number[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeDocument | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   async function loadGaps() {
     const r = await api.listKnowledgeGaps();
@@ -69,13 +72,15 @@ export function KnowledgeBasePage() {
       setBusy(false);
     }
   }
-  async function deleteDocument(id: string) {
-    setBusy(true);
+  async function deleteDocument() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await api.deleteKnowledgeDocument(id);
-      setLiveDocs(d => d?.filter(x => x.id !== id) ?? null);
+      await api.deleteKnowledgeDocument(deleteTarget.id);
+      setLiveDocs(d => d?.filter(x => x.id !== deleteTarget.id) ?? null);
     } finally {
-      setBusy(false);
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
   }
 
@@ -279,7 +284,7 @@ export function KnowledgeBasePage() {
                       </div>
                       <button
                         disabled={busy}
-                        onClick={() => deleteDocument(d.id)}
+                        onClick={() => setDeleteTarget(d)}
                         className="shrink-0 text-[#d1d5db] hover:text-[#ff5c39] active:opacity-60 disabled:opacity-50"
                         aria-label={`Delete ${d.title}`}
                       >
@@ -337,6 +342,22 @@ export function KnowledgeBasePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          title="Delete document?"
+          description={
+            <>
+              This will permanently delete{' '}
+              <span className="font-['Inter:Medium',sans-serif] text-[#0a0a0a]">"{deleteTarget.title}"</span> and
+              remove it from ODIN's knowledge base. This can't be undone.
+            </>
+          }
+          isDeleting={isDeleting}
+          onConfirm={deleteDocument}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );
