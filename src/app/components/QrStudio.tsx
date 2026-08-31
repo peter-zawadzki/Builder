@@ -13,6 +13,11 @@ const COLOR_PRESETS = [
 
 const SIZES = [300, 500, 1000] as const;
 
+// Not a real resort — pinned into the mountain picker so internal
+// (non-resort) campaigns have a utm_source to attribute to, without
+// creating a fake Mountain record in the CRM.
+const INTERNAL_MOUNTAIN_OPTION = { id: '__internal_yullr__', name: 'YULLR', internal: true };
+
 function sanitize(value: string): string {
   return value
     .trim()
@@ -85,7 +90,7 @@ export function QrStudioSection() {
   }, [preview]);
 
   const filteredMountains = useMemo(() => {
-    const named = mountains.filter((m) => !!m.name);
+    const named = [INTERNAL_MOUNTAIN_OPTION, ...mountains.filter((m) => !!m.name)];
     const q = mountainQuery.trim().toLowerCase();
     if (!q) return named.slice(0, 8);
     return named.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 8);
@@ -204,9 +209,12 @@ export function QrStudioSection() {
                   setMountainQuery('');
                   setMountainOpen(false);
                 }}
-                className={`w-full text-left px-4 py-3 active:bg-[#f3f3f5] text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px] ${i < filteredMountains.length - 1 ? 'border-b border-[rgba(0,0,0,0.06)]' : ''}`}
+                className={`w-full flex items-center justify-between gap-2 text-left px-4 py-3 active:bg-[#f3f3f5] text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[14px] ${i < filteredMountains.length - 1 ? 'border-b border-[rgba(0,0,0,0.06)]' : ''}`}
               >
                 {m.name}
+                {'internal' in m && m.internal && (
+                  <span className="shrink-0 text-[10px] font-['Inter:Medium',sans-serif] text-[#6a7282] bg-[#f3f3f5] px-2 py-0.5 rounded-full">Internal</span>
+                )}
               </button>
             ))}
           </div>
