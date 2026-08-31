@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList, Mail, MailX } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList, Mail, MailX, Activity } from 'lucide-react';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsAdminOrAbove } from '../hooks/useRole';
 import { useData, getMyNotifications } from '../context/DataContext';
@@ -111,6 +111,7 @@ export function AppHeader() {
             <UserButton appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }}>
               <UserButton.MenuItems>
                 <UserButton.Action label="Resource Center" labelIcon={<BookOpen size={16} />} onClick={() => navigate('/resources')} />
+                <UserButton.Action label="YULLR Monitor" labelIcon={<Activity size={16} />} onClick={() => window.open('https://portal.yullr.com/monitor/', '_blank', 'noopener,noreferrer')} />
                 {canManageTeam && <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />}
                 {canManageTeam && <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />}
                 {canManageTeam && <UserButton.Action label="Order Terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />}
