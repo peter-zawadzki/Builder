@@ -4,7 +4,7 @@ import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
   PlayCircle, ExternalLink, ChevronLeft, ChevronRight, Trash2, Upload, FileText,
-  Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X,
+  Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X, QrCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -22,8 +22,9 @@ import { type FAQCategory } from '../data/faqData';
 import { LOGO_GROUPS } from '../data/logoAssets';
 import { BRAND_COLORS, LOGO_FONT, BRAND_FONT } from '../data/brandStyle';
 import { DEMO_LINKS, PIPELINE_STEPS, DEMO_SLIDES, type DemoSlide } from '../data/demoHubData';
+import { QrStudioSection } from './QrStudio';
 
-type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo' | 'upload';
+type ResourceTab = 'faq' | 'training' | 'sales' | 'marketing' | 'logos' | 'demo' | 'qr' | 'upload';
 
 const TABS: { id: ResourceTab; label: string; icon: React.ReactNode }[] = [
   { id: 'faq',       label: 'FAQ',               icon: <HelpCircle size={14} /> },
@@ -32,6 +33,7 @@ const TABS: { id: ResourceTab; label: string; icon: React.ReactNode }[] = [
   { id: 'marketing', label: 'Marketing Assets',   icon: <ImageIcon size={14} /> },
   { id: 'logos',     label: 'Brand Assets',       icon: <Palette size={14} /> },
   { id: 'demo',      label: 'Demo Hub',           icon: <PlayCircle size={14} /> },
+  { id: 'qr',        label: 'QR Studio',          icon: <QrCode size={14} /> },
   { id: 'upload',    label: 'Upload',             icon: <Upload size={14} /> },
 ];
 
@@ -1354,6 +1356,7 @@ export function ResourceCenterPage() {
         {tab === 'marketing' && <ResourceFileManager category="marketing" emptyLabel="Marketing assets" />}
         {tab === 'logos' && <LogoFilesSection />}
         {tab === 'demo' && <DemoHubSection />}
+        {tab === 'qr' && <QrStudioSection />}
         {tab === 'upload' && <UploadSection />}
       </div>
     </div>
