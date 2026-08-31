@@ -80,6 +80,23 @@ export async function appendContactActivities(contactId: string, entries: NewAct
   );
 }
 
+// Bumps updatedAt on every project under this mountain so email-derived
+// notes/action items count as activity for the "stale if no updates in 5
+// business days" digest check (server/digest/staleDetection.ts) — otherwise
+// a mountain with an active email thread but no manual edit would still
+// show as stale. Same jsonb_set-in-place approach as appendContactActivities
+// above, so it can't race a concurrent manual edit.
+export async function touchProjectsForMountain(mountainId: string | null): Promise<void> {
+  if (!mountainId) return;
+  await query(
+    `UPDATE legacy_records
+     SET data = jsonb_set(data, '{updatedAt}', to_jsonb($2::text), true),
+         updated_at = now()
+     WHERE collection = 'projects' AND data->>'mountainId' = $1`,
+    [mountainId, new Date().toISOString()]
+  );
+}
+
 const KIND_LABEL: Record<NewActivityEntry["type"], string> = { note: "note", action: "action item" };
 const KIND_ARTICLE: Record<NewActivityEntry["type"], string> = { note: "a", action: "an" };
 

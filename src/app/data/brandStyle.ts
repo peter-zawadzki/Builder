@@ -28,6 +28,14 @@ export const BRAND_COLORS: BrandColor[] = [
     role: 'Secondary brand color, technology, trust, links, charts, and supporting graphics.',
   },
   {
+    name: 'Print Blue',
+    hex: '#1E293D',
+    rgb: '30, 41, 61',
+    cmyk: 'C:51 M:33 Y:0 K:76',
+    pantone: 'N/A',
+    role: 'Dark blue variant for print materials.',
+  },
+  {
     name: 'Dark Text',
     hex: '#1D252D',
     rgb: '29, 37, 45',

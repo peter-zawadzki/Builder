@@ -18,7 +18,7 @@ import { upsertNoteEmbedding } from "../notes/embedNote";
 import { parseMessageHeaders, isBulkOrAutomated, extractPlainTextBody, normalizeDateForSql, type ParsedHeaders } from "./messageParser";
 import { findContactMatch, findPrimaryEmployee } from "./matcher";
 import { generateEmailSummary } from "./summarize";
-import { appendContactActivities, logContactActivity, AUTOMATED_AUTHOR_NAME, type LegacyContact, type NewActivityEntry } from "./legacyCrm";
+import { appendContactActivities, logContactActivity, touchProjectsForMountain, AUTOMATED_AUTHOR_NAME, type LegacyContact, type NewActivityEntry } from "./legacyCrm";
 import type { EmployeeMailbox } from "./employees";
 import type { gmail_v1 } from "googleapis";
 
@@ -199,6 +199,7 @@ export async function finalizeGroups(evaluated: EvaluatedMessage[]): Promise<{ p
     }));
 
     await appendContactActivities(contact.id, [noteEntry, ...actionEntries]);
+    await touchProjectsForMountain(contact.mountainId);
 
     await upsertNoteEmbedding({
       noteSource: "activity",
