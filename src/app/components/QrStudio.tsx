@@ -29,6 +29,22 @@ function buildTrackingUrl(mountain: string, medium: string, campaign: string): s
   return params.length > 0 ? `https://yullr.com/?pricing&${params.join('&')}` : 'https://yullr.com/?pricing';
 }
 
+function hexToRgbDash(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}-${g}-${b}`;
+}
+
+// A live api.qrserver.com link pointing at the same tracking URL/color/size —
+// not used for generation (the app never depends on this CDN), just a
+// shareable image link someone can copy and drop straight into an email or
+// hand to a resort, since it renders the QR image directly when opened.
+// Background is forced transparent (alpha 0) to match the app's own output.
+function buildQrServerUrl(trackingUrl: string, hex: string, size: number): string {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&format=svg&margin=6&color=${hexToRgbDash(hex)}&bgcolor=255-255-255-0&data=${encodeURIComponent(trackingUrl)}`;
+}
+
 const CHECKERBOARD_STYLE: React.CSSProperties = {
   backgroundImage:
     'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)',
@@ -50,6 +66,7 @@ export function QrStudioSection() {
   const [size, setSize] = useState<number>(500);
 
   const [copied, setCopied] = useState(false);
+  const [qrUrlCopied, setQrUrlCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<'png' | 'svg' | null>(null);
   const [preview, setPreview] = useState<{ type: 'png' | 'svg'; url: string; filename: string } | null>(null);
@@ -79,6 +96,7 @@ export function QrStudioSection() {
   const campaignSlug = sanitize(campaign);
   const trackingUrl = buildTrackingUrl(mountainSlug, mediumSlug, campaignSlug);
   const color = COLOR_PRESETS.find((c) => c.slug === colorSlug) ?? COLOR_PRESETS[2];
+  const qrServerUrl = buildQrServerUrl(trackingUrl, color.hex, size);
 
   const handleCopy = async () => {
     try {
@@ -87,6 +105,16 @@ export function QrStudioSection() {
       setTimeout(() => setCopied(false), 1500);
     } catch {
       setError('Could not copy the URL — copy it manually.');
+    }
+  };
+
+  const handleCopyQrUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(qrServerUrl);
+      setQrUrlCopied(true);
+      setTimeout(() => setQrUrlCopied(false), 1500);
+    } catch {
+      setError('Could not copy the QR image URL — copy it manually.');
     }
   };
 
@@ -228,6 +256,27 @@ export function QrStudioSection() {
             {copied ? 'Copied' : 'Copy URL'}
           </button>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-[#6a7282] text-[12px] font-['Inter:Medium',sans-serif] mb-1">QR code image URL</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            readOnly
+            value={qrServerUrl}
+            className="flex-1 bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] font-['Inter:Regular',sans-serif] text-[13px] outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleCopyQrUrl}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-3 rounded-[8px] bg-[#1D2930] text-white text-[13px] font-['Inter:Medium',sans-serif] active:opacity-80"
+          >
+            {qrUrlCopied ? <Check size={15} /> : <Copy size={15} />}
+            {qrUrlCopied ? 'Copied' : 'Copy URL'}
+          </button>
+        </div>
+        <p className="text-[#6a7282] text-[11px] mt-1">Opens/renders the QR code directly — copy and share as-is, e.g. with a customer.</p>
       </div>
 
       <div>
