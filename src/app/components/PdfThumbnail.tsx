@@ -15,6 +15,32 @@ function loadPdfjs() {
   return pdfjsPromise;
 }
 
+// Renders a PDF File's first page to a small PNG data URL, used at upload
+// time so the card grid can show a stored thumbnail instantly instead of
+// downloading and re-rendering the full (sometimes 10MB+) PDF client-side
+// on every page load. Returns null on any failure — thumbnail generation
+// is a nice-to-have, never worth blocking or failing an upload over.
+export async function renderPdfFirstPageThumbnail(file: File, targetWidth = 480): Promise<string | null> {
+  try {
+    const pdfjs = await loadPdfjs();
+    const data = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data }).promise;
+    const page = await pdf.getPage(1);
+    const unscaled = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: targetWidth / unscaled.width });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.error('PDF upload-time thumbnail generation failed:', err);
+    return null;
+  }
+}
+
 export function PdfThumbnail({ url, alt }: { url: string; alt: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);

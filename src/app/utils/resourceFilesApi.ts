@@ -42,6 +42,7 @@ export interface ResourceFile {
   fileSize: number | null;
   createdAt: string;
   url: string;
+  thumbnailUrl: string | null;
 }
 
 export async function listResourceFiles(category: ResourceFileCategory): Promise<ResourceFile[]> {
@@ -55,6 +56,7 @@ export async function uploadResourceFile(data: {
   dataUrl: string;
   fileName: string;
   mimeType: string;
+  thumbnailDataUrl?: string;
 }): Promise<{ id: string }> {
   const res = await apiCall('', { method: 'POST', body: JSON.stringify(data) });
   return res.file;

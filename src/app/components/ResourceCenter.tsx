@@ -12,7 +12,7 @@ import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type O
 import { OdinVideoOffer } from './OdinVideoOffer';
 import { DocumentUploadForm } from './DocumentUploadForm';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { PdfThumbnail } from './PdfThumbnail';
+import { PdfThumbnail, renderPdfFirstPageThumbnail } from './PdfThumbnail';
 import { useIsSuperAdmin, useIsAdminOrAbove } from '../hooks/useRole';
 import { fileToBase64 } from '../utils/mountainDocumentsDB';
 import {
@@ -763,7 +763,10 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
     setUploading(true);
     try {
       const dataUrl = await fileToBase64(file);
-      await uploadResourceFile({ category, name: name.trim(), dataUrl, fileName: file.name, mimeType: file.type });
+      const thumbnailDataUrl = file.type === 'application/pdf'
+        ? await renderPdfFirstPageThumbnail(file) ?? undefined
+        : undefined;
+      await uploadResourceFile({ category, name: name.trim(), dataUrl, fileName: file.name, mimeType: file.type, thumbnailDataUrl });
       setName('');
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -828,6 +831,8 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
               <div className="aspect-[3/4] bg-[#f3f4f6] flex items-center justify-center overflow-hidden relative">
                 {f.mimeType.startsWith('image/') ? (
                   <img src={f.url} alt={f.name} className="max-h-full max-w-full object-contain" />
+                ) : f.thumbnailUrl ? (
+                  <img src={f.thumbnailUrl} alt={f.name} className="max-h-full max-w-full object-contain shadow-sm" />
                 ) : f.mimeType === 'application/pdf' ? (
                   <PdfThumbnail url={f.url} alt={f.name} />
                 ) : (

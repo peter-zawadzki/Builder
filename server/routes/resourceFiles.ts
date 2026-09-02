@@ -18,9 +18,9 @@ resourceFiles.get("/", async (c) => {
   }
   const rows = await query<{
     id: string; name: string; original_filename: string; mime_type: string;
-    s3_key: string; file_size: number | null; created_at: string;
+    s3_key: string; file_size: number | null; created_at: string; thumbnail_key: string | null;
   }>(
-    `SELECT id, name, original_filename, mime_type, s3_key, file_size, created_at
+    `SELECT id, name, original_filename, mime_type, s3_key, file_size, created_at, thumbnail_key
        FROM resource_files WHERE category = $1 ORDER BY created_at DESC`,
     [category]
   );
@@ -33,6 +33,7 @@ resourceFiles.get("/", async (c) => {
       fileSize: r.file_size,
       createdAt: r.created_at,
       url: await getSignedGetUrl(r.s3_key),
+      thumbnailUrl: r.thumbnail_key ? await getSignedGetUrl(r.thumbnail_key) : null,
     }))
   );
   return c.json({ files });
@@ -40,7 +41,7 @@ resourceFiles.get("/", async (c) => {
 
 resourceFiles.post("/", requireAdmin, async (c) => {
   const user = c.get("user");
-  const { category, name, dataUrl, fileName, mimeType } = await c.req.json().catch(() => ({}));
+  const { category, name, dataUrl, fileName, mimeType, thumbnailDataUrl } = await c.req.json().catch(() => ({}));
   if (!category || !CATEGORIES.includes(category)) {
     return c.json({ error: `category must be one of: ${CATEGORIES.join(", ")}` }, 400);
   }
@@ -53,10 +54,17 @@ resourceFiles.post("/", requireAdmin, async (c) => {
   const key = `resource-files/${category}/${id}.${extFromMime(finalMime)}`;
   await putObject(key, bytes, finalMime);
 
+  let thumbnailKey: string | null = null;
+  if (thumbnailDataUrl) {
+    const thumb = decodeDataUrl(thumbnailDataUrl);
+    thumbnailKey = `resource-files/${category}/${id}-thumb.${extFromMime(thumb.mime)}`;
+    await putObject(thumbnailKey, thumb.bytes, thumb.mime);
+  }
+
   const file = await queryOne<{ id: string }>(
-    `INSERT INTO resource_files (id, category, name, original_filename, mime_type, s3_key, file_size, uploaded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [id, category, name.trim(), fileName, finalMime, key, bytes.length, user.id]
+    `INSERT INTO resource_files (id, category, name, original_filename, mime_type, s3_key, file_size, uploaded_by, thumbnail_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [id, category, name.trim(), fileName, finalMime, key, bytes.length, user.id, thumbnailKey]
   );
   return c.json({ success: true, file }, 201);
 });
@@ -75,8 +83,12 @@ resourceFiles.patch("/:id", requireAdmin, async (c) => {
 
 resourceFiles.delete("/:id", requireAdmin, async (c) => {
   const id = c.req.param("id");
-  const row = await queryOne<{ s3_key: string }>(`DELETE FROM resource_files WHERE id=$1 RETURNING s3_key`, [id]);
+  const row = await queryOne<{ s3_key: string; thumbnail_key: string | null }>(
+    `DELETE FROM resource_files WHERE id=$1 RETURNING s3_key, thumbnail_key`,
+    [id]
+  );
   if (!row) return c.json({ error: "Not found" }, 404);
   await deleteObject(row.s3_key);
+  if (row.thumbnail_key) await deleteObject(row.thumbnail_key);
   return c.json({ ok: true });
 });
