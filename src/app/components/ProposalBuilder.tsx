@@ -13,7 +13,7 @@ import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
-import { buildCoverageCone, encodePolyline } from '../utils/geo';
+import { buildCoverageCone, encodePolyline, spreadOverlappingPins } from '../utils/geo';
 import { DEVICE_TYPE_CONFIG, DEFAULT_CAMERA_PROPS, WARNING_480V_COLOR, type CameraProperties, type DeviceType } from '../utils/deviceTypes';
 import { MapIconLegend } from './MapIconLegend';
 import { TransformerBadge, TransformerFootnote } from './TransformerNotice';
@@ -354,7 +354,6 @@ export function ProposalBuilder() {
     const trailConnections = allConnections.filter(c => c.trail_id === trailId);
     if (locs.length === 0 && trailConnections.length === 0) return null;
     const useCustomIcons = iconsHostedPublicly();
-    const pins: string[] = [];
     const paths: string[] = [];
     // `label` is only used in the localhost fallback (single alnum char);
     // ignored once useCustomIcons is true, since the real icon image already
@@ -363,9 +362,17 @@ export function ProposalBuilder() {
       useCustomIcons
         ? `url-${encodeURIComponent(iconUrl)}(${coord})`
         : `pin-s${label ? `-${label}` : ''}+${color.replace('#', '')}(${coord})`;
+    // Collected as {lat, lng, ...} descriptors first (not yet stringified)
+    // so spreadOverlappingPins can nudge apart any that land on the exact
+    // same spot or within a few meters of each other (multiple devices
+    // mounted on one pole/building, or a camera's own 480V warning pin,
+    // which otherwise renders exactly on top of its camera) — this static
+    // image has no click-to-separate/cluster interaction like the live map,
+    // so overlapping pins are otherwise simply lost. Coverage cones below
+    // still use each location's real, un-nudged coordinate.
+    const pinDescriptors: { lat: number; lng: number; label: string; color: string; iconUrl: string }[] = [];
     for (const loc of locs) {
       const { latitude, longitude } = loc.coordinates!;
-      const coord = `${longitude.toFixed(5)},${latitude.toFixed(5)}`;
       const deviceType = (loc.deviceType || 'misc') as DeviceType;
       const is480vPower = deviceType === 'power' && (loc.deviceProperties as any)?.voltage === '480V';
       const baseColor = deviceType === 'camera'
@@ -375,7 +382,7 @@ export function ProposalBuilder() {
       // different from a normal Power Source pin, not just a color change —
       // the localhost fallback can't show the real exclamation-triangle icon.
       const label = is480vPower ? 'w' : deviceType !== 'startfinish' ? deviceType[0] : '';
-      pins.push(pinFor(coord, label, baseColor, mapIconUrl(loc)));
+      pinDescriptors.push({ lat: latitude, lng: longitude, label, color: baseColor, iconUrl: mapIconUrl(loc) });
       if (deviceType === 'camera') {
         const props = (loc.deviceProperties || {}) as Partial<CameraProperties>;
         const color = (props.color || DEFAULT_CAMERA_PROPS.color).replace('#', '');
@@ -395,10 +402,13 @@ export function ProposalBuilder() {
         // Source locations above.
         if (props.powerVoltage === '480V') {
           const warningIconUrl = `${window.location.origin}/map-icons/warning-480v.png`;
-          pins.push(pinFor(coord, 'w', WARNING_480V_COLOR, warningIconUrl));
+          pinDescriptors.push({ lat: latitude, lng: longitude, label: 'w', color: WARNING_480V_COLOR, iconUrl: warningIconUrl });
         }
       }
     }
+    const pins = spreadOverlappingPins(pinDescriptors).map(p =>
+      pinFor(`${p.lng.toFixed(5)},${p.lat.toFixed(5)}`, p.label, p.color, p.iconUrl)
+    );
     // Connections (Wireless/PoE/120V links) — the Static Images API's
     // `path` primitive can't dash or offset like the live map's GL layers
     // do, so every type renders as a plain solid color-coded line here;

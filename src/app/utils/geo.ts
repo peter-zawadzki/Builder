@@ -87,3 +87,51 @@ function encodeSignedNumber(num: number): string {
   out += String.fromCharCode(sgnNum + 63);
   return out;
 }
+
+// The Static Images API (used for the proposal/order map addendum) has no
+// click-to-separate or zoom-based clustering like the live Mapbox GL map, so
+// multiple devices sharing (or nearly sharing) one spot — several items
+// mounted on the same pole/building, or a camera's own 480V warning pin,
+// which sits at the camera's exact coordinate — simply render on top of
+// each other with no way to tell them apart. Groups pins within a few
+// meters of each other and nudges each into a small ring around their
+// shared center so every one stays visible and distinguishable.
+export function spreadOverlappingPins<T extends { lat: number; lng: number }>(items: T[]): T[] {
+  const METERS_PER_DEG_LAT = 111320;
+  const PROXIMITY_METERS = 5;
+  const SPREAD_RADIUS_METERS = 6;
+
+  const groups: T[][] = [];
+  const used = new Set<number>();
+  items.forEach((item, i) => {
+    if (used.has(i)) return;
+    const group = [item];
+    used.add(i);
+    const metersPerDegLng = METERS_PER_DEG_LAT * Math.cos((item.lat * Math.PI) / 180);
+    items.forEach((other, j) => {
+      if (used.has(j) || i === j) return;
+      const dLat = (other.lat - item.lat) * METERS_PER_DEG_LAT;
+      const dLng = (other.lng - item.lng) * metersPerDegLng;
+      if (Math.sqrt(dLat * dLat + dLng * dLng) < PROXIMITY_METERS) {
+        group.push(other);
+        used.add(j);
+      }
+    });
+    groups.push(group);
+  });
+
+  const result: T[] = [];
+  groups.forEach(group => {
+    if (group.length === 1) { result.push(group[0]); return; }
+    const centerLat = group.reduce((s, g) => s + g.lat, 0) / group.length;
+    const centerLng = group.reduce((s, g) => s + g.lng, 0) / group.length;
+    const metersPerDegLng = METERS_PER_DEG_LAT * Math.cos((centerLat * Math.PI) / 180);
+    group.forEach((g, idx) => {
+      const angle = (2 * Math.PI * idx) / group.length;
+      const dLat = (SPREAD_RADIUS_METERS * Math.sin(angle)) / METERS_PER_DEG_LAT;
+      const dLng = (SPREAD_RADIUS_METERS * Math.cos(angle)) / metersPerDegLng;
+      result.push({ ...g, lat: centerLat + dLat, lng: centerLng + dLng });
+    });
+  });
+  return result;
+}

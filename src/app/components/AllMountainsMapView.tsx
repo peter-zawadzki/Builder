@@ -1,5 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { X, MapPin, Navigation, Camera, Users, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
@@ -114,6 +117,7 @@ export function AllMountainsMapView({ mountains, onClose }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const mapDivRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null);
 
   const { resolvedCoords, geocodedCount, totalToGeocode } = useMountainGeocoding(mountains);
   const [hoverInfo, setHoverInfo] = useState<{ mountain: Mountain; x: number; y: number } | null>(null);
@@ -121,6 +125,16 @@ export function AllMountainsMapView({ mountains, onClose }: Props) {
   const createMarkerIcon = useCallback((color: string) => {
     const html = `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:${color};border:2px solid white;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`;
     return L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -30] });
+  }, []);
+
+  // Cluster bubble instead of Leaflet's default blue/yellow/orange gradient
+  // ones — a plain dark-navy circle with the count keeps the same visual
+  // language as the individual teardrop pins.
+  const createClusterIcon = useCallback((cluster: L.MarkerCluster) => {
+    const count = cluster.getChildCount();
+    const size = count < 10 ? 34 : count < 100 ? 40 : 46;
+    const html = `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#1D2930;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;color:white;font-family:Inter,sans-serif;font-weight:500;font-size:${count < 100 ? 13 : 12}px;">${count}</div>`;
+    return L.divIcon({ html, className: '', iconSize: [size, size] });
   }, []);
 
   // Init Leaflet map once
@@ -140,13 +154,26 @@ export function AllMountainsMapView({ mountains, onClose }: Props) {
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     mapRef.current = map;
 
+    // Groups nearby pins into a single numbered bubble at low zoom (where
+    // dozens of mountains would otherwise stack into an unreadable, mostly
+    // unclickable pile) and splits back into individual pins as you zoom in.
+    const clusterGroup = L.markerClusterGroup({
+      iconCreateFunction: createClusterIcon,
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+    });
+    clusterGroup.addTo(map);
+    clusterGroupRef.current = clusterGroup;
+
     return () => {
-      markersRef.current.forEach(marker => { try { marker.remove(); } catch { /* ignore */ } });
       markersRef.current.clear();
+      try { clusterGroup.remove(); } catch { /* ignore */ }
+      clusterGroupRef.current = null;
       try { map.remove(); } catch { /* ignore */ }
       mapRef.current = null;
     };
-  }, []);
+  }, [createClusterIcon]);
 
   const mountainsWithCoords = mountains
     .map(m => ({ mountain: m, coords: m.coordinates || resolvedCoords[m.id] }))
@@ -156,11 +183,12 @@ export function AllMountainsMapView({ mountains, onClose }: Props) {
   // Sync markers whenever resolved mountains change
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const clusterGroup = clusterGroupRef.current;
+    if (!map || !clusterGroup) return;
 
     markersRef.current.forEach((marker, id) => {
       if (!mountainsWithCoords.find(({ mountain }) => mountain.id === id)) {
-        try { marker.remove(); } catch { /* ignore */ }
+        try { clusterGroup.removeLayer(marker); } catch { /* ignore */ }
         markersRef.current.delete(id);
       }
     });
@@ -168,7 +196,7 @@ export function AllMountainsMapView({ mountains, onClose }: Props) {
     mountainsWithCoords.forEach(({ mountain, coords }) => {
       if (markersRef.current.has(mountain.id)) return;
       const color = mountain.pipelineStage ? MARKER_COLORS[mountain.pipelineStage] : NO_STAGE_COLOR;
-      const marker = L.marker([coords.latitude, coords.longitude], { icon: createMarkerIcon(color) }).addTo(map);
+      const marker = L.marker([coords.latitude, coords.longitude], { icon: createMarkerIcon(color) });
 
       marker.on('mouseover', () => {
         const pt = map.latLngToContainerPoint(marker.getLatLng());
@@ -177,6 +205,7 @@ export function AllMountainsMapView({ mountains, onClose }: Props) {
       marker.on('mouseout', () => setHoverInfo(prev => (prev?.mountain.id === mountain.id ? null : prev)));
       marker.on('click', () => { onClose(); navigate(`/mountains/${mountain.id}`); });
 
+      clusterGroup.addLayer(marker);
       markersRef.current.set(mountain.id, marker);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
