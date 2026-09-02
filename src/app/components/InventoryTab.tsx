@@ -8,6 +8,7 @@ import {
   Package, Server as ServerIcon, Camera, Wifi, Wrench,
   Pencil, Trash2, Building2, Filter, Scan, Loader2,
   Tag, Hash, Calendar, Truck, FileText, DollarSign,
+  Download, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useData } from '../context/DataContext';
@@ -19,6 +20,7 @@ import {
 } from '../context/DataContext';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { useIsSuperAdmin } from '../hooks/useRole';
+import { inventoryAssetsToCsv, parseInventoryCsv, downloadTextFile } from '../utils/inventoryCsv';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1345,7 +1347,7 @@ function FilterBar({ filters, onChange, mountainOptions, onAddClick }: { filters
 // ─── Main Inventory Tab ───────────────────────────────────────────────────────
 
 export function InventoryTab() {
-  const { assets, deleteAsset, updateAsset, mountains } = useData();
+  const { assets, addAsset, deleteAsset, updateAsset, mountains } = useData();
   const isSuperAdmin = useIsSuperAdmin();
   const mountainOptions = useMemo(
     () => ['Unassigned / Warehouse', ...mountains.map(m => m.name).sort()],
@@ -1361,6 +1363,8 @@ export function InventoryTab() {
   const [filters, setFilters] = useState<Filters>({ search: '', category: '', mountain: '' });
   const [drillMountain, setDrillMountain] = useState<string | null>(null);
   const [drillCategory, setDrillCategory] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // Only show assets that have a yullrInventoryNumber (managed through admin inventory)
   // OR have an inventoryCategory set — this separates admin inventory from location-assigned assets
@@ -1404,6 +1408,54 @@ export function InventoryTab() {
   const componentCountFor = (asset: Asset) =>
     asset.serverComponentIds?.length ?? 0;
 
+  // Exports whatever the current filters show — defaults to the full
+  // inventory when no filters are applied — so a super admin can bulk-edit
+  // in a spreadsheet and re-upload (matched back to existing rows by `id`).
+  const handleExportCsv = () => {
+    if (filtered.length === 0) { toast.error('No inventory items to export.'); return; }
+    downloadTextFile(inventoryAssetsToCsv(filtered), `yullr-inventory-${today()}.csv`, 'text/csv');
+  };
+
+  const handleImportCsv = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const mountainNameToId = new Map(mountains.map(m => [m.name, m.id]));
+      const existingIds = new Set(assets.map(a => a.id));
+      const { rows, errors } = parseInventoryCsv(text, CATEGORIES, mountainNameToId);
+
+      let created = 0, updated = 0;
+      for (const row of rows) {
+        if (row.id && existingIds.has(row.id)) {
+          updateAsset(row.id, row.patch);
+          updated++;
+        } else {
+          addAsset(row.patch);
+          created++;
+        }
+      }
+
+      if (created || updated) {
+        toast.success(`Imported ${created + updated} item${created + updated !== 1 ? 's' : ''} (${created} added, ${updated} updated)`);
+      }
+      if (errors.length > 0) {
+        console.warn('Inventory CSV import issues:', errors);
+        toast.error(
+          `${errors.length} row${errors.length !== 1 ? 's' : ''} skipped or had issues — see browser console for details.`,
+          { duration: 6000 }
+        );
+      }
+      if (created === 0 && updated === 0 && errors.length === 0) {
+        toast.error('No rows found in that CSV.');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed — please check the file and try again.');
+    } finally {
+      setImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  };
+
   // Categories within a drilled-into mountain, with an "Uncategorized" bucket
   // for items that have no inventoryCategory set.
   const categoriesForMountain = (mountain: string): Record<string, Asset[]> => {
@@ -1425,6 +1477,35 @@ export function InventoryTab() {
         mountainOptions={mountainOptions}
         onAddClick={isSuperAdmin ? () => { setEditTarget(null); setShowAdd(true); } : undefined}
       />
+
+      {/* CSV bulk export/import — super admin only */}
+      {isSuperAdmin && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-3 py-2 text-[12px] font-['Inter:Medium',sans-serif] active:opacity-70"
+          >
+            <Download size={13} /> Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => csvInputRef.current?.click()}
+            disabled={importing}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-[#f3f3f5] text-[#0a0a0a] rounded-[8px] px-3 py-2 text-[12px] font-['Inter:Medium',sans-serif] active:opacity-70 disabled:opacity-50"
+          >
+            {importing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            {importing ? 'Importing…' : 'Import CSV'}
+          </button>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImportCsv(f); }}
+          />
+        </div>
+      )}
 
       {/* View toggle */}
       <div className="flex gap-1 bg-[#f3f3f5] rounded-[8px] p-1">
