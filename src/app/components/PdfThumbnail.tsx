@@ -20,6 +20,7 @@ export function PdfThumbnail({ url, alt }: { url: string; alt: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Only start fetching/rendering once the card is actually scrolled into
   // view — a grid of a few dozen PDFs spinning up that many pdf.js workers
@@ -62,7 +63,10 @@ export function PdfThumbnail({ url, alt }: { url: string; alt: string }) {
         if (!cancelled) setStatus('ready');
       } catch (err) {
         console.error('PDF thumbnail render failed:', err);
-        if (!cancelled) setStatus('failed');
+        if (!cancelled) {
+          setErrorMessage(err instanceof Error ? err.message : String(err));
+          setStatus('failed');
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -71,7 +75,10 @@ export function PdfThumbnail({ url, alt }: { url: string; alt: string }) {
   return (
     <div ref={containerRef} className="w-full h-full flex items-center justify-center">
       {status === 'failed' ? (
-        <FileText size={28} className="text-[#307fe2]" />
+        <div className="flex flex-col items-center gap-1 px-2 text-center" title={errorMessage ?? undefined}>
+          <FileText size={28} className="text-[#307fe2]" />
+          {errorMessage && <p className="text-[9px] text-[#8992a0] leading-tight line-clamp-2">{errorMessage}</p>}
+        </div>
       ) : (
         <>
           <canvas
