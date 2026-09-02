@@ -1,21 +1,19 @@
-import * as cloudLocSync from '../utils/cloudLocationSync';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
-import {
-  X, MapPin, ChevronUp, ChevronDown, ClipboardList, Mountain,
-} from 'lucide-react';
+import { X, MapPin } from 'lucide-react';
 import { useData } from '../context/DataContext';
-import type { Location } from '../context/DataContext';
 import { toast } from 'sonner';
 import { geocodeWithMapbox } from '../utils/mapboxGeocode';
 import { buildCoverageCone } from '../utils/geo';
 import { useLockViewportZoom } from '../hooks/useLockViewportZoom';
 import {
-  type DeviceType, type CameraProperties, DEVICE_TYPE_CONFIG, DEFAULT_CAMERA_PROPS, START_FINISH_COLORS,
+  type DeviceType, type CameraProperties, DEFAULT_CAMERA_PROPS, START_FINISH_COLORS,
   createDeviceMarkerElement, createCameraMarkerElement,
 } from '../utils/deviceTypes';
 import { listConnections, type MountainConnection, type ConnectionType } from '../utils/mountainConnectionsApi';
 import { LocationDetail } from './LocationDetail';
+import { LocationPropertiesPanel } from './LocationPropertiesPanel';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
 
@@ -53,105 +51,13 @@ function createPinElement(label: number, isActive: boolean) {
   return el;
 }
 
-// ─── Location thumbnail card ──────────────────────────────────────────────────
-
-function LocationCard({
-  location,
-  assetCount,
-  inspCount,
-  isActive,
-  onSelect,
-  hasGps,
-  number,
-  onViewDetails,
-}: {
-  location: Location;
-  assetCount: number;
-  inspCount: number;
-  isActive: boolean;
-  onSelect: () => void;
-  hasGps: boolean;
-  number: number;
-  onViewDetails: () => void;
-}) {
-  const [thumb, setThumb] = useState<string | null>(null);
-  const deviceType = location.deviceType as DeviceType | undefined;
-  const typeConfig = deviceType ? DEVICE_TYPE_CONFIG[deviceType] : null;
-
-  useEffect(() => {
-    // Reconciles with cloud every time — see LocationPropertiesPanel/EditLocation.
-    cloudLocSync.reconcileLocationMedia(location.id, 'loc').then(m => {
-      if (m.photos[0]) setThumb(m.photos[0]);
-    }).catch(() => {});
-  }, [location.id]);
-
-  return (
-    <div
-      className={`flex-shrink-0 w-36 rounded-[10px] border-2 overflow-hidden transition-all cursor-pointer ${
-        isActive ? 'border-[#ff5c39] shadow-lg' : 'border-[rgba(0,0,0,0.1)] bg-white'
-      }`}
-      onClick={onSelect}
-    >
-      <div className="relative h-14 bg-[#f3f3f5] overflow-hidden">
-        {thumb ? (
-          <img src={thumb} alt={location.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            {typeConfig ? <typeConfig.Icon size={18} className={isActive ? 'text-[#ff5c39]' : 'text-[#9ca3af]'} /> : <MapPin size={18} className={isActive ? 'text-[#ff5c39]' : 'text-[#d1d5db]'} />}
-          </div>
-        )}
-        <div className={`absolute top-1 left-1 w-5 h-5 rounded-full border border-white shadow-md flex items-center justify-center ${
-          isActive ? 'bg-[#ff5c39]' : 'bg-[#0a0a0a]'
-        }`}>
-          <span className="text-white text-[10px] font-['Inter:Bold',sans-serif] font-bold">{number}</span>
-        </div>
-        {!hasGps && (
-          <div className="absolute top-1 right-1 bg-black/60 rounded-full px-1.5 py-0.5">
-            <span className="text-white text-[9px] font-['Inter:Medium',sans-serif]">No GPS</span>
-          </div>
-        )}
-      </div>
-
-      <div className={`p-2 ${isActive ? 'bg-[#fff5f3]' : 'bg-white'}`}>
-        {/* What the item is — device type label, or the classic Location type. */}
-        <p className="text-[#8992a0] font-['Inter:Medium',sans-serif] text-[10px] uppercase tracking-wide truncate">
-          {typeConfig?.label || location.locationType || 'Location'}
-        </p>
-        <p className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[12px] truncate">
-          {location.name}
-        </p>
-
-        {(assetCount > 0 || inspCount > 0) && (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {assetCount > 0 && (
-              <span className="bg-[#FFe0D9] text-[#ff5c39] text-[9px] font-['Inter:Medium',sans-serif] px-1.5 py-0.5 rounded-full">
-                {assetCount} asset{assetCount !== 1 ? 's' : ''}
-              </span>
-            )}
-            {inspCount > 0 && (
-              <span className="bg-[#f3f3f5] text-[#0a0a0a] text-[9px] font-['Inter:Medium',sans-serif] px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                <ClipboardList size={8} />
-                {inspCount}
-              </span>
-            )}
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
-          className="mt-1.5 w-full text-center text-[#307fe2] font-['Inter:Medium',sans-serif] text-[11px] py-1 rounded-[6px] bg-[#eff6ff] active:bg-[#dbeafe]"
-        >
-          View Details
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main MapView component ───────────────────────────────────────────────────
-// Read-only browsing/overview — pan, zoom, select, view details (photos,
-// videos, notes, annotations — everything). Adding devices, editing fields,
+// Quick overview map — pan, zoom, select a device to view/edit its properties
+// (same LocationPropertiesPanel as SiteAssessmentWorkspace, so a device
+// behaves identically regardless of which map you're looking at it from) or
+// open the full LocationDetail page for photos/videos/annotations. No
+// add-device/connection tooling here — that stays exclusive to a Site
+// Assessment; this view is for browsing and editing what's already there.
 // and dragging pins all happen in a Site Assessment instead, not here.
 
 interface Props {
@@ -162,22 +68,29 @@ interface Props {
 
 export function MountainMapView({ mountainId, onClose, initialFocusLocationId }: Props) {
   useLockViewportZoom();
-  const { getMountainById, getLocationsByMountainId, getAssetsByLocationId, getInspectionsByLocationId, updateMountain, locations: allLocations } = useData();
+  const {
+    getMountainById, getLocationsByMountainId, getTrailsByMountainId,
+    updateMountain, updateLocation, deleteLocation, locations: allLocations,
+  } = useData();
   const mountain = getMountainById(mountainId);
   const locations = useMemo(
     () => getLocationsByMountainId(mountainId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allLocations, mountainId]
   );
+  const trails = useMemo(
+    () => getTrailsByMountainId(mountainId).map(t => ({ id: t.id, name: t.name })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mountainId]
+  );
 
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const mapDivRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
-  const cardScrollRef = useRef<HTMLDivElement>(null);
 
   const [activeLocationId, setActiveLocationId] = useState<string | null>(initialFocusLocationId || null);
   const [detailsLocationId, setDetailsLocationId] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [locationPendingDelete, setLocationPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [geocoding, setGeocoding] = useState(false);
   const [mapStyle, setMapStyle] = useState<'satellite' | 'streets' | 'outdoors'>('satellite');
   const [mapReady, setMapReady] = useState(false);
@@ -334,7 +247,6 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         setActiveLocationId(loc.id);
-        setDrawerOpen(true);
       });
 
       const marker = new mapboxgl.Marker({
@@ -394,16 +306,16 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
     source.setData({ type: 'FeatureCollection', features });
   }, [connections, styleReady]);
 
-  // Pan map + scroll card into view when active location changes
+  // Pan map to the selected location
   useEffect(() => {
     if (!activeLocationId || !mapRef.current) return;
     const loc = locations.find(l => l.id === activeLocationId);
     if (loc?.coordinates && isValidCoordinate(loc.coordinates.latitude, loc.coordinates.longitude)) {
       mapRef.current.panTo([loc.coordinates.longitude, loc.coordinates.latitude]);
     }
-    document.getElementById(`map-card-${activeLocationId}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeLocationId, locations]);
+
+  const selectedLocation = activeLocationId ? locations.find(l => l.id === activeLocationId) || null : null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
@@ -423,8 +335,9 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
         <X size={20} className="text-[#0a0a0a]" />
       </button>
 
-      {/* Top right controls */}
-      <div className="absolute top-4 right-4 z-[1001] flex items-center gap-2">
+      {/* Top right controls — shifted left of the properties panel (same
+          treatment as SiteAssessmentWorkspace) so they don't overlap it. */}
+      <div className={`absolute top-4 right-4 z-[1001] flex items-center gap-2 ${selectedLocation ? 'sm:mr-[296px]' : ''}`}>
         <div className="flex items-center bg-white rounded-full shadow-lg p-1 gap-0.5">
           {(Object.keys(STYLE_OPTIONS) as Array<keyof typeof STYLE_OPTIONS>).map(key => (
             <button
@@ -461,62 +374,37 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
         </div>
       )}
 
-      {/* Bottom drawer */}
-      <div
-        className={`absolute bottom-0 left-0 right-0 z-[1000] bg-white rounded-t-[20px] shadow-[0_-4px_24px_rgba(0,0,0,0.18)] transition-transform duration-300 ${
-          drawerOpen ? 'translate-y-0' : 'translate-y-[calc(100%-56px)]'
-        }`}
-      >
-        <button
-          className="relative w-full flex items-center justify-between px-5 py-4 active:bg-[#f9fafb]"
-          onClick={() => setDrawerOpen(v => !v)}
-        >
-          <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-10 h-1 bg-[rgba(0,0,0,0.15)] rounded-full" />
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px]">
-              Locations
-            </span>
-            <span className="bg-[#f3f3f5] text-[#6a7282] font-['Inter:Medium',sans-serif] text-[12px] px-2 py-0.5 rounded-full">
-              {locations.length}
-            </span>
-          </div>
-          {drawerOpen ? <ChevronDown size={20} className="text-[#6a7282]" /> : <ChevronUp size={20} className="text-[#6a7282]" />}
-        </button>
+      {/* Selected device — same properties panel as SiteAssessmentWorkspace,
+          so it looks/behaves identically. "View full details" opens the
+          LocationDetail modal above; there's no add-device tooling here. */}
+      {selectedLocation && (
+        <LocationPropertiesPanel
+          key={selectedLocation.id}
+          location={selectedLocation}
+          trails={trails}
+          onUpdate={(data) => updateLocation(selectedLocation.id, data)}
+          onDelete={() => setLocationPendingDelete({ id: selectedLocation.id, name: selectedLocation.name })}
+          onClose={() => setActiveLocationId(null)}
+          onViewFullDetails={() => setDetailsLocationId(selectedLocation.id)}
+        />
+      )}
 
-        {drawerOpen && (
-          <div
-            ref={cardScrollRef}
-            className="flex gap-3 overflow-x-auto px-4 pb-6 pt-1 snap-x"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {locations.length === 0 ? (
-              <p className="w-full text-center py-6 text-[#6a7282] font-['Inter:Regular',sans-serif] text-[14px]">
-                No locations yet.
-              </p>
-            ) : (
-              locations.map((loc, idx) => {
-                const assets = getAssetsByLocationId(loc.id);
-                const assetCount = assets.filter(a => a.type !== 'Miscellaneous').length;
-                const inspCount = getInspectionsByLocationId(loc.id)[0]?.items.reduce((s, i) => s + i.count, 0) || 0;
-                return (
-                  <div id={`map-card-${loc.id}`} key={loc.id} className="snap-start">
-                    <LocationCard
-                      location={loc}
-                      assetCount={assetCount}
-                      inspCount={inspCount}
-                      isActive={activeLocationId === loc.id}
-                      onSelect={() => { setActiveLocationId(loc.id); setDrawerOpen(true); }}
-                      hasGps={!!loc.coordinates}
-                      number={idx + 1}
-                      onViewDetails={() => setDetailsLocationId(loc.id)}
-                    />
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-      </div>
+      {locationPendingDelete && (
+        <DeleteConfirmModal
+          title={`Delete "${locationPendingDelete.name}"?`}
+          description="This removes it from the map and from the mountain's Locations. This can't be undone."
+          onCancel={() => setLocationPendingDelete(null)}
+          onConfirm={async () => {
+            try {
+              await deleteLocation(locationPendingDelete.id);
+              setActiveLocationId(null);
+              setLocationPendingDelete(null);
+            } catch (err: any) {
+              toast.error(`Error: ${err.message}`);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
