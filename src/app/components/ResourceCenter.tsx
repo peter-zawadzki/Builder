@@ -588,28 +588,49 @@ function formatFileSize(sizeKB: number): string {
   return sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
 }
 
-// Small YouTube-style preview: a real muted <video> seeked a few seconds in
-// (rather than a static play-icon tile) so the grid shows an actual frame
-// from each clip. Landing on frame 0 would show the same title-card/black
-// frame for nearly every video — 6s in is far more likely to be distinct,
-// representative footage; for anything shorter than that, halfway in.
+// Small YouTube-style preview: a real muted <video>. At rest it shows a
+// still frame seeked a few seconds in (rather than a static play-icon tile
+// or frame 0, which is the same title-card/black frame for nearly every
+// video) — 6s in is far more likely to be distinct, representative footage;
+// for anything shorter than that, halfway in. While `playing` (hovered), it
+// actually plays and loops so the card doubles as an inline preview.
 const PREVIEW_SEEK_SECONDS = 6;
 
-function VideoPreviewThumb({ src }: { src: string }) {
+function VideoPreviewThumb({ src, playing }: { src: string; playing: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const resetToPreviewFrame = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.currentTime = v.duration && v.duration < PREVIEW_SEEK_SECONDS ? v.duration / 2 : PREVIEW_SEEK_SECONDS;
+  };
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (playing) {
+      v.currentTime = 0;
+      v.play().catch(() => { /* autoplay can be blocked; static frame is an acceptable fallback */ });
+    } else {
+      v.pause();
+      resetToPreviewFrame();
+    }
+  }, [playing]);
+
   return (
     <video
       ref={videoRef}
       src={src}
       muted
+      loop
       playsInline
       preload="metadata"
-      onLoadedMetadata={() => {
-        const v = videoRef.current;
-        if (!v) return;
-        v.currentTime = v.duration && v.duration < PREVIEW_SEEK_SECONDS ? v.duration / 2 : PREVIEW_SEEK_SECONDS;
-      }}
-      className="w-full h-full object-cover pointer-events-none"
+      onLoadedMetadata={resetToPreviewFrame}
+      // object-contain (not cover) — the recording's real 1400x900 aspect
+      // ratio doesn't match every card's box, and cropping with object-cover
+      // was cutting off parts of the screen capture. Letterboxing shows the
+      // whole frame instead.
+      className="w-full h-full object-contain pointer-events-none"
     />
   );
 }
@@ -625,6 +646,7 @@ function TrainingMaterialsSection() {
   const [videos, setVideos] = useState<OdinVideoListItem[] | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OdinVideoListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
     api.listOdinVideos().then(r => setVideos(r.videos)).catch(() => setVideos([]));
@@ -674,15 +696,19 @@ function TrainingMaterialsSection() {
             tabIndex={0}
             onClick={() => navigate(`/odin-videos/${v.id}`)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate(`/odin-videos/${v.id}`); }}
+            onMouseEnter={() => setHoveredId(v.id)}
+            onMouseLeave={() => setHoveredId(null)}
             className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col text-left cursor-pointer active:opacity-80"
           >
-            <div className="h-28 bg-[#f9fafb] relative overflow-hidden">
+            <div className="aspect-[1400/900] bg-[#111827] relative overflow-hidden">
               {v.videoUrl ? (
                 <>
-                  <VideoPreviewThumb src={v.videoUrl} />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-                    <PlayCircle size={30} className="text-white drop-shadow" fill="rgba(0,0,0,0.35)" />
-                  </div>
+                  <VideoPreviewThumb src={v.videoUrl} playing={hoveredId === v.id} />
+                  {hoveredId !== v.id && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                      <PlayCircle size={30} className="text-white drop-shadow" fill="rgba(0,0,0,0.35)" />
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
