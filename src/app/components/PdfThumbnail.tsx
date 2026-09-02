@@ -15,11 +15,37 @@ function loadPdfjs() {
   return pdfjsPromise;
 }
 
+// Samples pixels across the canvas and flags it as "suspiciously uniform" —
+// e.g. a full-bleed photo embedded in the PDF silently failed to decode
+// (seen in Safari for at least one real file) and all that painted was the
+// solid background fill underneath it plus text. A real photo/gradient hero
+// always has far more variation than this threshold across a few hundred
+// sample points.
+function looksLikeUniformFill(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  const { data } = ctx.getImageData(0, 0, width, height);
+  const totalPixels = width * height;
+  const sampleStep = Math.max(1, Math.floor(totalPixels / 400)) * 4;
+  let first: [number, number, number] | null = null;
+  let samples = 0;
+  let differing = 0;
+  for (let i = 0; i < data.length; i += sampleStep) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    if (!first) {
+      first = [r, g, b];
+    } else if (Math.abs(r - first[0]) + Math.abs(g - first[1]) + Math.abs(b - first[2]) > 24) {
+      differing++;
+    }
+    samples++;
+  }
+  return samples > 20 && differing / samples < 0.03;
+}
+
 // Renders a PDF File's first page to a small PNG data URL, used at upload
 // time so the card grid can show a stored thumbnail instantly instead of
 // downloading and re-rendering the full (sometimes 10MB+) PDF client-side
-// on every page load. Returns null on any failure — thumbnail generation
-// is a nice-to-have, never worth blocking or failing an upload over.
+// on every page load. Returns null on any failure (or a suspiciously flat
+// render, see looksLikeUniformFill above) — thumbnail generation is a
+// nice-to-have, never worth blocking an upload or storing a broken image.
 export async function renderPdfFirstPageThumbnail(file: File, targetWidth = 480): Promise<string | null> {
   try {
     const pdfjs = await loadPdfjs();
@@ -31,11 +57,9 @@ export async function renderPdfFirstPageThumbnail(file: File, targetWidth = 480)
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    // Safari has known bugs rendering gradients/shading patterns onto a
-    // canvas that's never attached to the document — a hero image with a
-    // smooth gradient fill came out as a flat solid color when the canvas
-    // stayed detached. Chrome doesn't have this issue, but attaching it
-    // off-screen (never visible) costs nothing and fixes Safari too.
+    // Attached off-screen (never visible) rather than left fully detached —
+    // costs nothing, and some browsers handle certain canvas draw operations
+    // more reliably once the canvas is part of the live document.
     canvas.style.position = 'fixed';
     canvas.style.left = '-99999px';
     canvas.style.top = '0';
@@ -44,6 +68,10 @@ export async function renderPdfFirstPageThumbnail(file: File, targetWidth = 480)
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
       await page.render({ canvasContext: ctx, viewport }).promise;
+      if (looksLikeUniformFill(ctx, canvas.width, canvas.height)) {
+        console.warn('PDF thumbnail render looked suspiciously flat (likely a failed image decode) — skipping stored thumbnail.');
+        return null;
+      }
       return canvas.toDataURL('image/png');
     } finally {
       canvas.remove();
