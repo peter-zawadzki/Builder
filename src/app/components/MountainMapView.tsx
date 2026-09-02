@@ -4,7 +4,7 @@ import { X, MapPin } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { toast } from 'sonner';
 import { geocodeWithMapbox } from '../utils/mapboxGeocode';
-import { buildCoverageCone } from '../utils/geo';
+import { buildCoverageCone, buildCoverageAnnulus, CAMERA_COVERAGE_FILL_DEPTH_FT, METERS_PER_FOOT } from '../utils/geo';
 import { useLockViewportZoom } from '../hooks/useLockViewportZoom';
 import {
   type DeviceType, type CameraProperties, DEFAULT_CAMERA_PROPS, START_FINISH_COLORS,
@@ -144,8 +144,8 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
       map.setTerrain({ source: DEM_SOURCE_ID, exaggeration: 1 });
       if (!map.getSource(COVERAGE_SOURCE_ID)) {
         map.addSource(COVERAGE_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ id: 'mapview-coverage-fill', type: 'fill', source: COVERAGE_SOURCE_ID, paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 } });
-        map.addLayer({ id: 'mapview-coverage-outline', type: 'line', source: COVERAGE_SOURCE_ID, paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.6 } });
+        map.addLayer({ id: 'mapview-coverage-fill', type: 'fill', source: COVERAGE_SOURCE_ID, filter: ['==', ['get', 'role'], 'fill'], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 } });
+        map.addLayer({ id: 'mapview-coverage-outline', type: 'line', source: COVERAGE_SOURCE_ID, filter: ['==', ['get', 'role'], 'outline'], paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.6 } });
       }
       // Connections — read-only rendering (no drag handles; this view
       // never edits anything). Same 4-layer setup as
@@ -292,17 +292,28 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
     const source = map.getSource(COVERAGE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
     const cameras = locations.filter(l => l.deviceType === 'camera' && l.coordinates);
-    const features = cameras.map(cam => {
+    const features = cameras.flatMap(cam => {
       const props = (cam.deviceProperties || {}) as Partial<CameraProperties>;
-      const coords = buildCoverageCone(
-        cam.coordinates!.latitude, cam.coordinates!.longitude,
-        props.heading ?? 0, props.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov, props.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters
-      );
-      return {
-        type: 'Feature' as const,
-        properties: { id: cam.id, color: props.color ?? DEFAULT_CAMERA_PROPS.color },
-        geometry: { type: 'Polygon' as const, coordinates: [coords] },
-      };
+      const lat = cam.coordinates!.latitude, lng = cam.coordinates!.longitude;
+      const heading = props.heading ?? 0;
+      const hFov = props.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov;
+      const range = props.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters;
+      const color = props.color ?? DEFAULT_CAMERA_PROPS.color;
+      const fillDepthMeters = CAMERA_COVERAGE_FILL_DEPTH_FT * METERS_PER_FOOT;
+      const outlineCoords = buildCoverageCone(lat, lng, heading, hFov, range);
+      const fillCoords = buildCoverageAnnulus(lat, lng, heading, hFov, range, range - fillDepthMeters);
+      return [
+        {
+          type: 'Feature' as const,
+          properties: { id: cam.id, color, role: 'outline' },
+          geometry: { type: 'Polygon' as const, coordinates: [outlineCoords] },
+        },
+        {
+          type: 'Feature' as const,
+          properties: { id: cam.id, color, role: 'fill' },
+          geometry: { type: 'Polygon' as const, coordinates: [fillCoords] },
+        },
+      ];
     });
     source.setData({ type: 'FeatureCollection', features });
   }, [locations, styleReady]);

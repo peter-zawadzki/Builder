@@ -56,6 +56,39 @@ export function buildCoverageCone(lat: number, lng: number, headingDeg: number, 
 
 export const METERS_PER_FOOT = 0.3048;
 
+// Camera coverage fill only shades the outer band of the cone (the last
+// 600ft of range) rather than the whole wedge — a longer range means better
+// detection at distance, not necessarily useful detail near the lens, so
+// shading only the far band communicates that at a glance. The cone's full
+// pie-wedge outline (buildCoverageCone) is still drawn at full range so the
+// heading/FOV shape stays visible regardless of fill depth.
+export const CAMERA_COVERAGE_FILL_DEPTH_FT = 600;
+
+// Annular-sector (ring-wedge) polygon: the same pie wedge as
+// buildCoverageCone, but with the portion closer than innerRangeMeters cut
+// out. When innerRangeMeters <= 0 (range at or under the fill depth) this
+// degenerates to the identical full pie wedge buildCoverageCone returns.
+export function buildCoverageAnnulus(
+  lat: number, lng: number, headingDeg: number, hFovDeg: number,
+  outerRangeMeters: number, innerRangeMeters: number, steps = 24
+): [number, number][] {
+  const half = hFovDeg / 2;
+  const outer: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const bearing = headingDeg - half + (hFovDeg * i) / steps;
+    outer.push(destinationPoint(lat, lng, bearing, outerRangeMeters));
+  }
+  if (innerRangeMeters <= 0) {
+    return [[lng, lat], ...outer, [lng, lat]];
+  }
+  const inner: [number, number][] = [];
+  for (let i = steps; i >= 0; i--) {
+    const bearing = headingDeg - half + (hFovDeg * i) / steps;
+    inner.push(destinationPoint(lat, lng, bearing, innerRangeMeters));
+  }
+  return [...outer, ...inner, outer[0]];
+}
+
 // Google/Mapbox encoded-polyline algorithm (precision 5) — encodes [lng, lat]
 // pairs into the compact string Mapbox Static Images API `path` overlays
 // expect. Used instead of a raw GeoJSON overlay so a trail with several

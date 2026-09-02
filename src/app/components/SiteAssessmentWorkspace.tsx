@@ -23,7 +23,7 @@ import { LocationPropertiesPanel } from './LocationPropertiesPanel';
 import { ConnectionPropertiesPanel, CONNECTION_TYPE_CONFIG } from './ConnectionPropertiesPanel';
 import { LocationDetail } from './LocationDetail';
 import { geocodeWithMapbox } from '../utils/mapboxGeocode';
-import { bearingBetween, distanceBetween, destinationPoint, buildCoverageCone, compassLabel, METERS_PER_FOOT } from '../utils/geo';
+import { bearingBetween, distanceBetween, destinationPoint, buildCoverageCone, buildCoverageAnnulus, CAMERA_COVERAGE_FILL_DEPTH_FT, compassLabel, METERS_PER_FOOT } from '../utils/geo';
 import { isGeolocationBlockedByInsecureContext, INSECURE_CONTEXT_LOCATION_MESSAGE } from '../utils/geolocation';
 import { useLockViewportZoom } from '../hooks/useLockViewportZoom';
 
@@ -35,6 +35,20 @@ const MEASUREMENTS_SOURCE_ID = 'sa-measurements';
 const MEASURE_DRAFT_SOURCE_ID = 'sa-measure-draft';
 const CONNECTIONS_SOURCE_ID = 'sa-connections';
 const DEM_SOURCE_ID = 'mapbox-dem';
+
+// One camera's coverage cone as two GeoJSON features: a full pie-wedge
+// outline (heading + FOV stay visible at a glance regardless of fill depth)
+// and an annular fill covering only the outer band (see
+// CAMERA_COVERAGE_FILL_DEPTH_FT in utils/geo.ts).
+function cameraCoverageFeatures(id: string, lat: number, lng: number, heading: number, hFov: number, range: number, color: string) {
+  const fillDepthMeters = CAMERA_COVERAGE_FILL_DEPTH_FT * METERS_PER_FOOT;
+  const outlineCoords = buildCoverageCone(lat, lng, heading, hFov, range);
+  const fillCoords = buildCoverageAnnulus(lat, lng, heading, hFov, range, range - fillDepthMeters);
+  return [
+    { type: 'Feature' as const, properties: { id, color, role: 'outline' }, geometry: { type: 'Polygon' as const, coordinates: [outlineCoords] } },
+    { type: 'Feature' as const, properties: { id, color, role: 'fill' }, geometry: { type: 'Polygon' as const, coordinates: [fillCoords] } },
+  ];
+}
 
 const CONNECTION_COLORS: Record<ConnectionType, string> = {
   wireless: '#0ea5e9', poe: '#22c55e', '120v': '#f59e0b',
@@ -401,10 +415,12 @@ export function SiteAssessmentWorkspace() {
           // overlap, so each one can be given a distinct color to tell cones apart.
           map.addLayer({
             id: 'camera-coverage-fill', type: 'fill', source: COVERAGE_SOURCE_ID,
+            filter: ['==', ['get', 'role'], 'fill'],
             paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 },
           });
           map.addLayer({
             id: 'camera-coverage-outline', type: 'line', source: COVERAGE_SOURCE_ID,
+            filter: ['==', ['get', 'role'], 'outline'],
             paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.6 },
           });
         }
@@ -1005,17 +1021,13 @@ export function SiteAssessmentWorkspace() {
     const source = map.getSource(COVERAGE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
     const cameras = mountainLocations.filter(l => l.deviceType === 'camera' && l.coordinates);
-    const features = cameras.map(cam => {
+    const features = cameras.flatMap(cam => {
       const props = (cam.deviceProperties || {}) as Partial<CameraProperties>;
-      const coords = buildCoverageCone(
-        cam.coordinates!.latitude, cam.coordinates!.longitude,
-        props.heading ?? 0, props.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov, props.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters
+      return cameraCoverageFeatures(
+        cam.id, cam.coordinates!.latitude, cam.coordinates!.longitude,
+        props.heading ?? 0, props.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov,
+        props.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters, props.color ?? DEFAULT_CAMERA_PROPS.color
       );
-      return {
-        type: 'Feature' as const,
-        properties: { id: cam.id, color: props.color ?? DEFAULT_CAMERA_PROPS.color },
-        geometry: { type: 'Polygon' as const, coordinates: [coords] },
-      };
     });
     source.setData({ type: 'FeatureCollection', features });
   }, [mountainLocations, styleReady]);
@@ -1050,15 +1062,18 @@ export function SiteAssessmentWorkspace() {
       const source = map.getSource(COVERAGE_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
       if (source) {
         const others = mountainLocations.filter(l => l.deviceType === 'camera' && l.id !== selectedLocation.id && l.coordinates);
-        const otherFeatures = others.map(cam => {
+        const otherFeatures = others.flatMap(cam => {
           const p = (cam.deviceProperties || {}) as Partial<CameraProperties>;
-          const coords = buildCoverageCone(cam.coordinates!.latitude, cam.coordinates!.longitude, p.heading ?? 0, p.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov, p.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters);
-          return { type: 'Feature' as const, properties: { id: cam.id, color: p.color ?? DEFAULT_CAMERA_PROPS.color }, geometry: { type: 'Polygon' as const, coordinates: [coords] } };
+          return cameraCoverageFeatures(
+            cam.id, cam.coordinates!.latitude, cam.coordinates!.longitude,
+            p.heading ?? 0, p.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov,
+            p.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters, p.color ?? DEFAULT_CAMERA_PROPS.color
+          );
         });
-        const liveCoords = buildCoverageCone(camLat, camLng, liveHeading, hFov, liveRange);
+        const liveFeatures = cameraCoverageFeatures(selectedLocation.id, camLat, camLng, liveHeading, hFov, liveRange, camColor);
         source.setData({
           type: 'FeatureCollection',
-          features: [...otherFeatures, { type: 'Feature', properties: { id: selectedLocation.id, color: camColor }, geometry: { type: 'Polygon', coordinates: [liveCoords] } }],
+          features: [...otherFeatures, ...liveFeatures],
         });
       }
     });

@@ -13,7 +13,7 @@ import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
 import * as mountainDocsDB from '../utils/mountainDocumentsDB';
-import { buildCoverageCone, encodePolyline, spreadOverlappingPins } from '../utils/geo';
+import { buildCoverageCone, buildCoverageAnnulus, CAMERA_COVERAGE_FILL_DEPTH_FT, METERS_PER_FOOT, encodePolyline, spreadOverlappingPins } from '../utils/geo';
 import { DEVICE_TYPE_CONFIG, DEFAULT_CAMERA_PROPS, WARNING_480V_COLOR, type CameraProperties, type DeviceType } from '../utils/deviceTypes';
 import { MapIconLegend } from './MapIconLegend';
 import { TransformerBadge, TransformerFootnote } from './TransformerNotice';
@@ -386,17 +386,20 @@ export function ProposalBuilder() {
       if (deviceType === 'camera') {
         const props = (loc.deviceProperties || {}) as Partial<CameraProperties>;
         const color = (props.color || DEFAULT_CAMERA_PROPS.color).replace('#', '');
+        const heading = props.heading ?? DEFAULT_CAMERA_PROPS.heading;
+        const hFov = props.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov;
+        const range = props.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters;
+        const fillDepthMeters = CAMERA_COVERAGE_FILL_DEPTH_FT * METERS_PER_FOOT;
         // Fewer steps than the live map's cone (24) keeps the encoded
         // path short — still visually smooth at addendum-image scale.
-        const cone = buildCoverageCone(
-          latitude, longitude,
-          props.heading ?? DEFAULT_CAMERA_PROPS.heading,
-          props.horizontalFov ?? DEFAULT_CAMERA_PROPS.horizontalFov,
-          props.rangeMeters ?? DEFAULT_CAMERA_PROPS.rangeMeters,
-          10,
-        );
-        const encoded = encodeURIComponent(encodePolyline(cone));
-        paths.push(`path-1+${color}-0.7+${color}-0.3(${encoded})`);
+        const outlineCone = buildCoverageCone(latitude, longitude, heading, hFov, range, 10);
+        const fillAnnulus = buildCoverageAnnulus(latitude, longitude, heading, hFov, range, range - fillDepthMeters, 10);
+        // Two separate path overlays: the full pie-wedge outline (stroke
+        // only, transparent fill) so heading/FOV stay visible at full range,
+        // and the outer-band annulus (fill only, no stroke — avoids an
+        // extra ring drawn around the inner cutout edge).
+        paths.push(`path-1+${color}-0.7+${color}-0(${encodeURIComponent(encodePolyline(outlineCone))})`);
+        paths.push(`path-0+${color}-0+${color}-0.3(${encodeURIComponent(encodePolyline(fillAnnulus))})`);
         // A camera whose own power is 480V gets an additional warning
         // marker at the same spot — same convention as standalone Power
         // Source locations above.
