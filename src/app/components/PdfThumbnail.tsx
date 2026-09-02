@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Loader2 } from 'lucide-react';
 
 // pdfjs-dist is only needed for the handful of PDF cards actually on screen,
 // so it's loaded on first use rather than bundled into the main chunk —
@@ -16,12 +16,32 @@ function loadPdfjs() {
 }
 
 export function PdfThumbnail({ url, alt }: { url: string; alt: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [failed, setFailed] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
+
+  // Only start fetching/rendering once the card is actually scrolled into
+  // view — a grid of a few dozen PDFs spinning up that many pdf.js workers
+  // and full-file downloads at once is what made this look "stuck": every
+  // request competed for the same handful of browser connections/workers.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
-    setFailed(false);
+    setStatus('loading');
     (async () => {
       try {
         const pdfjs = await loadPdfjs();
@@ -39,14 +59,29 @@ export function PdfThumbnail({ url, alt }: { url: string; alt: string }) {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         await page.render({ canvasContext: ctx, viewport }).promise;
+        if (!cancelled) setStatus('ready');
       } catch (err) {
         console.error('PDF thumbnail render failed:', err);
-        if (!cancelled) setFailed(true);
+        if (!cancelled) setStatus('failed');
       }
     })();
     return () => { cancelled = true; };
-  }, [url]);
+  }, [url, visible]);
 
-  if (failed) return <FileText size={28} className="text-[#307fe2]" />;
-  return <canvas ref={canvasRef} aria-label={alt} className="max-h-full max-w-full object-contain shadow-sm" />;
+  return (
+    <div ref={containerRef} className="w-full h-full flex items-center justify-center">
+      {status === 'failed' ? (
+        <FileText size={28} className="text-[#307fe2]" />
+      ) : (
+        <>
+          <canvas
+            ref={canvasRef}
+            aria-label={alt}
+            className={`max-h-full max-w-full object-contain shadow-sm ${status === 'ready' ? '' : 'hidden'}`}
+          />
+          {status === 'loading' && <Loader2 size={20} className="animate-spin text-[#8992a0]" />}
+        </>
+      )}
+    </div>
+  );
 }
