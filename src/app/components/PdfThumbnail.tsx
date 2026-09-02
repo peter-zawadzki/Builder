@@ -31,10 +31,23 @@ export async function renderPdfFirstPageThumbnail(file: File, targetWidth = 480)
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    return canvas.toDataURL('image/png');
+    // Safari has known bugs rendering gradients/shading patterns onto a
+    // canvas that's never attached to the document — a hero image with a
+    // smooth gradient fill came out as a flat solid color when the canvas
+    // stayed detached. Chrome doesn't have this issue, but attaching it
+    // off-screen (never visible) costs nothing and fixes Safari too.
+    canvas.style.position = 'fixed';
+    canvas.style.left = '-99999px';
+    canvas.style.top = '0';
+    document.body.appendChild(canvas);
+    try {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      return canvas.toDataURL('image/png');
+    } finally {
+      canvas.remove();
+    }
   } catch (err) {
     console.error('PDF upload-time thumbnail generation failed:', err);
     return null;
