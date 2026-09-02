@@ -89,6 +89,10 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
 
   const [activeLocationId, setActiveLocationId] = useState<string | null>(initialFocusLocationId || null);
+  // Locked-by-default, same as SiteAssessmentWorkspace — only the item whose
+  // panel is actively in edit mode can be dragged, so browsing the map can't
+  // accidentally nudge a pin.
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   const [detailsLocationId, setDetailsLocationId] = useState<string | null>(null);
   const [locationPendingDelete, setLocationPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [geocoding, setGeocoding] = useState(false);
@@ -222,7 +226,8 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
     setMapStyle(key);
   }
 
-  // Marker sync — view-only, never draggable.
+  // Marker sync — draggable only for the one item currently being edited
+  // (its panel is open in edit mode), same as SiteAssessmentWorkspace.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
@@ -251,6 +256,7 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
 
       const marker = new mapboxgl.Marker({
         element: el,
+        draggable: loc.id === editingLocationId && !loc.isLocked,
         rotationAlignment: isCamera ? 'map' : 'auto',
         pitchAlignment: isCamera ? 'map' : 'auto',
       })
@@ -262,10 +268,22 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
         marker.setRotation(heading);
       }
 
+      marker.on('dragend', () => {
+        const ll = marker.getLngLat();
+        const updates: Partial<typeof loc> = { coordinates: { latitude: ll.lat, longitude: ll.lng } };
+        if (!loc.originalCoordinates && loc.coordinates) {
+          updates.originalCoordinates = {
+            latitude: loc.coordinates.latitude, longitude: loc.coordinates.longitude,
+            recordedAt: new Date().toISOString(),
+          };
+        }
+        updateLocation(loc.id, updates);
+      });
+
       markersRef.current.set(loc.id, marker);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gpsLocations, activeLocationId, mapReady]);
+  }, [gpsLocations, activeLocationId, editingLocationId, mapReady]);
 
   // Camera coverage cones
   useEffect(() => {
@@ -384,8 +402,9 @@ export function MountainMapView({ mountainId, onClose, initialFocusLocationId }:
           trails={trails}
           onUpdate={(data) => updateLocation(selectedLocation.id, data)}
           onDelete={() => setLocationPendingDelete({ id: selectedLocation.id, name: selectedLocation.name })}
-          onClose={() => setActiveLocationId(null)}
+          onClose={() => { setActiveLocationId(null); setEditingLocationId(null); }}
           onViewFullDetails={() => setDetailsLocationId(selectedLocation.id)}
+          onEditingChange={(editing) => setEditingLocationId(editing ? selectedLocation.id : null)}
         />
       )}
 
