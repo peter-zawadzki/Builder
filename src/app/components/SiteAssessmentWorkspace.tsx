@@ -456,6 +456,13 @@ export function SiteAssessmentWorkspace() {
 
         if (!map.getSource(CONNECTIONS_SOURCE_ID)) {
           map.addSource(CONNECTIONS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+          // Invisible wide line under the real (2-3px) styled ones, purely so
+          // clicking near a connection actually hits something — the visible
+          // lines alone are too thin a target, especially the 120V double-line.
+          map.addLayer({
+            id: 'sa-connections-hitarea', type: 'line', source: CONNECTIONS_SOURCE_ID,
+            paint: { 'line-color': '#000000', 'line-width': 20, 'line-opacity': 0 },
+          });
           // Wireless (dashed) + PoE (solid) share one layer via a data-driven
           // line-dasharray expression keyed on connectionType.
           map.addLayer({
@@ -881,8 +888,10 @@ export function SiteAssessmentWorkspace() {
     source.setData({ type: 'FeatureCollection', features });
   }, [connections, styleReady]);
 
-  // Clicking a connection's line selects it (opens the read-only summary,
-  // same as clicking a saved measurement).
+  // Clicking a connection (its line, the wide invisible hit-area, or its
+  // name label) selects it (opens the read-only summary, same as clicking a
+  // saved measurement). Also shows a pointer cursor on hover so it's
+  // discoverable as clickable at all — none of these layers had one before.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
@@ -891,9 +900,21 @@ export function SiteAssessmentWorkspace() {
       if (cid && cid !== selectedConnectionId) { setConnectionOpenInEditMode(false); setEditingConnectionId(null); }
       if (cid) setSelectedConnectionId(cid);
     };
-    const layerIds = ['sa-connections-line', 'sa-connections-120v-a', 'sa-connections-120v-b'];
-    layerIds.forEach(l => map.on('click', l, handler));
-    return () => { layerIds.forEach(l => map.off('click', l, handler)); };
+    const setPointer = () => { map.getCanvas().style.cursor = 'pointer'; };
+    const unsetPointer = () => { map.getCanvas().style.cursor = ''; };
+    const layerIds = ['sa-connections-hitarea', 'sa-connections-line', 'sa-connections-120v-a', 'sa-connections-120v-b', 'sa-connections-label'];
+    layerIds.forEach(l => {
+      map.on('click', l, handler);
+      map.on('mouseenter', l, setPointer);
+      map.on('mouseleave', l, unsetPointer);
+    });
+    return () => {
+      layerIds.forEach(l => {
+        map.off('click', l, handler);
+        map.off('mouseenter', l, setPointer);
+        map.off('mouseleave', l, unsetPointer);
+      });
+    };
   }, [mapReady, selectedConnectionId]);
 
   // Endpoint drag handles — only rendered for the one connection whose
