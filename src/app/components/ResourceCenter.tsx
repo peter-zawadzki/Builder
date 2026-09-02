@@ -4,7 +4,7 @@ import {
   ArrowLeft, Search, ChevronDown, HelpCircle, GraduationCap,
   Briefcase, Image as ImageIcon, Palette, FolderOpen, Download, Copy, Check,
   PlayCircle, ExternalLink, ChevronLeft, ChevronRight, Trash2, Upload, FileText,
-  Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X, QrCode,
+  Sparkles, Send, ThumbsUp, ThumbsDown, Loader2, X, QrCode, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -12,10 +12,11 @@ import { useApi, type FaqSource, type FaqVisual, type FaqVisualHighlight, type O
 import { OdinVideoOffer } from './OdinVideoOffer';
 import { DocumentUploadForm } from './DocumentUploadForm';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { PdfThumbnail } from './PdfThumbnail';
 import { useIsSuperAdmin, useIsAdminOrAbove } from '../hooks/useRole';
 import { fileToBase64 } from '../utils/mountainDocumentsDB';
 import {
-  listResourceFiles, uploadResourceFile, deleteResourceFile,
+  listResourceFiles, uploadResourceFile, renameResourceFile, deleteResourceFile,
   type ResourceFile, type ResourceFileCategory,
 } from '../utils/resourceFilesApi';
 import { type FAQCategory } from '../data/faqData';
@@ -744,6 +745,9 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
   const [uploading, setUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ResourceFile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => listResourceFiles(category).then(setFiles).catch(() => setFiles([]));
@@ -771,6 +775,32 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
     }
   }
 
+  function startRename(f: ResourceFile) {
+    setRenamingId(f.id);
+    setRenameValue(f.name);
+  }
+
+  async function commitRename() {
+    const id = renamingId;
+    if (!id) return;
+    const trimmed = renameValue.trim();
+    const current = (files ?? []).find(f => f.id === id);
+    if (!trimmed || trimmed === current?.name) {
+      setRenamingId(null);
+      return;
+    }
+    setIsRenaming(true);
+    try {
+      await renameResourceFile(id, trimmed);
+      setFiles(prev => (prev ?? []).map(f => (f.id === id ? { ...f, name: trimmed } : f)));
+      setRenamingId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Rename failed — please try again.');
+    } finally {
+      setIsRenaming(false);
+    }
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -792,14 +822,16 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
       ) : files.length === 0 ? (
         <EmptyPlaceholder label={emptyLabel} />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {files.map(f => (
             <div key={f.id} className="bg-white rounded-[12px] border border-[rgba(0,0,0,0.08)] overflow-hidden flex flex-col">
-              <div className="h-40 bg-[#f9fafb] flex items-center justify-center overflow-hidden relative">
+              <div className="aspect-[3/4] bg-[#f3f4f6] flex items-center justify-center overflow-hidden relative">
                 {f.mimeType.startsWith('image/') ? (
                   <img src={f.url} alt={f.name} className="max-h-full max-w-full object-contain" />
+                ) : f.mimeType === 'application/pdf' ? (
+                  <PdfThumbnail url={f.url} alt={f.name} />
                 ) : (
-                  <FileText size={32} className="text-[#307fe2]" />
+                  <FileText size={28} className="text-[#307fe2]" />
                 )}
                 {isAdmin && (
                   <button
@@ -812,9 +844,36 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
                   </button>
                 )}
               </div>
-              <div className="p-3 flex flex-col gap-2 flex-1">
+              <div className="p-2.5 flex flex-col gap-1.5 flex-1">
                 <div className="min-w-0">
-                  <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.name}</p>
+                  {renamingId === f.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      disabled={isRenaming}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onBlur={commitRename}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+                        if (e.key === 'Escape') { e.preventDefault(); setRenamingId(null); }
+                      }}
+                      className="w-full bg-[#f3f3f5] rounded-[6px] px-1.5 py-1 text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] outline-none"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-1 group">
+                      <p className="text-[13px] font-['Inter:Medium',sans-serif] text-[#0a0a0a] truncate">{f.name}</p>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => startRename(f)}
+                          className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 active:opacity-60"
+                          aria-label={`Rename ${f.name}`}
+                        >
+                          <Pencil size={11} className="text-[#8992a0]" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <p className="text-[11px] text-[#8992a0]">{f.fileSize ? formatFileSize(Math.round(f.fileSize / 1024)) : '—'}</p>
                 </div>
                 <div className="flex gap-1.5 mt-auto">

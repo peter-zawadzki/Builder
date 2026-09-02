@@ -61,6 +61,18 @@ resourceFiles.post("/", requireAdmin, async (c) => {
   return c.json({ success: true, file }, 201);
 });
 
+resourceFiles.patch("/:id", requireAdmin, async (c) => {
+  const id = c.req.param("id");
+  const { name } = await c.req.json().catch(() => ({}));
+  if (!name?.trim()) return c.json({ error: "name is required" }, 400);
+  const row = await queryOne<{ id: string }>(
+    `UPDATE resource_files SET name = $1 WHERE id = $2 RETURNING id`,
+    [name.trim(), id]
+  );
+  if (!row) return c.json({ error: "Not found" }, 404);
+  return c.json({ ok: true });
+});
+
 resourceFiles.delete("/:id", requireAdmin, async (c) => {
   const id = c.req.param("id");
   const row = await queryOne<{ s3_key: string }>(`DELETE FROM resource_files WHERE id=$1 RETURNING s3_key`, [id]);

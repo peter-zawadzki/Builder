@@ -60,6 +60,10 @@ export async function uploadResourceFile(data: {
   return res.file;
 }
 
+export async function renameResourceFile(id: string, name: string): Promise<void> {
+  await apiCall(`/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+}
+
 export async function deleteResourceFile(id: string): Promise<void> {
   await apiCall(`/${id}`, { method: 'DELETE' });
 }
