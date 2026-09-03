@@ -6,18 +6,46 @@ import { looksLikeUniformFill } from '../utils/thumbnailChecks';
 const VIEWPORT_WIDTH = 1024;
 const VIEWPORT_HEIGHT = 1280;
 
+// Several HTML thumbnails can become visible (and start rendering) at once
+// when a tab first loads — running multiple 1024x1280 iframes + html2canvas
+// passes concurrently caused real failures (confirmed: 2 of 3 real uploaded
+// docs came back "blank" when rendered together, 0 of 3 failed one at a
+// time). Serializes every render through this queue so only one iframe is
+// ever loading/rendering at once, regardless of how many cards ask for a
+// thumbnail simultaneously.
+let renderQueue: Promise<unknown> = Promise.resolve();
+function withRenderLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = renderQueue.then(fn, fn);
+  renderQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 // Renders an HTML document's first screenful to a small PNG by loading it
 // into an off-screen same-origin iframe (via srcdoc, so html2canvas can read
 // its DOM without cross-origin restrictions) and rasterizing that. Shared by
 // the upload-time generator and the on-demand fallback component below.
 async function renderHtmlToThumbnail(htmlText: string, targetWidth: number): Promise<string | null> {
+  return withRenderLock(() => renderHtmlToThumbnailUnlocked(htmlText, targetWidth));
+}
+
+async function renderHtmlToThumbnailUnlocked(htmlText: string, targetWidth: number): Promise<string | null> {
   const iframe = document.createElement('iframe');
+  // Positioned within the viewport (not off-canvas at e.g. left:-99999px) —
+  // Chrome throttles rendering/timers inside an iframe whose bounding box
+  // doesn't intersect the viewport at all, which stalled the inline script
+  // some uploaded pages use to swap a placeholder for their real content
+  // (confirmed: identical content rendered fine in an on-screen iframe,
+  // reliably came back blank once moved off-canvas). Near-zero opacity plus
+  // a negative z-index keeps it invisible without triggering that.
   iframe.style.position = 'fixed';
-  iframe.style.left = '-99999px';
+  iframe.style.left = '0';
   iframe.style.top = '0';
   iframe.style.width = `${VIEWPORT_WIDTH}px`;
   iframe.style.height = `${VIEWPORT_HEIGHT}px`;
   iframe.style.border = 'none';
+  iframe.style.opacity = '0.01';
+  iframe.style.zIndex = '-1';
+  iframe.style.pointerEvents = 'none';
   document.body.appendChild(iframe);
   try {
     await new Promise<void>((resolve, reject) => {
@@ -25,10 +53,22 @@ async function renderHtmlToThumbnail(htmlText: string, targetWidth: number): Pro
       iframe.onload = () => { clearTimeout(timeout); resolve(); };
       iframe.srcdoc = htmlText;
     });
-    // Give inline images/fonts/layout a moment to settle after load fires.
-    await new Promise((r) => setTimeout(r, 400));
     const doc = iframe.contentDocument;
     if (!doc?.body) return null;
+    // Some uploaded pages are themselves a small client-side bundle that
+    // shows a placeholder (solid-color block) and swaps in the real content
+    // via an inline script shortly after load — a fixed short wait here was
+    // unreliable (fine in isolation, but under real-world load, e.g. several
+    // large HTML thumbnails rendering at once, the swap can take noticeably
+    // longer). Poll until the body stops mutating instead of guessing a
+    // fixed delay.
+    let lastLength = doc.body.innerHTML.length;
+    for (let i = 0; i < 24; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      const length = doc.body.innerHTML.length;
+      if (length === lastLength) break;
+      lastLength = length;
+    }
     const canvas = await html2canvas(doc.body, {
       width: VIEWPORT_WIDTH,
       height: VIEWPORT_HEIGHT,
