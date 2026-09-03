@@ -147,6 +147,17 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # .mjs is missing from nginx's default mime.types, so it falls back to
+    # application/octet-stream — browsers refuse to execute a dynamically
+    # imported ES module (e.g. pdf.js's worker script) served with that
+    # Content-Type, failing with "Failed to fetch dynamically imported
+    # module". Force the correct type for this extension specifically.
+    # Added 2026-09-03 after PDF thumbnail previews broke in prod.
+    location ~ \.mjs$ {
+        default_type application/javascript;
+        try_files $uri =404;
+    }
+
     location / {
         try_files $uri /index.html;
     }
