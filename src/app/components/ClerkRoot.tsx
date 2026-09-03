@@ -29,6 +29,7 @@ export function ClerkRoot() {
       signUpFallbackRedirectUrl="/"
       afterSignOutUrl="/"
       appearance={{ layout: { logoPlacement: "none" } }}
+      localization={{ userButton: { action__manageAccount: "Manage Account" } }}
     >
       <Outlet />
     </ClerkProvider>

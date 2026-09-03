@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { UserButton } from '@clerk/clerk-react';
-import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList, Mail, MailX, Activity, Eye, Check } from 'lucide-react';
+import { Mountain, Users, Boxes, UserPlus, Wrench, Bell, X, ListTodo, MessageSquare, ChevronRight, FileText, Tag, BookOpen, Sparkles, MessageSquareWarning, BrainCircuit, ClipboardList, Mail, MailX, Activity } from 'lucide-react';
 import imgImageYullrLogo from 'figma:asset/a398c9c1b81eb62ace77ff4fa0a3dd0b1e238b2f.png';
 import { useIsAdminOrAbove, useRealUserRole } from '../hooks/useRole';
 import { useRoleOverride } from '../context/RoleOverrideContext';
@@ -75,13 +75,38 @@ export function AppHeader() {
   };
 
   return (
-    <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-2.5">
+    <div className="bg-white border-b border-[rgba(0,0,0,0.1)] px-4 py-2.5 relative">
       <div className="flex items-center justify-between gap-2">
         {/* Left: brand */}
         <Link to="/" className="flex items-center gap-2 active:opacity-70 shrink-0">
           <img src={imgImageYullrLogo} alt="Yullr" className="h-7" />
           <span className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[16px] tracking-[0.06em]">BUILDER</span>
         </Link>
+
+        {/* Center: super-admin-only Admin/User view toggle (see ViewAsBanner
+            for the "you're previewing" reminder shown while set to User) */}
+        {realRole === 'super_admin' && (
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-[#f3f3f5] rounded-full p-1 gap-0.5">
+            <button
+              type="button"
+              onClick={() => setOverride(null)}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${
+                !override ? 'bg-[#1D2930] text-white' : 'text-[#6a7282]'
+              }`}
+            >
+              Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => setOverride('user')}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-['Inter:Medium',sans-serif] font-medium transition-colors ${
+                override === 'user' ? 'bg-[#1D2930] text-white' : 'text-[#6a7282]'
+              }`}
+            >
+              User
+            </button>
+          </div>
+        )}
 
         {/* Right: section navigation (active icon orange), then the signed-in user */}
         <div className="flex items-center gap-2">
@@ -128,35 +153,6 @@ export function AppHeader() {
                     label={digestPreference.enabled ? 'Daily digest: On' : 'Daily digest: Off'}
                     labelIcon={digestPreference.enabled ? <Mail size={16} /> : <MailX size={16} />}
                     onClick={digestPreference.toggle}
-                  />
-                )}
-                {/* "View as" — lets a real super admin preview the app as a lower
-                    role without a second account. Checked against the REAL role
-                    (not the overridden one), so this stays visible and usable
-                    even while previewing as User — otherwise switching down
-                    would hide the only way to switch back. Clerk's
-                    UserButton.MenuItems only accepts literal UserButton.Action
-                    children (see comment atop this file) — a .map()/Fragment
-                    here gets silently dropped, so these are written out flat. */}
-                {realRole === 'super_admin' && (
-                  <UserButton.Action
-                    label="View as: Super Admin"
-                    labelIcon={!override ? <Check size={16} className="text-[#ff5c39]" /> : <Eye size={16} />}
-                    onClick={() => setOverride(null)}
-                  />
-                )}
-                {realRole === 'super_admin' && (
-                  <UserButton.Action
-                    label="View as: Admin"
-                    labelIcon={override === 'admin' ? <Check size={16} className="text-[#ff5c39]" /> : <Eye size={16} />}
-                    onClick={() => setOverride('admin')}
-                  />
-                )}
-                {realRole === 'super_admin' && (
-                  <UserButton.Action
-                    label="View as: User"
-                    labelIcon={override === 'user' ? <Check size={16} className="text-[#ff5c39]" /> : <Eye size={16} />}
-                    onClick={() => setOverride('user')}
                   />
                 )}
               </UserButton.MenuItems>
