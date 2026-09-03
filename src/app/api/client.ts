@@ -1,5 +1,6 @@
 import { useAuth } from "@clerk/clerk-react";
 import { useMemo } from "react";
+import { toast } from "sonner";
 
 // Authenticated client for the local API. Attaches the Clerk session token as a
 // Bearer header; requests go to /api (proxied to the Hono server in dev, same
@@ -101,7 +102,16 @@ export function useApi() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Request failed (${res.status})`);
+        const errorMsg = body.error || `Request failed (${res.status})`;
+        // Viewer accounts get a real 403 from every write (server/auth.ts) —
+        // one friendly, de-duplicated toast instead of whatever raw error
+        // each call site would otherwise show (or silently swallow).
+        if (res.status === 403 && String(errorMsg).toLowerCase().includes("view-only")) {
+          toast.error("You're in view-only mode — changes aren't saved.", { id: "viewer-readonly", duration: 4000 });
+        }
+        const error = new Error(errorMsg) as Error & { status?: number };
+        error.status = res.status;
+        throw error;
       }
       return res.json();
     }

@@ -1282,6 +1282,14 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
     // transient network/server failure that's worth retrying.
     const error = new Error(errorMsg) as Error & { status?: number };
     error.status = response.status;
+    // Viewer accounts get a real 403 from every write (server/auth.ts) —
+    // surface it as one friendly, de-duplicated toast here rather than
+    // whatever raw error message each individual call site would otherwise
+    // show (many swallow errors silently, which would make a viewer's
+    // click look like it just did nothing).
+    if (response.status === 403 && errorMsg.toLowerCase().includes('view-only')) {
+      toast.error("You're in view-only mode — changes aren't saved.", { id: 'viewer-readonly', duration: 4000 });
+    }
     throw error;
   }
   return response.json();

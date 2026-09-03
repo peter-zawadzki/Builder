@@ -9,7 +9,9 @@ if (!secretKey) {
 
 const clerk = createClerkClient({ secretKey });
 
-export type UserRole = "user" | "admin" | "super_admin";
+export type UserRole = "user" | "admin" | "super_admin" | "viewer";
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export interface AppUser {
   id: string;
@@ -53,13 +55,14 @@ export const requireAuth: MiddlewareHandler<HonoEnv> = async (c, next) => {
       cu.primaryEmailAddress?.emailAddress ?? cu.emailAddresses[0]?.emailAddress ?? null;
     const name = [cu.firstName, cu.lastName].filter(Boolean).join(" ") || null;
     // Role source of truth on first sight: Clerk publicMetadata.role
-    // ('admin' | 'super_admin', new Dev Story 10.1 convention), falling back
-    // to the legacy publicMetadata.super_admin boolean, or peter@yullr.com
+    // ('admin' | 'super_admin' | 'viewer', new Dev Story 10.1 convention,
+    // extended for read-only investor/observer accounts), falling back to
+    // the legacy publicMetadata.super_admin boolean, or peter@yullr.com
     // (rollout promotion) — the DB migration also backfills peter@yullr.com
     // in case this row already existed before the migration ran.
     const metaRole = cu.publicMetadata?.role;
     const role: UserRole =
-      metaRole === "admin" || metaRole === "super_admin"
+      metaRole === "admin" || metaRole === "super_admin" || metaRole === "viewer"
         ? metaRole
         : cu.publicMetadata?.super_admin === true || email?.toLowerCase() === "peter@yullr.com"
         ? "super_admin"
@@ -72,6 +75,15 @@ export const requireAuth: MiddlewareHandler<HonoEnv> = async (c, next) => {
        RETURNING id, clerk_user_id AS "clerkUserId", email, name, role, is_super_admin AS "isSuperAdmin", daily_digest_enabled AS "dailyDigestEnabled"`,
       [sub, email, name, role, role === "super_admin"]
     );
+  }
+
+  // Viewer accounts (read-only investor/observer access) can hit any route
+  // that requireAuth alone protects — most of the app's mutations have no
+  // further role check — but nothing they do can actually change data:
+  // reject every non-GET/HEAD/OPTIONS request outright, regardless of what
+  // the UI does or doesn't hide. This is the one real enforcement point.
+  if (user!.role === "viewer" && !SAFE_METHODS.has(c.req.method)) {
+    return c.json({ error: "View-only mode — this account can't make changes." }, 403);
   }
 
   c.set("user", user!);
