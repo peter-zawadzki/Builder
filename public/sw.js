@@ -24,7 +24,7 @@
  *  - OSM tile requests: stale-while-revalidate (map works offline after first view)
  */
 
-const CACHE = 'builder-v6';
+const CACHE = 'builder-v7';
 const SUPABASE_PATTERN = /supabase\.co/;
 
 // ── Install: warm up the app shell cache ──────────────────────────────────────
@@ -99,9 +99,14 @@ self.addEventListener('fetch', event => {
   // normal Vite dev/build output. Stale-while-revalidate below assumes every
   // cached URL's bytes never change — false here, so a `npm install` that
   // bumps pdfjs-dist would keep serving the old worker's bytes from cache
-  // indefinitely. Always go to the network for it.
+  // indefinitely. `cache: 'no-store'` bypasses the browser's own HTTP cache
+  // too, not just this SW's cache — a prod nginx misconfig once served this
+  // file with the wrong Content-Type, and a plain `fetch(req)` kept
+  // replaying that cached (broken) response even after the server was
+  // fixed, since nothing here was telling the browser not to trust its
+  // heuristic freshness for it.
   if (url.pathname.includes('pdfjs-dist') || url.pathname.includes('pdf.worker')) {
-    event.respondWith(fetch(req));
+    event.respondWith(fetch(req, { cache: 'no-store' }));
     return;
   }
 
