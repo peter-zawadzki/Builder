@@ -13,6 +13,7 @@ import { OdinVideoOffer } from './OdinVideoOffer';
 import { DocumentUploadForm } from './DocumentUploadForm';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { PdfThumbnail, renderPdfFirstPageThumbnail } from './PdfThumbnail';
+import { HtmlThumbnail, renderHtmlFirstViewThumbnail } from './HtmlThumbnail';
 import { useIsSuperAdmin, useIsAdminOrAbove } from '../hooks/useRole';
 import { fileToBase64 } from '../utils/mountainDocumentsDB';
 import {
@@ -791,6 +792,8 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
       const dataUrl = await fileToBase64(file);
       const thumbnailDataUrl = file.type === 'application/pdf'
         ? await renderPdfFirstPageThumbnail(file) ?? undefined
+        : file.type === 'text/html'
+        ? await renderHtmlFirstViewThumbnail(file) ?? undefined
         : undefined;
       await uploadResourceFile({ category, name: name.trim(), dataUrl, fileName: file.name, mimeType: file.type, thumbnailDataUrl });
       setName('');
@@ -861,6 +864,8 @@ function ResourceFileManager({ category, emptyLabel }: { category: ResourceFileC
                   <img src={f.thumbnailUrl} alt={f.name} className="max-h-full max-w-full object-contain shadow-sm" />
                 ) : f.mimeType === 'application/pdf' ? (
                   <PdfThumbnail url={f.url} alt={f.name} />
+                ) : f.mimeType === 'text/html' ? (
+                  <HtmlThumbnail url={f.url} alt={f.name} />
                 ) : (
                   <FileText size={28} className="text-[#307fe2]" />
                 )}

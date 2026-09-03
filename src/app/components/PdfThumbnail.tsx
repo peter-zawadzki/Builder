@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
+import { looksLikeUniformFill } from '../utils/thumbnailChecks';
 
 // pdfjs-dist is only needed for the handful of PDF cards actually on screen,
 // so it's loaded on first use rather than bundled into the main chunk —
@@ -13,31 +14,6 @@ function loadPdfjs() {
     });
   }
   return pdfjsPromise;
-}
-
-// Samples pixels across the canvas and flags it as "suspiciously uniform" —
-// e.g. a full-bleed photo embedded in the PDF silently failed to decode
-// (seen in Safari for at least one real file) and all that painted was the
-// solid background fill underneath it plus text. A real photo/gradient hero
-// always has far more variation than this threshold across a few hundred
-// sample points.
-function looksLikeUniformFill(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
-  const { data } = ctx.getImageData(0, 0, width, height);
-  const totalPixels = width * height;
-  const sampleStep = Math.max(1, Math.floor(totalPixels / 400)) * 4;
-  let first: [number, number, number] | null = null;
-  let samples = 0;
-  let differing = 0;
-  for (let i = 0; i < data.length; i += sampleStep) {
-    const r = data[i], g = data[i + 1], b = data[i + 2];
-    if (!first) {
-      first = [r, g, b];
-    } else if (Math.abs(r - first[0]) + Math.abs(g - first[1]) + Math.abs(b - first[2]) > 24) {
-      differing++;
-    }
-    samples++;
-  }
-  return samples > 20 && differing / samples < 0.03;
 }
 
 // Renders a PDF File's first page to a small PNG data URL, used at upload
