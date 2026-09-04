@@ -230,11 +230,19 @@ export function useApi() {
         request<{ results: NoteSearchResult[] }>(`/notes/search?q=${encodeURIComponent(q)}${mountainId ? `&mountainId=${mountainId}` : ""}`),
 
       // Team — app-level role (distinct from Clerk's org member/admin role)
-      listTeamRoles: () => request<{ members: TeamMemberRole[] }>("/team"),
-      updateTeamRole: (clerkUserId: string, role: TeamMemberRole["role"]) =>
+      listTeamRoles: (organizationId: string) =>
+        request<{ members: TeamMemberRole[]; pending: Record<string, TeamMemberRole["role"]> }>(
+          `/team?organizationId=${encodeURIComponent(organizationId)}`
+        ),
+      updateTeamRole: (clerkUserId: string, role: TeamMemberRole["role"], organizationId: string) =>
         request<{ ok: true; clerkUserId: string; role: TeamMemberRole["role"] }>(`/team/${clerkUserId}/role`, {
           method: "PATCH",
-          body: JSON.stringify({ role }),
+          body: JSON.stringify({ role, organizationId }),
+        }),
+      inviteTeamMember: (email: string, role: TeamMemberRole["role"], organizationId: string) =>
+        request<{ ok: true }>("/team/invite", {
+          method: "POST",
+          body: JSON.stringify({ email, role, organizationId }),
         }),
     };
   }, [getToken]);
@@ -251,8 +259,6 @@ export interface AppMeUser {
 
 export interface TeamMemberRole {
   clerkUserId: string;
-  email: string | null;
-  name: string | null;
   role: "user" | "admin" | "super_admin" | "viewer";
 }
 

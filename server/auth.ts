@@ -54,19 +54,32 @@ export const requireAuth: MiddlewareHandler<HonoEnv> = async (c, next) => {
     const email =
       cu.primaryEmailAddress?.emailAddress ?? cu.emailAddresses[0]?.emailAddress ?? null;
     const name = [cu.firstName, cu.lastName].filter(Boolean).join(" ") || null;
-    // Role source of truth on first sight: Clerk publicMetadata.role
-    // ('admin' | 'super_admin' | 'viewer', new Dev Story 10.1 convention,
-    // extended for read-only investor/observer accounts), falling back to
-    // the legacy publicMetadata.super_admin boolean, or peter@yullr.com
-    // (rollout promotion) — the DB migration also backfills peter@yullr.com
-    // in case this row already existed before the migration ran.
+    // Role source of truth on first sight, in priority order:
+    // 1. A role an admin picked for this email at invite time, before this
+    //    person ever signed in (server/routes/team.ts's invite endpoint) —
+    //    there's no Clerk User object yet at invite time to put this on
+    //    publicMetadata.role, so it's staged here instead and consumed once.
+    // 2. Clerk publicMetadata.role ('admin' | 'super_admin' | 'viewer', Dev
+    //    Story 10.1, extended for read-only investor/observer accounts) —
+    //    set either by the Team page's role editor (server/routes/team.ts)
+    //    after this person already has a `users` row, or by hand in the
+    //    Clerk Dashboard.
+    // 3. The legacy publicMetadata.super_admin boolean, or peter@yullr.com
+    //    (rollout promotion) — the DB migration also backfills peter@yullr.com
+    //    in case this row already existed before the migration ran.
+    const pending = email
+      ? await queryOne<{ role: UserRole }>(`SELECT role FROM pending_role_assignments WHERE email = $1`, [
+          email.toLowerCase(),
+        ])
+      : null;
     const metaRole = cu.publicMetadata?.role;
-    const role: UserRole =
-      metaRole === "admin" || metaRole === "super_admin" || metaRole === "viewer"
-        ? metaRole
-        : cu.publicMetadata?.super_admin === true || email?.toLowerCase() === "peter@yullr.com"
-        ? "super_admin"
-        : "user";
+    const role: UserRole = pending
+      ? pending.role
+      : metaRole === "admin" || metaRole === "super_admin" || metaRole === "viewer"
+      ? metaRole
+      : cu.publicMetadata?.super_admin === true || email?.toLowerCase() === "peter@yullr.com"
+      ? "super_admin"
+      : "user";
     user = await queryOne<AppUser>(
       `INSERT INTO users (clerk_user_id, email, name, role, is_super_admin)
          VALUES ($1, $2, $3, $4, $5)
@@ -75,6 +88,9 @@ export const requireAuth: MiddlewareHandler<HonoEnv> = async (c, next) => {
        RETURNING id, clerk_user_id AS "clerkUserId", email, name, role, is_super_admin AS "isSuperAdmin", daily_digest_enabled AS "dailyDigestEnabled"`,
       [sub, email, name, role, role === "super_admin"]
     );
+    if (pending && email) {
+      await queryOne(`DELETE FROM pending_role_assignments WHERE email = $1`, [email.toLowerCase()]);
+    }
   }
 
   // Viewer accounts (read-only investor/observer access) can hit any route

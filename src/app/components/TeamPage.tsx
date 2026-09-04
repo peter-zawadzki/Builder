@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { useOrganization, useUser } from "@clerk/clerk-react";
 import { ArrowLeft, Shield, User, Trash2, X, Loader2, Send, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { useIsAdminOrAbove, useIsSuperAdmin } from "../hooks/useRole";
+import { useIsAdminOrAbove, useIsSuperAdmin, useRealUserRole } from "../hooks/useRole";
 import { useApi, type TeamMemberRole } from "../api/client";
 
 // Custom team management: invite teammates and manage members, scoped to the
@@ -11,18 +11,13 @@ import { useApi, type TeamMemberRole } from "../api/client";
 // / leave controls — org management is not exposed anywhere in the app. Only
 // admins see the invite form and the remove/revoke actions.
 //
-// Two separate role systems show up on this page:
-// - Clerk's own org role (org:member/org:admin) — only used for the invite
-//   form below, since Clerk's invite API requires one. It has no bearing on
-//   what this app lets someone do.
-// - Builder's own app role (user/admin/super_admin/viewer, server/auth.ts) —
-//   the "Builder Role" column further down, which is what actually gates
-//   every feature in the app, including read-only Viewer access.
-
-const ROLE_LABEL: Record<string, string> = {
-  "org:admin": "Admin",
-  "org:member": "Member",
-};
+// The role this page manages is Builder's own app role (user / admin /
+// super_admin / viewer, server/auth.ts) — the thing that actually gates
+// every feature in the app, including read-only Viewer access. Clerk's own
+// organization role (org:member / org:admin) only exists in the background
+// because Clerk's invite/membership APIs require one; server/routes/team.ts
+// keeps it in sync automatically (Admin/Super Admin -> org:admin, everyone
+// else -> org:member) so it's never edited here directly.
 
 const APP_ROLE_LABEL: Record<TeamMemberRole["role"], string> = {
   user: "User",
@@ -31,18 +26,18 @@ const APP_ROLE_LABEL: Record<TeamMemberRole["role"], string> = {
   viewer: "Viewer",
 };
 
-function RoleBadge({ role }: { role: string }) {
-  const isAdmin = role === "org:admin";
+function AppRoleBadge({ role }: { role: TeamMemberRole["role"] }) {
+  const elevated = role === "admin" || role === "super_admin";
   return (
     <span
       className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-['Inter:Medium',sans-serif]"
       style={{
-        backgroundColor: isAdmin ? "#fdece7" : "#f3f3f5",
-        color: isAdmin ? "#c2410c" : "#6a7282",
+        backgroundColor: elevated ? "#fdece7" : "#f3f3f5",
+        color: elevated ? "#c2410c" : "#6a7282",
       }}
     >
-      {isAdmin ? <Shield size={11} /> : <User size={11} />}
-      {ROLE_LABEL[role] ?? role}
+      {elevated ? <Shield size={11} /> : <User size={11} />}
+      {APP_ROLE_LABEL[role]}
     </span>
   );
 }
@@ -51,31 +46,37 @@ export function TeamPage() {
   const navigate = useNavigate();
   const canManageTeam = useIsAdminOrAbove();
   const isSuperAdmin = useIsSuperAdmin();
+  const realRole = useRealUserRole();
   const api = useApi();
   const { user } = useUser();
   const { organization, membership, memberships, invitations, isLoaded } =
     useOrganization({ memberships: true, invitations: true });
 
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("org:member");
+  const [inviteRole, setInviteRole] = useState<TeamMemberRole["role"]>("user");
   const [inviting, setInviting] = useState(false);
   const [appRoles, setAppRoles] = useState<Record<string, TeamMemberRole["role"]>>({});
+  const [pendingRoles, setPendingRoles] = useState<Record<string, TeamMemberRole["role"]>>({});
   const [updatingAppRole, setUpdatingAppRole] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!canManageTeam) return;
+    if (!canManageTeam || !organization?.id) return;
     api
-      .listTeamRoles()
-      .then((r) => setAppRoles(Object.fromEntries(r.members.map((m) => [m.clerkUserId, m.role]))))
+      .listTeamRoles(organization.id)
+      .then((r) => {
+        setAppRoles(Object.fromEntries(r.members.map((m) => [m.clerkUserId, m.role])));
+        setPendingRoles(r.pending ?? {});
+      })
       .catch(() => {});
-  }, [canManageTeam, api]);
+  }, [canManageTeam, organization?.id, api]);
 
   const handleAppRoleChange = async (clerkUserId: string, newRole: TeamMemberRole["role"]) => {
+    if (!organization?.id) return;
     const previous = appRoles[clerkUserId];
     setAppRoles((prev) => ({ ...prev, [clerkUserId]: newRole }));
     setUpdatingAppRole(clerkUserId);
     try {
-      await api.updateTeamRole(clerkUserId, newRole);
+      await api.updateTeamRole(clerkUserId, newRole, organization.id);
       toast.success("Builder role updated");
     } catch (err: any) {
       setAppRoles((prev) => ({ ...prev, [clerkUserId]: previous }));
@@ -133,12 +134,13 @@ export function TeamPage() {
     if (!addr) return;
     setInviting(true);
     try {
-      await organization.inviteMember({ emailAddress: addr, role });
+      await api.inviteTeamMember(addr, inviteRole, organization.id);
       toast.success(`Invitation sent to ${addr}`);
       setEmail("");
+      setInviteRole("user");
       await invitations?.revalidate?.();
     } catch (err: any) {
-      toast.error(err?.errors?.[0]?.message || "Could not send invitation");
+      toast.error(err?.message || "Could not send invitation");
     } finally {
       setInviting(false);
     }
@@ -161,17 +163,6 @@ export function TeamPage() {
       await memberships?.revalidate?.();
     } catch {
       toast.error("Could not remove member");
-    }
-  };
-
-  const handleRoleChange = async (mem: any, newRole: string) => {
-    if (newRole === mem.role) return;
-    try {
-      await mem.update({ role: newRole });
-      toast.success("Role updated");
-      await memberships?.revalidate?.();
-    } catch (err: any) {
-      toast.error(err?.errors?.[0]?.message || "Could not update role");
     }
   };
 
@@ -215,12 +206,15 @@ export function TeamPage() {
                 className="flex-1 bg-[#f3f3f5] rounded-[8px] px-4 py-3 text-[#0a0a0a] text-[15px] outline-none border-2 border-transparent focus:border-[#1D2930]"
               />
               <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as TeamMemberRole["role"])}
+                title="Builder role — what this person will be able to do in the app"
                 className="bg-[#f3f3f5] rounded-[8px] px-3 py-3 text-[#0a0a0a] text-[15px] outline-none border-2 border-transparent focus:border-[#1D2930]"
               >
-                <option value="org:member">Member</option>
-                <option value="org:admin">Admin</option>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+                {isSuperAdmin && <option value="super_admin">Super Admin</option>}
+                <option value="viewer">Viewer</option>
               </select>
               <button
                 type="submit"
@@ -263,9 +257,9 @@ export function TeamPage() {
                     </p>
                     <p className="text-[#6a7282] text-[12px] truncate">{u.identifier}</p>
                   </div>
-                  {isAdmin && !isSelf && u.userId && appRoles[u.userId] ? (
+                  {isAdmin && !isSelf && u.userId ? (
                     <select
-                      value={appRoles[u.userId]}
+                      value={appRoles[u.userId] ?? "user"}
                       disabled={updatingAppRole === u.userId}
                       onChange={(e) => handleAppRoleChange(u.userId, e.target.value as TeamMemberRole["role"])}
                       title="Builder role — what this person can actually do in the app"
@@ -279,7 +273,7 @@ export function TeamPage() {
                       <option value="viewer">Viewer</option>
                     </select>
                   ) : (
-                    <RoleBadge role={mem.role} />
+                    <AppRoleBadge role={isSelf ? realRole : (appRoles[u.userId] ?? "user")} />
                   )}
                   {isAdmin && !isSelf && (
                     <button
@@ -309,7 +303,7 @@ export function TeamPage() {
                     <p className="text-[#0a0a0a] text-[14px] truncate">{inv.emailAddress}</p>
                     <p className="text-[#6a7282] text-[12px]">Invited · awaiting acceptance</p>
                   </div>
-                  <RoleBadge role={inv.role} />
+                  <AppRoleBadge role={pendingRoles[inv.emailAddress?.toLowerCase()] ?? "user"} />
                   {isAdmin && (
                     <button
                       onClick={() => handleRevoke(inv)}
