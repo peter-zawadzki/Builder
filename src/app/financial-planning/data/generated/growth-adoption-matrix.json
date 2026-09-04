@@ -1,0 +1,98 @@
+[
+  {
+    "growthPreset": "Accelerated Growth",
+    "adoptionPreset": "Wildfire",
+    "FY26/27": 0,
+    "FY27/28": 0.015,
+    "FY28/29": 0.03,
+    "FY29/30": 0.07
+  },
+  {
+    "growthPreset": "Accelerated Growth",
+    "adoptionPreset": "Rapid",
+    "FY26/27": 0,
+    "FY27/28": 0.013,
+    "FY28/29": 0.022,
+    "FY29/30": 0.035
+  },
+  {
+    "growthPreset": "Accelerated Growth",
+    "adoptionPreset": "Modest",
+    "FY26/27": 0,
+    "FY27/28": 0.01,
+    "FY28/29": 0.017,
+    "FY29/30": 0.028
+  },
+  {
+    "growthPreset": "Accelerated Growth",
+    "adoptionPreset": "Slow",
+    "FY26/27": 0,
+    "FY27/28": 0.008,
+    "FY28/29": 0.015,
+    "FY29/30": 0.023
+  },
+  {
+    "growthPreset": "Balanced Growth",
+    "adoptionPreset": "Wildfire",
+    "FY26/27": 0,
+    "FY27/28": 0.013,
+    "FY28/29": 0.028,
+    "FY29/30": 0.065
+  },
+  {
+    "growthPreset": "Balanced Growth",
+    "adoptionPreset": "Rapid",
+    "FY26/27": 0,
+    "FY27/28": 0.011,
+    "FY28/29": 0.02,
+    "FY29/30": 0.032
+  },
+  {
+    "growthPreset": "Balanced Growth",
+    "adoptionPreset": "Modest",
+    "FY26/27": 0,
+    "FY27/28": 0.009,
+    "FY28/29": 0.016,
+    "FY29/30": 0.026
+  },
+  {
+    "growthPreset": "Balanced Growth",
+    "adoptionPreset": "Slow",
+    "FY26/27": 0,
+    "FY27/28": 0.007,
+    "FY28/29": 0.014,
+    "FY29/30": 0.021
+  },
+  {
+    "growthPreset": "Conservative Growth",
+    "adoptionPreset": "Wildfire",
+    "FY26/27": 0,
+    "FY27/28": 0.011,
+    "FY28/29": 0.026,
+    "FY29/30": 0.06
+  },
+  {
+    "growthPreset": "Conservative Growth",
+    "adoptionPreset": "Rapid",
+    "FY26/27": 0,
+    "FY27/28": 0.01,
+    "FY28/29": 0.018,
+    "FY29/30": 0.03
+  },
+  {
+    "growthPreset": "Conservative Growth",
+    "adoptionPreset": "Modest",
+    "FY26/27": 0,
+    "FY27/28": 0.008,
+    "FY28/29": 0.015,
+    "FY29/30": 0.025
+  },
+  {
+    "growthPreset": "Conservative Growth",
+    "adoptionPreset": "Slow",
+    "FY26/27": 0,
+    "FY27/28": 0.005,
+    "FY28/29": 0.012,
+    "FY29/30": 0.02
+  }
+]

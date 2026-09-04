@@ -1,0 +1,200 @@
+[
+  {
+    "sourceRow": 40,
+    "section": "Core Contractors",
+    "title": "Customer Success",
+    "person": "William",
+    "region": null,
+    "baselineAnnual": 35000,
+    "baselineMonthlySchedule": [
+      3000,
+      4000,
+      4000,
+      4000,
+      4000,
+      4000,
+      4000,
+      4000,
+      4000,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "sourceRow": 41,
+    "section": "Core Contractors",
+    "title": "Midwest Contractor",
+    "person": "MacKenzie",
+    "region": null,
+    "baselineAnnual": 10000,
+    "baselineMonthlySchedule": [
+      0,
+      5000,
+      5000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "sourceRow": 42,
+    "section": "Core Contractors",
+    "title": "Contract Software Developers",
+    "person": null,
+    "region": "US",
+    "baselineAnnual": 180000,
+    "baselineMonthlySchedule": [
+      15000,
+      15000,
+      15000,
+      15000,
+      15000,
+      15000,
+      15000,
+      15000,
+      15000,
+      15000,
+      15000,
+      15000
+    ]
+  },
+  {
+    "sourceRow": 43,
+    "section": "Core Contractors",
+    "title": "External Engineering Services",
+    "person": null,
+    "region": "US",
+    "baselineAnnual": 2400,
+    "baselineMonthlySchedule": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200
+    ]
+  },
+  {
+    "sourceRow": 44,
+    "section": "Core Contractors",
+    "title": "Contract Installers",
+    "person": null,
+    "region": "US",
+    "baselineAnnual": 72000,
+    "baselineMonthlySchedule": [
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000
+    ]
+  },
+  {
+    "sourceRow": 45,
+    "section": "Core Contractors",
+    "title": "YMA day rates (200/day)",
+    "person": "185",
+    "region": "US",
+    "baselineAnnual": 37000,
+    "baselineMonthlySchedule": [
+      0,
+      0,
+      1000,
+      3000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      2000,
+      1000,
+      0
+    ]
+  },
+  {
+    "sourceRow": 48,
+    "section": "Europe",
+    "title": "EU Regional Manager / GM",
+    "person": null,
+    "region": "EU",
+    "baselineAnnual": 60000,
+    "baselineMonthlySchedule": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      10000,
+      10000,
+      10000,
+      10000,
+      10000,
+      10000
+    ]
+  },
+  {
+    "sourceRow": 49,
+    "section": "Europe",
+    "title": "EU Field Service Technician",
+    "person": null,
+    "region": "EU",
+    "baselineAnnual": 36000,
+    "baselineMonthlySchedule": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000,
+      6000
+    ]
+  },
+  {
+    "sourceRow": 50,
+    "section": "Europe",
+    "title": "EU Customer Support Rep",
+    "person": null,
+    "region": "EU",
+    "baselineAnnual": 30000,
+    "baselineMonthlySchedule": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      5000,
+      5000,
+      5000,
+      5000,
+      5000,
+      5000
+    ]
+  }
+]

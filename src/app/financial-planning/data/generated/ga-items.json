@@ -1,0 +1,467 @@
+{
+  "items": [
+    {
+      "sourceRow": 3,
+      "category": "Installation Equipment",
+      "title": "Installation Equipment",
+      "type": "allocation_curve",
+      "baselineAnnual": null,
+      "baselineAllocationCurve": [
+        0.05,
+        0.05,
+        0.2,
+        0.2,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.05,
+        0.05,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 4,
+      "category": "Installation Equipment",
+      "title": "Switches, Transmitters, Cables",
+      "type": "expense_line",
+      "baselineAnnual": 35000,
+      "baselineMonthlySchedule": [
+        1750,
+        1750,
+        7000,
+        7000,
+        3500,
+        3500,
+        3500,
+        3500,
+        1750,
+        1750,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 5,
+      "category": "Installation Equipment",
+      "title": "Installation Materials & Tools",
+      "type": "expense_line",
+      "baselineAnnual": 10000,
+      "baselineMonthlySchedule": [
+        500,
+        500,
+        2000,
+        2000,
+        1000,
+        1000,
+        1000,
+        1000,
+        500,
+        500,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 8,
+      "category": "Travel & Entertainment",
+      "title": "Travel & Entertainment",
+      "type": "allocation_curve",
+      "baselineAnnual": null,
+      "baselineAllocationCurve": [
+        0.05,
+        0.05,
+        0.2,
+        0.2,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.05,
+        0.05,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 9,
+      "category": "Travel & Entertainment",
+      "title": "Accommodations",
+      "type": "expense_line",
+      "baselineAnnual": 20000,
+      "baselineMonthlySchedule": [
+        1000,
+        1000,
+        4000,
+        4000,
+        2000,
+        2000,
+        2000,
+        2000,
+        1000,
+        1000,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 10,
+      "category": "Travel & Entertainment",
+      "title": "Airlines",
+      "type": "expense_line",
+      "baselineAnnual": 45000,
+      "baselineMonthlySchedule": [
+        2250,
+        2250,
+        9000,
+        9000,
+        4500,
+        4500,
+        4500,
+        4500,
+        2250,
+        2250,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 11,
+      "category": "Travel & Entertainment",
+      "title": "Gasoline",
+      "type": "expense_line",
+      "baselineAnnual": 6000,
+      "baselineMonthlySchedule": [
+        300,
+        300,
+        1200,
+        1200,
+        600,
+        600,
+        600,
+        600,
+        300,
+        300,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 12,
+      "category": "Travel & Entertainment",
+      "title": "Meals & Entertainment",
+      "type": "expense_line",
+      "baselineAnnual": 15000,
+      "baselineMonthlySchedule": [
+        750,
+        750,
+        3000,
+        3000,
+        1500,
+        1500,
+        1500,
+        1500,
+        750,
+        750,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 13,
+      "category": "Travel & Entertainment",
+      "title": "Transportation",
+      "type": "expense_line",
+      "baselineAnnual": 10000,
+      "baselineMonthlySchedule": [
+        500,
+        500,
+        2000,
+        2000,
+        1000,
+        1000,
+        1000,
+        1000,
+        500,
+        500,
+        0,
+        0
+      ]
+    },
+    {
+      "sourceRow": 16,
+      "category": "General Operations",
+      "title": "General Operations",
+      "type": "allocation_curve",
+      "baselineAnnual": null,
+      "baselineAllocationCurve": [
+        0.08,
+        0.08,
+        0.08,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.08,
+        0.08,
+        0.08,
+        0.08,
+        0.08
+      ]
+    },
+    {
+      "sourceRow": 17,
+      "category": "General Operations",
+      "title": "Bank Charges",
+      "type": "expense_line",
+      "baselineAnnual": 3000,
+      "baselineMonthlySchedule": [
+        240,
+        240,
+        240,
+        270,
+        270,
+        270,
+        270,
+        240,
+        240,
+        240,
+        240,
+        240
+      ]
+    },
+    {
+      "sourceRow": 18,
+      "category": "General Operations",
+      "title": "Business Licenses & Fees",
+      "type": "expense_line",
+      "baselineAnnual": 3000,
+      "baselineMonthlySchedule": [
+        240,
+        240,
+        240,
+        270,
+        270,
+        270,
+        270,
+        240,
+        240,
+        240,
+        240,
+        240
+      ]
+    },
+    {
+      "sourceRow": 19,
+      "category": "General Operations",
+      "title": "Business Memberships & Dues",
+      "type": "expense_line",
+      "baselineAnnual": 2000,
+      "baselineMonthlySchedule": [
+        160,
+        160,
+        160,
+        180,
+        180,
+        180,
+        180,
+        160,
+        160,
+        160,
+        160,
+        160
+      ]
+    },
+    {
+      "sourceRow": 20,
+      "category": "General Operations",
+      "title": "Corporate Facilities",
+      "type": "expense_line",
+      "baselineAnnual": 24000,
+      "baselineMonthlySchedule": [
+        1920,
+        1920,
+        1920,
+        2160,
+        2160,
+        2160,
+        2160,
+        1920,
+        1920,
+        1920,
+        1920,
+        1920
+      ]
+    },
+    {
+      "sourceRow": 21,
+      "category": "General Operations",
+      "title": "Insurance",
+      "type": "expense_line",
+      "baselineAnnual": 6000,
+      "baselineMonthlySchedule": [
+        480,
+        480,
+        480,
+        540,
+        540,
+        540,
+        540,
+        480,
+        480,
+        480,
+        480,
+        480
+      ]
+    },
+    {
+      "sourceRow": 22,
+      "category": "General Operations",
+      "title": "Internal IT & BI Tools (AI Tools)",
+      "type": "expense_line",
+      "baselineAnnual": 15000,
+      "baselineMonthlySchedule": [
+        1200,
+        1200,
+        1200,
+        1350,
+        1350,
+        1350,
+        1350,
+        1200,
+        1200,
+        1200,
+        1200,
+        1200
+      ]
+    },
+    {
+      "sourceRow": 23,
+      "category": "General Operations",
+      "title": "Office Supplies",
+      "type": "expense_line",
+      "baselineAnnual": 5000,
+      "baselineMonthlySchedule": [
+        400,
+        400,
+        400,
+        450,
+        450,
+        450,
+        450,
+        400,
+        400,
+        400,
+        400,
+        400
+      ]
+    },
+    {
+      "sourceRow": 24,
+      "category": "General Operations",
+      "title": "Admin & Miscellaneous",
+      "type": "expense_line",
+      "baselineAnnual": 2000,
+      "baselineMonthlySchedule": [
+        160,
+        160,
+        160,
+        180,
+        180,
+        180,
+        180,
+        160,
+        160,
+        160,
+        160,
+        160
+      ]
+    },
+    {
+      "sourceRow": 27,
+      "category": "Legal & Professional",
+      "title": "Legal & Professional",
+      "type": "allocation_curve",
+      "baselineAnnual": null,
+      "baselineAllocationCurve": [
+        0.08,
+        0.08,
+        0.08,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.08,
+        0.08,
+        0.08,
+        0.08,
+        0.08
+      ]
+    },
+    {
+      "sourceRow": 28,
+      "category": "Legal & Professional",
+      "title": "Accounting Fees",
+      "type": "expense_line",
+      "baselineAnnual": 18000,
+      "baselineMonthlySchedule": [
+        1440,
+        1440,
+        1440,
+        1620,
+        1620,
+        1620,
+        1620,
+        1440,
+        1440,
+        1440,
+        1440,
+        1440
+      ]
+    },
+    {
+      "sourceRow": 29,
+      "category": "Legal & Professional",
+      "title": "Legal Fees",
+      "type": "expense_line",
+      "baselineAnnual": 40000,
+      "baselineMonthlySchedule": [
+        3200,
+        3200,
+        3200,
+        3600,
+        3600,
+        3600,
+        3600,
+        3200,
+        3200,
+        3200,
+        3200,
+        3200
+      ]
+    },
+    {
+      "sourceRow": 30,
+      "category": "Legal & Professional",
+      "title": "Professional Fees (Other)",
+      "type": "expense_line",
+      "baselineAnnual": 35000,
+      "baselineMonthlySchedule": [
+        2800,
+        2800,
+        2800,
+        3150,
+        3150,
+        3150,
+        3150,
+        2800,
+        2800,
+        2800,
+        2800,
+        2800
+      ]
+    }
+  ],
+  "grandTotal": 294000
+}

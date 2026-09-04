@@ -1,4 +1,4 @@
-import { createBrowserRouter, useParams } from "react-router";
+import { createBrowserRouter, Navigate, useParams } from "react-router";
 import { RootLayout } from "./components/RootLayout";
 import { MountainsList } from "./components/MountainsList";
 import { MountainDetail } from "./components/MountainDetail";
@@ -32,6 +32,23 @@ import { SignUpPage } from "./components/SignUpPage";
 import { TeamPage } from "./components/TeamPage";
 import { SystemCheck } from "./components/SystemCheck";
 import { SiteAssessmentWorkspace } from "./components/SiteAssessmentWorkspace";
+import { FinancialPlanningGate } from "./financial-planning/FinancialPlanningGate";
+import { FinancialPlanningLayout } from "./financial-planning/FinancialPlanningLayout";
+import DashboardPage from "./financial-planning/pages/DashboardPage";
+import MountainGrowthPage from "./financial-planning/pages/MountainGrowthPage";
+import AdoptionCustomersPage from "./financial-planning/pages/AdoptionCustomersPage";
+import PricingRevenuePage from "./financial-planning/pages/PricingRevenuePage";
+import StaffingPage from "./financial-planning/pages/StaffingPage";
+import ContractorsPage from "./financial-planning/pages/ContractorsPage";
+import GaPage from "./financial-planning/pages/GaPage";
+import OperatingExpensesPage from "./financial-planning/pages/OperatingExpensesPage";
+import InventoryCapexPage from "./financial-planning/pages/InventoryCapexPage";
+import CashCapitalPage from "./financial-planning/pages/CashCapitalPage";
+import ProfitabilityPage from "./financial-planning/pages/ProfitabilityPage";
+import CapitalEfficiencyPage from "./financial-planning/pages/CapitalEfficiencyPage";
+import CapTablePage from "./financial-planning/pages/CapTablePage";
+import ScenarioLibraryPage from "./financial-planning/pages/ScenarioLibraryPage";
+import ModelExplorerPage from "./financial-planning/pages/ModelExplorerPage";
 
 // react-router reuses the same component instance across param-only
 // navigations (e.g. /proposal/A -> /proposal/B) — ProposalBuilder holds a lot
@@ -115,6 +132,34 @@ export const router = createBrowserRouter([
           { path: "/mountains/:mountainId/locations/:locationId/assets/new", Component: AddAsset },
           { path: "/mountains/:mountainId/locations/:locationId/assets/:assetId", Component: AssetDetail },
           { path: "/mountains/:mountainId/locations/:locationId/assets/:assetId/edit", Component: AddAsset },
+          // ── Financial Planning (Admin/Super Admin only) ─────────────────────
+          {
+            path: "/financial-planning",
+            Component: FinancialPlanningGate,
+            children: [
+              {
+                Component: FinancialPlanningLayout,
+                children: [
+                  { index: true, element: <Navigate to="/financial-planning/dashboard" replace /> },
+                  { path: "dashboard", Component: DashboardPage },
+                  { path: "mountain-growth", Component: MountainGrowthPage },
+                  { path: "adoption-customers", Component: AdoptionCustomersPage },
+                  { path: "pricing-revenue", Component: PricingRevenuePage },
+                  { path: "staffing", Component: StaffingPage },
+                  { path: "contractors", Component: ContractorsPage },
+                  { path: "ga", Component: GaPage },
+                  { path: "operating-expenses", Component: OperatingExpensesPage },
+                  { path: "inventory-capex", Component: InventoryCapexPage },
+                  { path: "cash-capital", Component: CashCapitalPage },
+                  { path: "profitability", Component: ProfitabilityPage },
+                  { path: "capital-efficiency", Component: CapitalEfficiencyPage },
+                  { path: "cap-table", Component: CapTablePage },
+                  { path: "scenario-library", Component: ScenarioLibraryPage },
+                  { path: "model-explorer", Component: ModelExplorerPage },
+                ],
+              },
+            ],
+          },
         ],
       },
     ],
