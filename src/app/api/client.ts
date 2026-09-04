@@ -228,6 +228,14 @@ export function useApi() {
       markNoteNotificationRead: (id: string) => request<{ ok: true }>(`/notes/notifications/${id}/read`, { method: "POST" }),
       searchNotes: (q: string, mountainId?: string) =>
         request<{ results: NoteSearchResult[] }>(`/notes/search?q=${encodeURIComponent(q)}${mountainId ? `&mountainId=${mountainId}` : ""}`),
+
+      // Team — app-level role (distinct from Clerk's org member/admin role)
+      listTeamRoles: () => request<{ members: TeamMemberRole[] }>("/team"),
+      updateTeamRole: (clerkUserId: string, role: TeamMemberRole["role"]) =>
+        request<{ ok: true; clerkUserId: string; role: TeamMemberRole["role"] }>(`/team/${clerkUserId}/role`, {
+          method: "PATCH",
+          body: JSON.stringify({ role }),
+        }),
     };
   }, [getToken]);
 }
@@ -236,9 +244,16 @@ export interface AppMeUser {
   id: string;
   email: string | null;
   name: string | null;
-  role: "user" | "admin" | "super_admin";
+  role: "user" | "admin" | "super_admin" | "viewer";
   isSuperAdmin: boolean;
   dailyDigestEnabled: boolean;
+}
+
+export interface TeamMemberRole {
+  clerkUserId: string;
+  email: string | null;
+  name: string | null;
+  role: "user" | "admin" | "super_admin" | "viewer";
 }
 
 // Notes

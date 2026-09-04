@@ -1,18 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { useOrganization } from "@clerk/clerk-react";
+import { useOrganization, useUser } from "@clerk/clerk-react";
 import { ArrowLeft, Shield, User, Trash2, X, Loader2, Send, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { useIsAdminOrAbove } from "../hooks/useRole";
+import { useIsAdminOrAbove, useIsSuperAdmin } from "../hooks/useRole";
+import { useApi, type TeamMemberRole } from "../api/client";
 
 // Custom team management: invite teammates and manage members, scoped to the
 // single YULLR organization. Intentionally renders NO organization edit / delete
 // / leave controls — org management is not exposed anywhere in the app. Only
 // admins see the invite form and the remove/revoke actions.
+//
+// Two separate role systems show up on this page:
+// - Clerk's own org role (org:member/org:admin) — only used for the invite
+//   form below, since Clerk's invite API requires one. It has no bearing on
+//   what this app lets someone do.
+// - Builder's own app role (user/admin/super_admin/viewer, server/auth.ts) —
+//   the "Builder Role" column further down, which is what actually gates
+//   every feature in the app, including read-only Viewer access.
 
 const ROLE_LABEL: Record<string, string> = {
   "org:admin": "Admin",
   "org:member": "Member",
+};
+
+const APP_ROLE_LABEL: Record<TeamMemberRole["role"], string> = {
+  user: "User",
+  admin: "Admin",
+  super_admin: "Super Admin",
+  viewer: "Viewer",
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -34,12 +50,40 @@ function RoleBadge({ role }: { role: string }) {
 export function TeamPage() {
   const navigate = useNavigate();
   const canManageTeam = useIsAdminOrAbove();
+  const isSuperAdmin = useIsSuperAdmin();
+  const api = useApi();
+  const { user } = useUser();
   const { organization, membership, memberships, invitations, isLoaded } =
     useOrganization({ memberships: true, invitations: true });
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("org:member");
   const [inviting, setInviting] = useState(false);
+  const [appRoles, setAppRoles] = useState<Record<string, TeamMemberRole["role"]>>({});
+  const [updatingAppRole, setUpdatingAppRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canManageTeam) return;
+    api
+      .listTeamRoles()
+      .then((r) => setAppRoles(Object.fromEntries(r.members.map((m) => [m.clerkUserId, m.role]))))
+      .catch(() => {});
+  }, [canManageTeam, api]);
+
+  const handleAppRoleChange = async (clerkUserId: string, newRole: TeamMemberRole["role"]) => {
+    const previous = appRoles[clerkUserId];
+    setAppRoles((prev) => ({ ...prev, [clerkUserId]: newRole }));
+    setUpdatingAppRole(clerkUserId);
+    try {
+      await api.updateTeamRole(clerkUserId, newRole);
+      toast.success("Builder role updated");
+    } catch (err: any) {
+      setAppRoles((prev) => ({ ...prev, [clerkUserId]: previous }));
+      toast.error(err?.message || "Could not update role");
+    } finally {
+      setUpdatingAppRole(null);
+    }
+  };
 
   // Team management is Admin/Super Admin only (Dev Story 10.1). Plain
   // Users cannot see or manage the team — the button is hidden for them and
@@ -69,7 +113,11 @@ export function TeamPage() {
   }
 
   const isAdmin = membership?.role === "org:admin";
-  const selfUserId = membership?.publicUserData?.userId;
+  // membership?.publicUserData?.userId was silently always undefined here
+  // (never matched any row's u.userId), so "remove"/"edit role" controls
+  // were never actually hidden for your own row — useUser()'s id is the
+  // reliable source for "am I looking at myself."
+  const selfUserId = user?.id;
 
   if (!isLoaded || !organization) {
     return (
@@ -188,9 +236,13 @@ export function TeamPage() {
 
         {/* Members */}
         <div className="bg-white rounded-[16px] border border-[rgba(0,0,0,0.08)] p-5">
-          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px] mb-3">
+          <h2 className="text-[#0a0a0a] font-['Inter:Medium',sans-serif] font-medium text-[15px]">
             Members
           </h2>
+          <p className="text-[#6a7282] text-[12px] mb-3">
+            The dropdown next to each teammate sets their Builder role (User / Admin / Super Admin / Viewer) — this is
+            what controls what they can actually do in the app.
+          </p>
           <div className="flex flex-col divide-y divide-[rgba(0,0,0,0.06)]">
             {(memberships?.data ?? []).map((mem: any) => {
               const u = mem.publicUserData ?? {};
@@ -211,14 +263,20 @@ export function TeamPage() {
                     </p>
                     <p className="text-[#6a7282] text-[12px] truncate">{u.identifier}</p>
                   </div>
-                  {isAdmin && !isSelf ? (
+                  {isAdmin && !isSelf && u.userId && appRoles[u.userId] ? (
                     <select
-                      value={mem.role}
-                      onChange={(e) => handleRoleChange(mem, e.target.value)}
-                      className="text-[12px] bg-[#f3f3f5] rounded-full px-2.5 py-1 outline-none font-['Inter:Medium',sans-serif]"
+                      value={appRoles[u.userId]}
+                      disabled={updatingAppRole === u.userId}
+                      onChange={(e) => handleAppRoleChange(u.userId, e.target.value as TeamMemberRole["role"])}
+                      title="Builder role — what this person can actually do in the app"
+                      className="text-[12px] bg-[#f3f3f5] rounded-full px-2.5 py-1 outline-none font-['Inter:Medium',sans-serif] disabled:opacity-50"
                     >
-                      <option value="org:member">Member</option>
-                      <option value="org:admin">Admin</option>
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                      {(isSuperAdmin || appRoles[u.userId] === "super_admin") && (
+                        <option value="super_admin">Super Admin</option>
+                      )}
+                      <option value="viewer">Viewer</option>
                     </select>
                   ) : (
                     <RoleBadge role={mem.role} />

@@ -25,6 +25,7 @@ import { notes } from "./routes/notes";
 import { proposalPublicSign } from "./routes/proposalPublicSign";
 import { agreementPublicSign } from "./routes/agreementPublicSign";
 import { financialScenarios } from "./routes/financialScenarios";
+import { team } from "./routes/team";
 
 const app = new Hono<HonoEnv>();
 
@@ -77,6 +78,8 @@ app.use("/api/me", requireAuth);
 app.use("/api/me/*", requireAuth);
 app.use("/api/scenarios", requireAuth);
 app.use("/api/scenarios/*", requireAuth);
+app.use("/api/team", requireAuth);
+app.use("/api/team/*", requireAuth);
 
 // Who am I — verifies the auth chain and returns the synced app user.
 app.get("/api/me", (c) => c.json({ user: c.get("user") }));
@@ -108,6 +111,7 @@ app.route("/api/knowledge-base", knowledgeBase);
 app.route("/api/knowledge-documents", knowledgeDocuments);
 app.route("/api/notes", notes);
 app.route("/api/scenarios", financialScenarios);
+app.route("/api/team", team);
 // Legacy shapes for the existing UI running losslessly on the local DB.
 app.route("/api/legacy", legacy);
 
