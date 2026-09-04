@@ -139,19 +139,19 @@ export function AppHeader() {
             <UserButton appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }}>
               <UserButton.MenuItems>
                 <UserButton.Action label="Resource Center" labelIcon={<BookOpen size={16} />} onClick={() => navigate('/resources')} />
+                {canManageTeam && <UserButton.Action label="Financial Planning" labelIcon={<LineChart size={16} />} onClick={() => navigate('/financial-planning')} />}
                 <UserButton.Action label="YULLR Monitor" labelIcon={<Activity size={16} />} onClick={() => window.open('https://portal.yullr.com/monitor/', '_blank', 'noopener,noreferrer')} />
-                {canManageTeam && <UserButton.Action label="Team & invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />}
-                {canManageTeam && <UserButton.Action label="Inspection items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />}
+                {canManageTeam && <UserButton.Action label="Team & Invites" labelIcon={<UserPlus size={16} />} onClick={() => navigate('/team')} />}
+                {canManageTeam && <UserButton.Action label="Inspection Items" labelIcon={<Wrench size={16} />} onClick={() => navigate('/inspection-items')} />}
                 {canManageTeam && <UserButton.Action label="Order Terms" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-terms')} />}
                 {canManageTeam && <UserButton.Action label="Order Template" labelIcon={<FileText size={16} />} onClick={() => navigate('/proposal-template')} />}
-                {canManageTeam && <UserButton.Action label="Agreement template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />}
-                {canManageTeam && <UserButton.Action label="Contact tags" labelIcon={<Tag size={16} />} onClick={() => navigate('/contact-tags')} />}
-                {canManageTeam && <UserButton.Action label="Knowledge base" labelIcon={<BrainCircuit size={16} />} onClick={() => navigate('/admin/knowledge-base')} />}
-                {canManageTeam && <UserButton.Action label="Feedback requests" labelIcon={<ClipboardList size={16} />} onClick={() => navigate('/admin/feedback')} />}
-                {canManageTeam && <UserButton.Action label="Financial Planning" labelIcon={<LineChart size={16} />} onClick={() => navigate('/financial-planning')} />}
+                {canManageTeam && <UserButton.Action label="Agreement Template" labelIcon={<FileText size={16} />} onClick={() => navigate('/agreement-template')} />}
+                {canManageTeam && <UserButton.Action label="Contact Tags" labelIcon={<Tag size={16} />} onClick={() => navigate('/contact-tags')} />}
+                {canManageTeam && <UserButton.Action label="Knowledge Base" labelIcon={<BrainCircuit size={16} />} onClick={() => navigate('/admin/knowledge-base')} />}
+                {canManageTeam && <UserButton.Action label="Feedback Requests" labelIcon={<ClipboardList size={16} />} onClick={() => navigate('/admin/feedback')} />}
                 {digestPreference.enabled !== null && (
                   <UserButton.Action
-                    label={digestPreference.enabled ? 'Daily digest: On' : 'Daily digest: Off'}
+                    label={digestPreference.enabled ? 'Daily Digest: On' : 'Daily Digest: Off'}
                     labelIcon={digestPreference.enabled ? <Mail size={16} /> : <MailX size={16} />}
                     onClick={digestPreference.toggle}
                   />
