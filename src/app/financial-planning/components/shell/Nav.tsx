@@ -19,11 +19,11 @@ export function Nav() {
         top: 0,
       }}
     >
-      <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--color-gray-200)' }}>
-        <img src="/financial-planning/brand/yullr_logo_wide_text_orange.webp" alt="YULLR" width={160} height={43} />
+      <div style={{ padding: '18px 20px 4px', fontWeight: 600, fontSize: 13, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-gray-600)' }}>
+        Financial Planning
       </div>
       <ModeToggle />
-      <div style={{ overflowY: 'auto', flex: 1, padding: '12px 0' }}>
+      <div style={{ overflowY: 'auto', flex: 1, padding: '8px 12px' }}>
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href;
           return (
@@ -34,13 +34,14 @@ export function Nav() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '10px 20px',
+                padding: '9px 14px',
+                margin: '2px 0',
+                borderRadius: 8,
                 fontFamily: 'var(--font-body)',
                 fontSize: 14,
-                fontWeight: active ? 700 : 400,
+                fontWeight: active ? 600 : 400,
                 color: active ? 'var(--color-primary-orange)' : 'var(--color-gray-800)',
-                borderLeft: active ? '3px solid var(--color-primary-orange)' : '3px solid transparent',
-                background: active ? 'var(--color-stroke-orange)' : 'transparent',
+                background: active ? '#fff0ec' : 'transparent',
               }}
             >
               <span>{item.label}</span>

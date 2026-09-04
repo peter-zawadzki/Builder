@@ -5,18 +5,8 @@
    Adapted here for the Financial Planning & Capital Model app.
    ============================================================= */
 
-@import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;700&family=Inter:wght@400;600;700;900&display=swap");
-
-@font-face {
-  font-family: "League Gothic";
-  src: url("/financial-planning/fonts/LeagueGothic-Regular-VariableFont_wdth.ttf") format("truetype-variations");
-  font-weight: 400 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
-  /* ===== Brand ===== */
+  /* ===== Brand — matches the rest of Builder (see AppHeader.tsx) ===== */
   --color-primary-orange: #FF5C39;
   --color-primary-orange-hover: #FF7A5C;
   --color-primary-orange-light: #FFE0D9;
@@ -25,7 +15,7 @@
   --color-blue-hover: #3165CE;
   --color-blue-dark: #002447;
 
-  --color-dark: #1D252D;
+  --color-dark: #1D2930;
   --color-white: #FFFFFF;
 
   /* ===== Gray scale ===== */
@@ -73,11 +63,11 @@
   --color-functional-green: var(--color-additional-green-dark);
   --color-functional-green-light: var(--color-additional-green-light);
 
-  /* ===== Radii ===== */
-  --radius-0: 0px;
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 8px;
+  /* ===== Radii — rounded, matching Builder's rounded-[8px]/[10px]/[16px] ===== */
+  --radius-0: 8px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
 
   /* ===== Spacing (M = 8) ===== */
   --space-m: 8px;
@@ -86,18 +76,18 @@
   --space-5m: 40px;
   --space-10m: 80px;
 
-  /* ===== Shadow system ===== */
-  --shadow-hard-sm: 2px 2px 0 #1D252D;
-  --shadow-hard:    4px 4px 0 #1D252D;
-  --shadow-hard-lg: 6px 6px 0 #1D252D;
-  --shadow-soft:    0 2px 6px rgba(29,37,45,0.08);
-  --shadow-card:    0 1px 2px rgba(29,37,45,0.05);
+  /* ===== Shadow system — soft, matching Builder's flat/bordered cards ===== */
+  --shadow-hard-sm: 0 1px 2px rgba(29,41,48,0.06);
+  --shadow-hard:    0 1px 2px rgba(29,41,48,0.06);
+  --shadow-hard-lg: 0 2px 6px rgba(29,41,48,0.08);
+  --shadow-soft:    0 2px 6px rgba(29,41,48,0.08);
+  --shadow-card:    0 1px 2px rgba(29,41,48,0.05);
 
-  /* ===== Type: families ===== */
-  --font-display: "League Gothic", "Oswald", "Impact", sans-serif;
-  --font-body: "Open Sans", "Myriad Pro", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --font-ui-mono: "IBM Plex Sans", system-ui, sans-serif;
+  /* ===== Type: families — Inter everywhere, matching the rest of Builder ===== */
+  --font-display: "Inter", system-ui, -apple-system, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", monospace;
+  --font-ui-mono: "Inter", system-ui, sans-serif;
   --font-index: "Inter", system-ui, sans-serif;
 
   /* ===== Type: base scale ===== */
@@ -108,15 +98,15 @@
   --fs-xl: 20px;
   --fs-2xl: 24px;
 
-  --fs-h1: 120px;
-  --fs-h2: 56px;
-  --fs-h3: 44px;
-  --fs-h4: 32px;
-  --fs-subheader: 24px;
+  --fs-h1: 40px;
+  --fs-h2: 32px;
+  --fs-h3: 24px;
+  --fs-h4: 20px;
+  --fs-subheader: 18px;
 
-  --fs-h1-m: 64px;
-  --fs-h2-m: 44px;
-  --fs-h3-m: 32px;
+  --fs-h1-m: 32px;
+  --fs-h2-m: 26px;
+  --fs-h3-m: 20px;
   --fs-subheader-m: 16px;
 
   /* App-shell dimensions (financial-app-specific, not in source system) */
@@ -138,17 +128,17 @@
   line-height: 1.6;
 }
 
-.fp-scope .ds-h1, .fp-scope h1 { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-h1); line-height: 1.0; color: var(--color-dark); text-transform: uppercase; }
-.fp-scope .ds-h2, .fp-scope h2 { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-h2); line-height: 1.2; color: var(--color-dark); text-transform: uppercase; }
-.fp-scope .ds-h3, .fp-scope h3 { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-h3); line-height: 1.2; color: var(--color-dark); text-transform: uppercase; }
-.fp-scope .ds-h4, .fp-scope h4 { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-h4); line-height: 1.2; color: var(--color-dark); text-transform: uppercase; }
+.fp-scope .ds-h1, .fp-scope h1 { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-h1); line-height: 1.2; color: var(--color-dark); }
+.fp-scope .ds-h2, .fp-scope h2 { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-h2); line-height: 1.2; color: var(--color-dark); }
+.fp-scope .ds-h3, .fp-scope h3 { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-h3); line-height: 1.2; color: var(--color-dark); }
+.fp-scope .ds-h4, .fp-scope h4 { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-h4); line-height: 1.2; color: var(--color-dark); }
 
 .ds-subheader, .ds-eyebrow {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 600;
   font-size: var(--fs-subheader);
   line-height: 1.2;
-  letter-spacing: 0.4em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-dark);
 }
@@ -183,7 +173,7 @@
 .ds-card {
   background: var(--color-white);
   border: 1px solid var(--color-gray-200);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
 }
 .ds-card--hard { box-shadow: var(--shadow-hard); border-color: var(--color-dark); }
@@ -195,18 +185,18 @@
   gap: 8px;
   padding: 11px 24px;
   font-family: var(--font-body);
-  font-weight: 700;
+  font-weight: 600;
   font-size: var(--fs-md);
   line-height: 26px;
-  border-radius: 0;
-  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .ds-btn--sm { padding: 6px 14px; font-size: var(--fs-sm); line-height: 20px; }
 .ds-btn--primary { background: var(--color-primary-orange); color: var(--color-white); }
 .ds-btn--primary:hover { background: #E94B2A; }
-.ds-btn--outline { background: var(--color-white); color: var(--color-dark); border-color: var(--color-dark); }
+.ds-btn--outline { background: var(--color-white); color: var(--color-dark); border-color: var(--color-gray-300); }
 .ds-btn--outline:hover { background: var(--color-primary-orange); color: var(--color-white); border-color: var(--color-primary-orange); }
 .ds-btn--ghost { background: transparent; color: var(--color-dark); border-color: transparent; }
 .ds-btn--ghost:hover { color: var(--color-primary-orange); }
@@ -221,7 +211,7 @@
   color: var(--color-gray-900);
   background: var(--color-white);
   border: 1px solid var(--color-gray-300);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   outline: none;
   transition: border-color 120ms ease;
 }
@@ -233,6 +223,7 @@
   align-items: center;
   padding: 4px 10px;
   border: 1px solid var(--color-gray-300);
+  border-radius: 999px;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-gray-900);
